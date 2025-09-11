@@ -2,11 +2,27 @@
 // Handle
 // -----------------------------------------------------------------------------
 
+/// A handle for a [Fragment].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum Handle {
     Point(Point),
-    Span(SpanHandle),
-    Zipper(ZipperHandle),
+    Span(SpanHandleAndFocus),
+    Zipper(ZipperHandleAndFocus),
+}
+
+pub type SpanHandleAndFocus = (SpanHandle, SpanFocus);
+
+pub type ZipperHandleAndFocus = (ZipperHandle, ZipperFocus);
+
+// -----------------------------------------------------------------------------
+// Fragment
+// -----------------------------------------------------------------------------
+
+/// A fragment of syntax.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum Fragment<L> {
+    Span(Span<L>),
+    Zipper(Expr<L>),
 }
 
 // -----------------------------------------------------------------------------
@@ -34,16 +50,19 @@ pub struct Index(pub usize);
 // SpanHandle
 // -----------------------------------------------------------------------------
 
+/// A handle for a span.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct SpanHandle(pub SpanH, pub SpanFocus);
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct SpanH {
+pub struct SpanHandle {
     pub path: Path,
     pub left: Index,
     pub right: Index,
 }
 
+// -----------------------------------------------------------------------------
+// SpanFocus
+// -----------------------------------------------------------------------------
+
+/// A focus of a [SpanHandle].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum SpanFocus {
     Left,
@@ -62,10 +81,7 @@ pub struct Span<L>(pub Vec<Expr<L>>);
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct ZipperHandle(pub ZipperH, pub ZipperFocus);
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct ZipperH {
+pub struct ZipperHandle {
     pub outer_path: Path,
     pub outer_left: Index,
     pub outer_right: Index,
@@ -73,6 +89,10 @@ pub struct ZipperH {
     pub inner_left: Index,
     pub inner_right: Index,
 }
+
+// -----------------------------------------------------------------------------
+// ZipperFocus
+// -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum ZipperFocus {
