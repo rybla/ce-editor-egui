@@ -13,15 +13,20 @@ pub enum Handle {
 // Point
 // -----------------------------------------------------------------------------
 
+/// A point between two expressions.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Point(pub Path, pub Index);
 
+/// A path from the top span to an expression.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Path(pub Vec<Step>);
 
+/// A step from an expression to one of its kids.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Step(pub usize);
 
+/// An index between kid, or before the first kid, or after the last kid of an
+/// expression.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Index(pub usize);
 
