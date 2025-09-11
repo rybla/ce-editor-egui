@@ -16,6 +16,53 @@ pub type SpanHandleAndFocus = (SpanHandle, SpanFocus);
 
 pub type ZipperHandleAndFocus = (ZipperHandle, ZipperFocus);
 
+impl Handle {
+    pub fn move_up<L: Debug>(&mut self, expr: &Expr<L>) {
+        match self {
+            Handle::Point(Point { path, index: _ }) => {
+                if let Some(step) = path.pop() {
+                    *self = Handle::Span((
+                        SpanHandle {
+                            path: path.clone(),
+                            left: step.left_index(),
+                            right: step.right_index(),
+                        },
+                        SpanFocus::Left,
+                    ));
+                }
+            }
+            Handle::Span((SpanHandle { path, left, right }, focus)) => {
+                let kid = expr.at_path(path);
+                let (leftmost, rightmost) = kid.kids.extreme_indexes();
+                if *left == leftmost && *right == rightmost {
+                    if let Some(step) = path.pop() {
+                        *self = Handle::Span((
+                            SpanHandle {
+                                path: path.clone(),
+                                left: step.left_index(),
+                                right: step.right_index(),
+                            },
+                            focus.clone(),
+                        ))
+                    }
+                } else {
+                    *left = leftmost;
+                    *right = rightmost;
+                }
+            }
+            Handle::Zipper(_) => todo!(),
+        }
+    }
+
+    pub fn move_prev<L>(&mut self, _expr: &Expr<L>) {
+        todo!()
+    }
+
+    pub fn move_next<L>(&mut self, _expr: &Expr<L>) {
+        todo!()
+    }
+}
+
 impl Default for Handle {
     fn default() -> Self {
         Self::Point(Point::default())
@@ -24,7 +71,10 @@ impl Default for Handle {
 
 /// A point between two [Expr]s.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
-pub struct Point(pub Path, pub Index);
+pub struct Point {
+    pub path: Path,
+    pub index: Index,
+}
 
 /// A path from the top [Expr] to an [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
@@ -69,11 +119,17 @@ pub struct SpanHandle {
 
 impl SpanHandle {
     pub fn left_point(&self) -> Point {
-        Point(self.path.clone(), self.left.clone())
+        Point {
+            path: self.path.clone(),
+            index: self.left.clone(),
+        }
     }
 
     pub fn right_point(&self) -> Point {
-        Point(self.path.clone(), self.right.clone())
+        Point {
+            path: self.path.clone(),
+            index: self.right.clone(),
+        }
     }
 }
 
@@ -101,19 +157,31 @@ impl ZipperHandle {
     }
 
     pub fn outer_left_point(&self) -> Point {
-        Point(self.outer_path.clone(), self.outer_left.clone())
+        Point {
+            path: self.outer_path.clone(),
+            index: self.outer_left.clone(),
+        }
     }
 
     pub fn outer_right_point(&self) -> Point {
-        Point(self.outer_path.clone(), self.outer_right.clone())
+        Point {
+            path: self.outer_path.clone(),
+            index: self.outer_right.clone(),
+        }
     }
 
     pub fn inner_left_point(&self) -> Point {
-        Point(self.inner_path(), self.inner_left.clone())
+        Point {
+            path: self.inner_path(),
+            index: self.inner_left.clone(),
+        }
     }
 
     pub fn inner_right_point(&self) -> Point {
-        Point(self.inner_path(), self.inner_right.clone())
+        Point {
+            path: self.inner_path(),
+            index: self.inner_right.clone(),
+        }
     }
 }
 
@@ -152,12 +220,8 @@ impl<L: Debug> Expr<L> {
             .fold(0, |h, e| std::cmp::max(h, 1 + e.height()))
     }
 
-    pub fn at_step<'a>(&'a self, step: &Step) -> &'a Expr<L> {
-        self.kids.at_step(step)
-    }
-
     pub fn at_path<'a>(&'a self, path: &Path) -> &'a Expr<L> {
-        path.0.iter().fold(self, |e, step| e.at_step(step))
+        path.0.iter().fold(self, |e, step| e.kids.at_step(step))
     }
 
     pub fn kids_and_steps<'a>(
@@ -199,6 +263,10 @@ impl<L: Debug> Span<L> {
         self.0
             .get(step.0)
             .unwrap_or_else(|| panic!("step out of bounds: span = {self:?}; step = {step:?}"))
+    }
+
+    pub fn extreme_indexes(&self) -> (Index, Index) {
+        (Index(0), Index(self.0.len()))
     }
 }
 

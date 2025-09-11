@@ -45,6 +45,16 @@ pub trait EditorSpec {
         label: &ExprLabel<Self::Constructor, Self::Diagnostic>,
     ) -> egui::Response;
 
+    fn update(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ctx: &egui::Context) {
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            state.handle.move_up(&state.expr);
+        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+            state.handle.move_prev(&state.expr);
+        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+            state.handle.move_next(&state.expr);
+        }
+    }
+
     fn render(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ui: &mut egui::Ui) {
         Self::render_expr(state, ui, &state.expr.clone(), &Path::default());
     }
@@ -123,7 +133,14 @@ pub trait EditorSpec {
 
             for (step, is_last_step, kid) in expr.kids_and_steps() {
                 // render left point
-                Self::render_point(state, ui, &Point(path.clone(), step.left_index()));
+                Self::render_point(
+                    state,
+                    ui,
+                    &Point {
+                        path: path.clone(),
+                        index: step.left_index(),
+                    },
+                );
                 let right_index = if is_last_step {
                     Some(step.right_index())
                 } else {
@@ -137,7 +154,14 @@ pub trait EditorSpec {
 
                 // render right (last) point if at end
                 if let Some(right_index) = right_index {
-                    Self::render_point(state, ui, &Point(path.clone(), right_index));
+                    Self::render_point(
+                        state,
+                        ui,
+                        &Point {
+                            path: path.clone(),
+                            index: right_index,
+                        },
+                    );
                 }
             }
         });
