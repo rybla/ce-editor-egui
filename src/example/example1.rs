@@ -27,7 +27,7 @@ impl editor::EditorSpec for EditorSpec {
 
     fn get_diagnostics(
         _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
-    ) -> Vec<editor::Diagnostic> {
+    ) -> Vec<Self::Diagnostic> {
         todo!()
     }
 
