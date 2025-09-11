@@ -55,6 +55,24 @@ impl Handle {
             Handle::Zipper((zipper, focus)) => zipper.focus_point(focus),
         }
     }
+
+    pub fn contains_path(&self, path: &Path) -> bool {
+        match self {
+            Handle::Point(_point) => false,
+            Handle::Span((handle, _focus)) => path
+                .strip_prefix(&handle.path)
+                .and_then(|steps| {
+                    steps.first().and_then(|step| {
+                        Some(
+                            step.is_after_index(&handle.left)
+                                && step.is_before_index(&handle.right),
+                        )
+                    })
+                })
+                .unwrap_or(false),
+            Handle::Zipper((handle, focus)) => todo!(),
+        }
+    }
 }
 
 impl Default for Handle {
@@ -120,6 +138,10 @@ impl Path {
     pub fn starts_with(&self, path: &Path) -> bool {
         self.0.starts_with(&path.0)
     }
+
+    pub fn strip_prefix(&self, path: &Path) -> Option<&[Step]> {
+        self.0.strip_prefix(path.0.as_slice())
+    }
 }
 
 /// A step from an [Expr] to one of its kids.
@@ -141,6 +163,22 @@ impl Step {
 
     pub fn right_index(&self) -> Index {
         Index(self.0 + 1)
+    }
+
+    pub fn is_before_step(&self, step: &Step) -> bool {
+        self.0 < step.0
+    }
+
+    pub fn is_after_step(&self, step: &Step) -> bool {
+        self.0 > step.0
+    }
+
+    pub fn is_before_index(&self, index: &Index) -> bool {
+        self.0 < index.0
+    }
+
+    pub fn is_after_index(&self, index: &Index) -> bool {
+        self.0 + 1 > index.0
     }
 }
 
@@ -195,10 +233,6 @@ impl SpanHandle {
             SpanFocus::Left => self.left_point(),
             SpanFocus::Right => self.right_point(),
         }
-    }
-
-    pub fn starts_with(&self, path: &Path) -> bool {
-        self.path.0.starts_with(&path.0)
     }
 }
 

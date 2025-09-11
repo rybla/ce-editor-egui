@@ -114,15 +114,10 @@ pub trait EditorSpec {
         expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
         path: &Path,
     ) {
-        let in_handle = match &state.handle {
-            Handle::Point(_point) => false,
-            Handle::Span((handle, _focus)) => path.starts_with(&handle.path),
-            Handle::Zipper((handle, focus)) => todo!(),
-        };
         let frame = Frame::new()
             .outer_margin(0)
             .inner_margin(4)
-            .fill(if in_handle {
+            .fill(if state.handle.contains_path(path) {
                 HIGHLIGHT_BACKGROUND_COLOR
             } else {
                 NORMAL_BACKGROUND_COLOR
