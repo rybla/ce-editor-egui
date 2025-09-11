@@ -14,29 +14,29 @@ pub enum Handle {
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Point(Path, Index);
+pub struct Point(pub Path, pub Index);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Path(Vec<Step>);
+pub struct Path(pub Vec<Step>);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Step(usize);
+pub struct Step(pub usize);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Index(usize);
+pub struct Index(pub usize);
 
 // -----------------------------------------------------------------------------
 // SpanHandle
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct SpanHandle(SpanH, SpanFocus);
+pub struct SpanHandle(pub SpanH, pub SpanFocus);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct SpanH {
-    path: Path,
-    left: Index,
-    right: Index,
+    pub path: Path,
+    pub left: Index,
+    pub right: Index,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
@@ -56,16 +56,16 @@ pub struct Span<L>(pub Vec<Expr<L>>);
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct ZipperHandle(ZipperH, ZipperFocus);
+pub struct ZipperHandle(pub ZipperH, pub ZipperFocus);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ZipperH {
-    outer_path: Path,
-    outer_left: Index,
-    outer_right: Index,
-    inner_path: Path,
-    inner_left: Index,
-    inner_right: Index,
+    pub outer_path: Path,
+    pub outer_left: Index,
+    pub outer_right: Index,
+    pub inner_path: Path,
+    pub inner_left: Index,
+    pub inner_right: Index,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
