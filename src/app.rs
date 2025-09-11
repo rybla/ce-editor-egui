@@ -51,7 +51,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("ce-editor-egui");
 
-            ui.label(format!("handlke: {:?}", &self.editor_state.handle));
+            ui.label(format!("handle: {:?}", &self.editor_state.handle));
 
             egui::ScrollArea::both()
                 .auto_shrink([false, true])
@@ -59,7 +59,6 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
                 .show(ui, |ui| {
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                     EditorSpec::render(&mut self.editor_state, ui);
-                    todo!();
                 })
         });
     }

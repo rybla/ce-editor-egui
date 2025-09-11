@@ -14,7 +14,7 @@ pub struct EditorState<Constructor, Diagnostic> {
     pub handle: Handle,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct EditMenu {
     // TODO
 }
@@ -33,7 +33,10 @@ pub trait EditorSpec {
         state: EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> Vec<Self::Diagnostic>;
 
-    fn render_label(ui: &mut egui::Ui, label: ExprLabel<Self::Constructor, Self::Diagnostic>);
+    fn render_label(
+        ui: &mut egui::Ui,
+        label: &ExprLabel<Self::Constructor, Self::Diagnostic>,
+    ) -> egui::Response;
 
     fn render(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ui: &mut egui::Ui) {
         Self::render_expr(state, ui, &state.expr.clone(), &Path::default());
@@ -50,27 +53,11 @@ pub trait EditorSpec {
                 .inner_margin(12)
                 .outer_margin(12)
                 .corner_radius(22)
-                .fill(egui::Color32::BLUE)
-                .stroke(match &state.handle {
-                    Handle::Point(point) => {
-                        if point.0 == *path {
-                            egui::Stroke::new(2.0, egui::Color32::BLUE)
-                        } else {
-                            egui::Stroke::new(2.0, egui::Color32::BLACK)
-                        }
-                    }
-                    Handle::Span((_span_handle, _span_focus)) => {
-                        // TODO: highlight focuses
-                        egui::Stroke::new(2.0, egui::Color32::BLACK)
-                    }
-                    Handle::Zipper((_zipper_handle, _zipper_focus)) => {
-                        // TODO: highlight focuses
-                        egui::Stroke::new(2.0, egui::Color32::BLACK)
-                    }
-                });
+                .fill(egui::Color32::WHITE)
+                .stroke(egui::Stroke::new(2.0, egui::Color32::BLACK));
 
             frame.show(ui, |ui| {
-                let label = ui.button(egui::RichText::new(format!("{:?}", expr.label)));
+                let label = Self::render_label(ui, &expr.label);
                 if label.clicked() {
                     state.handle = Handle::Point(Point(path.clone(), Index(0)));
                 }

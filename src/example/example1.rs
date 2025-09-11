@@ -1,5 +1,7 @@
 use crate::{editor, expr::*};
 
+const LABEL_COLOR: egui::Color32 = egui::Color32::BLACK;
+
 type Constructor = String;
 type Diagnostic = String;
 
@@ -27,7 +29,7 @@ impl editor::EditorSpec for EditorSpec {
         };
 
         editor::EditorState {
-            expr: Expr::example(&mut mk_label, 4, 4),
+            expr: Expr::example(&mut mk_label, 4, 2),
             handle: Handle::default(),
         }
     }
@@ -35,19 +37,19 @@ impl editor::EditorSpec for EditorSpec {
     fn get_edit_menu(
         _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> editor::EditMenu {
-        todo!()
+        editor::EditMenu::default()
     }
 
     fn get_diagnostics(
         _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> Vec<Self::Diagnostic> {
-        todo!()
+        vec![]
     }
 
     fn render_label(
-        _ui: &mut egui::Ui,
-        _label: editor::ExprLabel<Self::Constructor, Self::Diagnostic>,
-    ) {
-        todo!()
+        ui: &mut egui::Ui,
+        label: &editor::ExprLabel<Self::Constructor, Self::Diagnostic>,
+    ) -> egui::Response {
+        ui.label(egui::RichText::new(label.constructor.clone()).color(LABEL_COLOR))
     }
 }
