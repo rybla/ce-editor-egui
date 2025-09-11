@@ -49,6 +49,7 @@ pub enum SpanFocus {
 // Span
 // -----------------------------------------------------------------------------
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Span<L>(pub Vec<Expr<L>>);
 
 // -----------------------------------------------------------------------------
@@ -74,6 +75,44 @@ pub enum ZipperFocus {
     InnerLeft,
     OuterRight,
     InnerRight,
+}
+
+// -----------------------------------------------------------------------------
+// Tooth
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct Tooth<L> {
+    pub left: Vec<Expr<L>>,
+    pub right: Vec<Expr<L>>,
+}
+
+// -----------------------------------------------------------------------------
+// ExprContext
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct ExprContext<L>(pub Vec<Tooth<L>>);
+
+// -----------------------------------------------------------------------------
+// SpanContext
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct SpanContext<L> {
+    pub outer: ExprContext<L>,
+    pub inner: Tooth<L>,
+}
+
+// -----------------------------------------------------------------------------
+// Zipper
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct Zipper<L> {
+    pub outer_left: Vec<Expr<L>>,
+    pub outer_right: Vec<Expr<L>>,
+    pub inner: SpanContext<L>,
 }
 
 // -----------------------------------------------------------------------------
