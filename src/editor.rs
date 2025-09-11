@@ -4,10 +4,11 @@ use std::fmt::Debug;
 
 pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
 
-pub const COLOR_NORMAL_TEXT: egui::Color32 = egui::Color32::BLACK;
-pub const COLOR_NORMAL_BACKGROUND: egui::Color32 = egui::Color32::WHITE;
-pub const COLOR_ACTIVE_TEXT: egui::Color32 = egui::Color32::WHITE;
-pub const COLOR_ACTIVE_BACKGROUND: egui::Color32 = egui::Color32::BLUE;
+pub const NORMAL_BORDER_COLOR: egui::Color32 = egui::Color32::BLACK;
+pub const NORMAL_TEXT_COLOR: egui::Color32 = egui::Color32::BLACK;
+pub const NORMAL_BACKGROUND_COLOR: egui::Color32 = egui::Color32::TRANSPARENT;
+pub const ACTIVE_TEXT_COLOR: egui::Color32 = egui::Color32::WHITE;
+pub const ACTIVE_BACKGROUND_COLOR: egui::Color32 = egui::Color32::BLUE;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprLabel<Constructor, Diagnostic> {
@@ -89,16 +90,16 @@ pub trait EditorSpec {
                 bottom: 0,
             })
             .fill(if is_handle {
-                COLOR_ACTIVE_BACKGROUND
+                ACTIVE_BACKGROUND_COLOR
             } else {
-                COLOR_NORMAL_BACKGROUND
+                NORMAL_BACKGROUND_COLOR
             });
 
         frame.show(ui, |ui| {
             let label = ui.label(egui::RichText::new(format!("•")).color(if is_handle {
-                COLOR_ACTIVE_TEXT
+                ACTIVE_TEXT_COLOR
             } else {
-                COLOR_ACTIVE_BACKGROUND
+                ACTIVE_BACKGROUND_COLOR
             }));
             if label.clicked() {
                 state.handle = Handle::Point(point.clone())
@@ -113,10 +114,10 @@ pub trait EditorSpec {
         path: &Path,
     ) {
         let frame = Frame::new()
+            .outer_margin(0)
             .inner_margin(4)
-            .outer_margin(4)
-            .fill(egui::Color32::WHITE)
-            .stroke(egui::Stroke::new(1.0, egui::Color32::BLACK));
+            .fill(NORMAL_BACKGROUND_COLOR)
+            .stroke(egui::Stroke::new(1.0, NORMAL_BORDER_COLOR));
 
         frame.show(ui, |ui| {
             let label = Self::render_label(ui, &expr.label);
