@@ -26,7 +26,7 @@ pub struct Step(usize);
 pub struct Index(usize);
 
 // -----------------------------------------------------------------------------
-// Span
+// SpanHandle
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
@@ -46,7 +46,7 @@ pub enum SpanFocus {
 }
 
 // -----------------------------------------------------------------------------
-// Zipper
+// ZipperHandle
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
