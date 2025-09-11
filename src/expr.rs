@@ -72,26 +72,34 @@ pub struct Point {
 
 impl Point {
     pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) {
-        let kid = expr.at_path(&self.path);
-        let (leftmost, _rightmost) = kid.kids.extreme_indexes();
+        let subexpr = expr.at_path(&self.path);
+        let (leftmost, _rightmost) = subexpr.kids.extreme_indexes();
         if self.index == leftmost {
             if let Some(step) = self.path.pop() {
                 self.index = step.left_index();
             }
         } else {
-            self.index = Index(self.index.0 - 1);
+            let step = self.index.left_step();
+            let kid = subexpr.kids.at_step(&step);
+            let (_kid_leftmost, kid_rightmost) = kid.kids.extreme_indexes();
+            self.path.push(step);
+            self.index = kid_rightmost;
         }
     }
 
     pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) {
-        let kid = expr.at_path(&self.path);
-        let (_leftmost, rightmost) = kid.kids.extreme_indexes();
+        let subexpr = expr.at_path(&self.path);
+        let (_leftmost, rightmost) = subexpr.kids.extreme_indexes();
         if self.index == rightmost {
             if let Some(step) = self.path.pop() {
                 self.index = step.right_index();
             }
         } else {
-            self.index = Index(self.index.0 + 1);
+            let step = self.index.right_step();
+            let kid = subexpr.kids.at_step(&step);
+            let (kid_leftmost, _kid_rightmost) = kid.kids.extreme_indexes();
+            self.path.push(step);
+            self.index = kid_leftmost;
         }
     }
 }
@@ -115,6 +123,14 @@ impl Path {
 pub struct Step(pub usize);
 
 impl Step {
+    pub fn left_step(&self) -> Step {
+        Step(self.0 - 1)
+    }
+
+    pub fn right_step(&self) -> Step {
+        Step(self.0 + 1)
+    }
+
     pub fn left_index(&self) -> Index {
         Index(self.0)
     }
@@ -128,6 +144,24 @@ impl Step {
 /// [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
 pub struct Index(pub usize);
+
+impl Index {
+    pub fn left_index(&self) -> Index {
+        Index(self.0 - 1)
+    }
+
+    pub fn right_index(&self) -> Index {
+        Index(self.0 + 1)
+    }
+
+    pub fn left_step(&self) -> Step {
+        Step(self.0 - 1)
+    }
+
+    pub fn right_step(&self) -> Step {
+        Step(self.0)
+    }
+}
 
 /// A handle for a [Span].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
@@ -264,13 +298,13 @@ impl<L: Debug> Expr<L> {
         &'a self,
     ) -> std::iter::Map<
         std::iter::Enumerate<std::slice::Iter<'a, Expr<L>>>,
-        impl FnMut((usize, &'a Expr<L>)) -> (Step, bool, &'a Expr<L>),
+        impl FnMut((usize, &'a Expr<L>)) -> (Step, &'a Expr<L>),
     > {
         self.kids
             .0
             .iter()
             .enumerate()
-            .map(|(i, kid)| (Step(i), i != 0 && i == self.kids.0.len() - 1, kid))
+            .map(|(i, kid)| (Step(i), kid))
     }
 
     pub fn example<F>(mk_label: &mut F, width: usize, depth: usize) -> Self

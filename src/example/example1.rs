@@ -27,7 +27,7 @@ impl editor::EditorSpec for EditorSpec {
         };
 
         editor::EditorState {
-            expr: Expr::example(&mut mk_label, 2, 3),
+            expr: Expr::example(&mut mk_label, 2, 6),
             handle: Handle::default(),
         }
     }

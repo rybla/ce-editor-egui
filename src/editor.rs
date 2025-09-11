@@ -2,12 +2,12 @@ use crate::expr::*;
 use egui::Frame;
 use std::fmt::Debug;
 
+pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
+
 pub const COLOR_NORMAL_TEXT: egui::Color32 = egui::Color32::BLACK;
 pub const COLOR_NORMAL_BACKGROUND: egui::Color32 = egui::Color32::WHITE;
 pub const COLOR_ACTIVE_TEXT: egui::Color32 = egui::Color32::WHITE;
 pub const COLOR_ACTIVE_BACKGROUND: egui::Color32 = egui::Color32::BLUE;
-
-pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprLabel<Constructor, Diagnostic> {
@@ -134,7 +134,7 @@ pub trait EditorSpec {
                 }
             }
 
-            for (step, is_last_step, kid) in expr.kids_and_steps() {
+            for (step, kid) in expr.kids_and_steps() {
                 // render left point
                 Self::render_point(
                     state,
@@ -144,29 +144,22 @@ pub trait EditorSpec {
                         index: step.left_index(),
                     },
                 );
-                let right_index = if is_last_step {
-                    Some(step.right_index())
-                } else {
-                    None
-                };
 
                 // render kid
                 let mut kid_path = path.clone();
                 kid_path.push(step);
                 Self::render_expr(state, ui, kid, &kid_path);
-
-                // render right (last) point if at end
-                if let Some(right_index) = right_index {
-                    Self::render_point(
-                        state,
-                        ui,
-                        &Point {
-                            path: path.clone(),
-                            index: right_index,
-                        },
-                    );
-                }
             }
+
+            // render last point
+            Self::render_point(
+                state,
+                ui,
+                &Point {
+                    path: path.clone(),
+                    index: expr.kids.extreme_indexes().1,
+                },
+            );
         });
 
         ui.set_max_size(ui.min_size());
