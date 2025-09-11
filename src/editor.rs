@@ -46,12 +46,15 @@ pub trait EditorSpec {
     ) -> egui::Response;
 
     fn update(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ctx: &egui::Context) {
+        let mut focus_point = state.handle.focus_point();
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
             state.handle.move_up(&state.expr);
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-            state.handle.move_prev(&state.expr);
+            focus_point.move_prev(&state.expr);
+            state.handle = Handle::Point(focus_point);
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-            state.handle.move_next(&state.expr);
+            focus_point.move_next(&state.expr);
+            state.handle = Handle::Point(focus_point);
         }
     }
 

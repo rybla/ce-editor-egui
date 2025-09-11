@@ -31,35 +31,29 @@ impl Handle {
                     ));
                 }
             }
-            Handle::Span((SpanHandle { path, left, right }, focus)) => {
+            Handle::Span((SpanHandle { path, left, right }, _focus)) => {
                 let kid = expr.at_path(path);
                 let (leftmost, rightmost) = kid.kids.extreme_indexes();
                 if *left == leftmost && *right == rightmost {
                     if let Some(step) = path.pop() {
-                        *self = Handle::Span((
-                            SpanHandle {
-                                path: path.clone(),
-                                left: step.left_index(),
-                                right: step.right_index(),
-                            },
-                            focus.clone(),
-                        ))
+                        *left = step.left_index();
+                        *right = step.right_index();
                     }
                 } else {
                     *left = leftmost;
                     *right = rightmost;
                 }
             }
-            Handle::Zipper(_) => todo!(),
+            Handle::Zipper(_) => todo!("move_up zipper"),
         }
     }
 
-    pub fn move_prev<L>(&mut self, _expr: &Expr<L>) {
-        todo!()
-    }
-
-    pub fn move_next<L>(&mut self, _expr: &Expr<L>) {
-        todo!()
+    pub fn focus_point<'a>(&'a self) -> Point {
+        match self {
+            Handle::Point(point) => point.clone(),
+            Handle::Span((span, focus)) => span.focus_point(focus),
+            Handle::Zipper((zipper, focus)) => zipper.focus_point(focus),
+        }
     }
 }
 
@@ -74,6 +68,32 @@ impl Default for Handle {
 pub struct Point {
     pub path: Path,
     pub index: Index,
+}
+
+impl Point {
+    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) {
+        let kid = expr.at_path(&self.path);
+        let (leftmost, _rightmost) = kid.kids.extreme_indexes();
+        if self.index == leftmost {
+            if let Some(step) = self.path.pop() {
+                self.index = step.left_index();
+            }
+        } else {
+            self.index = Index(self.index.0 - 1);
+        }
+    }
+
+    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) {
+        let kid = expr.at_path(&self.path);
+        let (_leftmost, rightmost) = kid.kids.extreme_indexes();
+        if self.index == rightmost {
+            if let Some(step) = self.path.pop() {
+                self.index = step.right_index();
+            }
+        } else {
+            self.index = Index(self.index.0 + 1);
+        }
+    }
 }
 
 /// A path from the top [Expr] to an [Expr].
@@ -125,10 +145,17 @@ impl SpanHandle {
         }
     }
 
-    pub fn right_point(&self) -> Point {
+    pub fn right_point<'a>(&'a self) -> Point {
         Point {
             path: self.path.clone(),
             index: self.right.clone(),
+        }
+    }
+
+    pub fn focus_point(&self, focus: &SpanFocus) -> Point {
+        match focus {
+            SpanFocus::Left => self.left_point(),
+            SpanFocus::Right => self.right_point(),
         }
     }
 }
@@ -181,6 +208,15 @@ impl ZipperHandle {
         Point {
             path: self.inner_path(),
             index: self.inner_right.clone(),
+        }
+    }
+
+    fn focus_point(&self, focus: &ZipperFocus) -> Point {
+        match focus {
+            ZipperFocus::OuterLeft => self.outer_left_point(),
+            ZipperFocus::InnerLeft => self.inner_left_point(),
+            ZipperFocus::InnerRight => self.inner_right_point(),
+            ZipperFocus::OuterRight => self.outer_right_point(),
         }
     }
 }
