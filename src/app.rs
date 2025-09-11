@@ -1,17 +1,11 @@
 use crate::editor;
 
-pub struct App<Constructor, Diagnostic, EditorSpec>
-where
-    EditorSpec: editor::EditorSpec<Constructor, Diagnostic>,
-{
+pub struct App<EditorSpec: editor::EditorSpec> {
     editor_spec: EditorSpec,
-    editor_state: editor::EditorState<Constructor, Diagnostic>,
+    editor_state: editor::EditorState<EditorSpec::Constructor, EditorSpec::Diagnostic>,
 }
 
-impl<Constructor, Diagnostic, EditorSpec> Default for App<Constructor, Diagnostic, EditorSpec>
-where
-    EditorSpec: editor::EditorSpec<Constructor, Diagnostic>,
-{
+impl<EditorSpec: editor::EditorSpec> Default for App<EditorSpec> {
     fn default() -> Self {
         Self {
             editor_spec: todo!(),
@@ -20,10 +14,7 @@ where
     }
 }
 
-impl<Constructor, Diagnostic, EditorSpec> App<Constructor, Diagnostic, EditorSpec>
-where
-    EditorSpec: editor::EditorSpec<Constructor, Diagnostic>,
-{
+impl<EditorSpec: editor::EditorSpec> App<EditorSpec> {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -33,10 +24,7 @@ where
     }
 }
 
-impl<Constructor, Diagnostic, EditorSpec> eframe::App for App<Constructor, Diagnostic, EditorSpec>
-where
-    EditorSpec: editor::EditorSpec<Constructor, Diagnostic>,
-{
+impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         // TODO: remove this since not doing storage

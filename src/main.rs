@@ -20,7 +20,11 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "ce-editor-egui",
         native_options,
-        Box::new(|cc| Ok(Box::new(ce_editor_egui::App::new(cc)))), // TODO: specify example being used
+        Box::new(|cc| {
+            Ok(Box::new(ce_editor_egui::App::<
+                ce_editor_egui::example::example1::EditorSpec,
+            >::new(cc)))
+        }), // TODO: specify example being used
     )
 }
 
