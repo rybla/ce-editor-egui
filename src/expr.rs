@@ -33,7 +33,11 @@ pub struct Index(usize);
 pub struct SpanHandle(Span, SpanFocus);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Span(String);
+pub struct Span {
+    path: Path,
+    left: Index,
+    right: Index,
+}
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum SpanFocus {}
