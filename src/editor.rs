@@ -1,13 +1,13 @@
 use crate::expr::*;
 
 pub struct ExprLabel<Constructor, Diagnostic> {
-    constructor: Constructor,
-    diagnostic: Diagnostic,
+    pub constructor: Constructor,
+    pub diagnostic: Diagnostic,
 }
 
 pub struct EditorState<Constructor, Diagnostic> {
-    pub initial_expr: Expr<ExprLabel<Constructor, Diagnostic>>,
-    pub initial_handle: Handle,
+    pub expr: Expr<ExprLabel<Constructor, Diagnostic>>,
+    pub handle: Handle,
 }
 
 pub struct EditMenu {}

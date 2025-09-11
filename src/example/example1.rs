@@ -20,20 +20,20 @@ impl editor::EditorSpec for EditorSpec {
     }
 
     fn get_edit_menu(
-        state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
+        _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> editor::EditMenu {
         todo!()
     }
 
     fn get_diagnostics(
-        state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
+        _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> Vec<editor::Diagnostic> {
         todo!()
     }
 
     fn render_label(
-        ui: &mut egui::Ui,
-        label: editor::ExprLabel<Self::Constructor, Self::Diagnostic>,
+        _ui: &mut egui::Ui,
+        _label: editor::ExprLabel<Self::Constructor, Self::Diagnostic>,
     ) {
         todo!()
     }

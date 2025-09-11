@@ -1,22 +1,20 @@
 use crate::editor;
 
 pub struct App<EditorSpec: editor::EditorSpec> {
-    editor_spec: EditorSpec,
-    editor_state: editor::EditorState<EditorSpec::Constructor, EditorSpec::Diagnostic>,
+    pub editor_state: editor::EditorState<EditorSpec::Constructor, EditorSpec::Diagnostic>,
 }
 
 impl<EditorSpec: editor::EditorSpec> Default for App<EditorSpec> {
     fn default() -> Self {
         Self {
-            editor_spec: todo!(),
-            editor_state: todo!(),
+            editor_state: EditorSpec::initial_state(),
         }
     }
 }
 
 impl<EditorSpec: editor::EditorSpec> App<EditorSpec> {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
@@ -26,7 +24,7 @@ impl<EditorSpec: editor::EditorSpec> App<EditorSpec> {
 
 impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
     /// Called by the framework to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         // TODO: remove this since not doing storage
         // eframe::set_value(storage, eframe::APP_KEY, self);
     }
@@ -53,8 +51,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("ce-editor-egui");
 
-            // ui.label(format!("focus: {:?}", self.focus));
-            todo!();
+            ui.label(format!("handlke: {:?}", &self.editor_state.handle));
 
             egui::ScrollArea::both()
                 .auto_shrink([false, true])
