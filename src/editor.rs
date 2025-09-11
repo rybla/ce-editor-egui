@@ -2,6 +2,11 @@ use crate::expr::*;
 use egui::Frame;
 use std::fmt::Debug;
 
+pub const COLOR_NORMAL_TEXT: egui::Color32 = egui::Color32::BLACK;
+pub const COLOR_NORMAL_BACKGROUND: egui::Color32 = egui::Color32::WHITE;
+pub const COLOR_ACTIVE_TEXT: egui::Color32 = egui::Color32::WHITE;
+pub const COLOR_ACTIVE_BACKGROUND: egui::Color32 = egui::Color32::BLUE;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprLabel<Constructor, Diagnostic> {
     pub constructor: Constructor,
@@ -42,31 +47,93 @@ pub trait EditorSpec {
         Self::render_expr(state, ui, &state.expr.clone(), &Path::default());
     }
 
+    fn render_point(
+        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
+        ui: &mut egui::Ui,
+        point: &Point,
+    ) {
+        let is_handle = match &state.handle {
+            Handle::Point(handle) => point == handle,
+            Handle::Span((handle, _)) => {
+                *point == handle.left_point() || *point == handle.right_point()
+            }
+            Handle::Zipper((handle, _)) => {
+                *point == handle.outer_left_point()
+                    || *point == handle.outer_right_point()
+                    || *point == handle.inner_left_point()
+                    || *point == handle.inner_right_point()
+            }
+            _ => false,
+        };
+
+        let frame = Frame::new()
+            .inner_margin(1)
+            .outer_margin(1)
+            .fill(if is_handle {
+                COLOR_ACTIVE_BACKGROUND
+            } else {
+                COLOR_NORMAL_BACKGROUND
+            });
+
+        frame.show(ui, |ui| {
+            let label = ui.label(egui::RichText::new(format!("|")).color(if is_handle {
+                COLOR_ACTIVE_TEXT
+            } else {
+                COLOR_ACTIVE_BACKGROUND
+            }));
+            if label.clicked() {
+                state.handle = Handle::Point(point.clone())
+            }
+        });
+    }
+
     fn render_expr(
         state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
         ui: &mut egui::Ui,
         expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
         path: &Path,
     ) {
-        ui.vertical(|ui| {
+        ui.horizontal(|ui| {
             let frame = Frame::new()
-                .inner_margin(12)
-                .outer_margin(12)
-                .corner_radius(22)
+                .inner_margin(4)
+                .outer_margin(4)
                 .fill(egui::Color32::WHITE)
-                .stroke(egui::Stroke::new(2.0, egui::Color32::BLACK));
+                .stroke(egui::Stroke::new(1.0, egui::Color32::BLACK));
 
             frame.show(ui, |ui| {
                 let label = Self::render_label(ui, &expr.label);
                 if label.clicked() {
-                    state.handle = Handle::Point(Point(path.clone(), Index(0)));
+                    let mut path = path.clone();
+                    if let Some(step_parent) = path.pop() {
+                        state.handle = Handle::Span((
+                            SpanHandle {
+                                path: path,
+                                left: step_parent.left_index(),
+                                right: step_parent.right_index(),
+                            },
+                            SpanFocus::Left,
+                        ));
+                    }
                 }
 
-                for (i, kid) in expr.kids.0.iter().enumerate() {
-                    let step = Step(i);
+                for (step, is_last_step, kid) in expr.kids_and_steps() {
+                    // render left point
+                    Self::render_point(state, ui, &Point(path.clone(), step.left_index()));
+                    let right_index = if is_last_step {
+                        Some(step.right_index())
+                    } else {
+                        None
+                    };
+
+                    // render kid
                     let mut kid_path = path.clone();
-                    kid_path.0.push(step);
-                    Self::render_expr(state, ui, kid, path);
+                    kid_path.push(step);
+                    Self::render_expr(state, ui, kid, &kid_path);
+
+                    // render right (last) point if at end
+                    if let Some(right_index) = right_index {
+                        Self::render_point(state, ui, &Point(path.clone(), right_index));
+                    }
                 }
             });
 

@@ -1,7 +1,5 @@
 use crate::{editor, expr::*};
 
-const LABEL_COLOR: egui::Color32 = egui::Color32::BLACK;
-
 type Constructor = String;
 type Diagnostic = String;
 
@@ -50,6 +48,6 @@ impl editor::EditorSpec for EditorSpec {
         ui: &mut egui::Ui,
         label: &editor::ExprLabel<Self::Constructor, Self::Diagnostic>,
     ) -> egui::Response {
-        ui.label(egui::RichText::new(label.constructor.clone()).color(LABEL_COLOR))
+        ui.label(egui::RichText::new(label.constructor.clone()))
     }
 }
