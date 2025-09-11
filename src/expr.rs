@@ -40,7 +40,10 @@ pub struct Span {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub enum SpanFocus {}
+pub enum SpanFocus {
+    Left,
+    Right,
+}
 
 // -----------------------------------------------------------------------------
 // Zipper
