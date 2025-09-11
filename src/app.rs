@@ -58,7 +58,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
                 .scroll_source(egui::containers::scroll_area::ScrollSource::MOUSE_WHEEL)
                 .show(ui, |ui| {
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                    // self.render_tree(ui, ctx);
+                    EditorSpec::render(&mut self.editor_state, ui);
                     todo!();
                 })
         });

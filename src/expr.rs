@@ -16,12 +16,18 @@ pub type SpanHandleAndFocus = (SpanHandle, SpanFocus);
 
 pub type ZipperHandleAndFocus = (ZipperHandle, ZipperFocus);
 
+impl Default for Handle {
+    fn default() -> Self {
+        Self::Point(Point::default())
+    }
+}
+
 /// A point between two [Expr]s.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
 pub struct Point(pub Path, pub Index);
 
 /// A path from the top [Expr] to an [Expr].
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
 pub struct Path(pub Vec<Step>);
 
 /// A step from an [Expr] to one of its kids.
@@ -30,7 +36,7 @@ pub struct Step(pub usize);
 
 /// An index between kids, or before the first kid, or after the last kid of an
 /// [Expr].
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
 pub struct Index(pub usize);
 
 /// A handle for a [Span].
@@ -97,6 +103,22 @@ impl<L: Debug> Expr<L> {
             e = e.at_step(step)
         }
         e
+    }
+
+    pub fn example<F>(mk_label: &mut F, width: usize, depth: usize) -> Self
+    where
+        F: FnMut() -> L,
+    {
+        Expr {
+            label: mk_label(),
+            kids: Span(if depth == 0 {
+                vec![]
+            } else {
+                (0..width)
+                    .map(|_| Self::example(mk_label, width, depth - 1))
+                    .collect()
+            }),
+        }
     }
 }
 

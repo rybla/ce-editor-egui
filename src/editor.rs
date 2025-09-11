@@ -2,7 +2,7 @@ use crate::expr::*;
 use egui::Frame;
 use std::fmt::Debug;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprLabel<Constructor, Diagnostic> {
     pub constructor: Constructor,
     pub diagnostic: Diagnostic,
@@ -34,6 +34,10 @@ pub trait EditorSpec {
     ) -> Vec<Self::Diagnostic>;
 
     fn render_label(ui: &mut egui::Ui, label: ExprLabel<Self::Constructor, Self::Diagnostic>);
+
+    fn render(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ui: &mut egui::Ui) {
+        Self::render_expr(state, ui, &state.expr.clone(), &Path::default());
+    }
 
     fn render_expr(
         state: &mut EditorState<Self::Constructor, Self::Diagnostic>,

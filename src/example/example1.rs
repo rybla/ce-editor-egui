@@ -1,4 +1,4 @@
-use crate::editor;
+use crate::{editor, expr::*};
 
 type Constructor = String;
 type Diagnostic = String;
@@ -12,11 +12,24 @@ impl editor::EditorSpec for EditorSpec {
     type Diagnostic = Diagnostic;
 
     fn name() -> String {
-        todo!()
+        format!("example1")
     }
 
     fn initial_state() -> editor::EditorState<Self::Constructor, Self::Diagnostic> {
-        todo!()
+        let mut i = 0;
+
+        let mut mk_label = || {
+            i += 1;
+            editor::ExprLabel {
+                constructor: format!("label_{i}"),
+                diagnostic: format!("diagnostic"),
+            }
+        };
+
+        editor::EditorState {
+            expr: Expr::example(&mut mk_label, 4, 4),
+            handle: Handle::default(),
+        }
     }
 
     fn get_edit_menu(
