@@ -9,6 +9,7 @@ pub const NORMAL_TEXT_COLOR: egui::Color32 = egui::Color32::BLACK;
 pub const NORMAL_BACKGROUND_COLOR: egui::Color32 = egui::Color32::TRANSPARENT;
 pub const ACTIVE_TEXT_COLOR: egui::Color32 = egui::Color32::WHITE;
 pub const ACTIVE_BACKGROUND_COLOR: egui::Color32 = egui::Color32::BLUE;
+pub const HIGHLIGHT_BACKGROUND_COLOR: egui::Color32 = egui::Color32::LIGHT_BLUE;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprLabel<Constructor, Diagnostic> {
@@ -113,10 +114,19 @@ pub trait EditorSpec {
         expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
         path: &Path,
     ) {
+        let in_handle = match &state.handle {
+            Handle::Point(_point) => false,
+            Handle::Span((handle, _focus)) => path.starts_with(&handle.path),
+            Handle::Zipper((handle, focus)) => todo!(),
+        };
         let frame = Frame::new()
             .outer_margin(0)
             .inner_margin(4)
-            .fill(NORMAL_BACKGROUND_COLOR)
+            .fill(if in_handle {
+                HIGHLIGHT_BACKGROUND_COLOR
+            } else {
+                NORMAL_BACKGROUND_COLOR
+            })
             .stroke(egui::Stroke::new(1.0, NORMAL_BORDER_COLOR));
 
         frame.show(ui, |ui| {

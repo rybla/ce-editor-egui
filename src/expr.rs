@@ -116,6 +116,10 @@ impl Path {
     pub fn push(&mut self, step: Step) {
         self.0.push(step);
     }
+
+    pub fn starts_with(&self, path: &Path) -> bool {
+        self.0.starts_with(&path.0)
+    }
 }
 
 /// A step from an [Expr] to one of its kids.
@@ -191,6 +195,10 @@ impl SpanHandle {
             SpanFocus::Left => self.left_point(),
             SpanFocus::Right => self.right_point(),
         }
+    }
+
+    pub fn starts_with(&self, path: &Path) -> bool {
+        self.path.0.starts_with(&path.0)
     }
 }
 
