@@ -68,8 +68,13 @@ pub trait EditorSpec {
         };
 
         let frame = Frame::new()
-            .inner_margin(1)
-            .outer_margin(1)
+            .outer_margin(0)
+            .inner_margin(egui::Margin {
+                left: 4,
+                right: 4,
+                top: 0,
+                bottom: 0,
+            })
             .fill(if is_handle {
                 COLOR_ACTIVE_BACKGROUND
             } else {
@@ -77,7 +82,7 @@ pub trait EditorSpec {
             });
 
         frame.show(ui, |ui| {
-            let label = ui.label(egui::RichText::new(format!("|")).color(if is_handle {
+            let label = ui.label(egui::RichText::new(format!("•")).color(if is_handle {
                 COLOR_ACTIVE_TEXT
             } else {
                 COLOR_ACTIVE_BACKGROUND
@@ -147,7 +152,7 @@ pub trait EditorSpec {
         path: &Path,
     ) {
         if expr.height() <= MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
-            ui.horizontal(|ui| Self::render_expr_contents(state, ui, expr, path));
+            ui.horizontal_top(|ui| Self::render_expr_contents(state, ui, expr, path));
         } else {
             ui.vertical(|ui| Self::render_expr_contents(state, ui, expr, path));
         }
