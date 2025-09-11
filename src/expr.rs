@@ -30,10 +30,10 @@ pub struct Index(usize);
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct SpanHandle(Span, SpanFocus);
+pub struct SpanHandle(SpanH, SpanFocus);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Span {
+pub struct SpanH {
     path: Path,
     left: Index,
     right: Index,
@@ -50,10 +50,17 @@ pub enum SpanFocus {
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct ZipperHandle(Zipper, ZipperFocus);
+pub struct ZipperHandle(ZipperH, ZipperFocus);
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Zipper(String);
+pub struct ZipperH {
+    outer_path: Path,
+    outer_left: Index,
+    outer_right: Index,
+    inner_path: Path,
+    inner_left: Index,
+    inner_right: Index,
+}
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum ZipperFocus {}
