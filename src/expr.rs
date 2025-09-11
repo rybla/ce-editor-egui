@@ -1,5 +1,7 @@
+use std::fmt::Debug;
+
 // -----------------------------------------------------------------------------
-// Handle
+// Handle: Point, SpanHandle, ZipperHandle
 // -----------------------------------------------------------------------------
 
 /// A handle for a [Fragment].
@@ -14,53 +16,30 @@ pub type SpanHandleAndFocus = (SpanHandle, SpanFocus);
 
 pub type ZipperHandleAndFocus = (ZipperHandle, ZipperFocus);
 
-// -----------------------------------------------------------------------------
-// Fragment
-// -----------------------------------------------------------------------------
-
-/// A fragment of syntax.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub enum Fragment<L> {
-    Span(Span<L>),
-    Zipper(Expr<L>),
-}
-
-// -----------------------------------------------------------------------------
-// Point
-// -----------------------------------------------------------------------------
-
-/// A point between two expressions.
+/// A point between two [Expr]s.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Point(pub Path, pub Index);
 
-/// A path from the top span to an expression.
+/// A path from the top [Expr] to an [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Path(pub Vec<Step>);
 
-/// A step from an expression to one of its kids.
+/// A step from an [Expr] to one of its kids.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Step(pub usize);
 
-/// An index between kid, or before the first kid, or after the last kid of an
-/// expression.
+/// An index between kids, or before the first kid, or after the last kid of an
+/// [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Index(pub usize);
 
-// -----------------------------------------------------------------------------
-// SpanHandle
-// -----------------------------------------------------------------------------
-
-/// A handle for a span.
+/// A handle for a [Span].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct SpanHandle {
     pub path: Path,
     pub left: Index,
     pub right: Index,
 }
-
-// -----------------------------------------------------------------------------
-// SpanFocus
-// -----------------------------------------------------------------------------
 
 /// A focus of a [SpanHandle].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
@@ -69,17 +48,7 @@ pub enum SpanFocus {
     Right,
 }
 
-// -----------------------------------------------------------------------------
-// Span
-// -----------------------------------------------------------------------------
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Span<L>(pub Vec<Expr<L>>);
-
-// -----------------------------------------------------------------------------
-// ZipperHandle
-// -----------------------------------------------------------------------------
-
+/// A hanle for a [Zipper].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ZipperHandle {
     pub outer_path: Path,
@@ -90,10 +59,7 @@ pub struct ZipperHandle {
     pub inner_right: Index,
 }
 
-// -----------------------------------------------------------------------------
-// ZipperFocus
-// -----------------------------------------------------------------------------
-
+/// A focus fro a [ZipperHandle].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum ZipperFocus {
     OuterLeft,
@@ -103,49 +69,71 @@ pub enum ZipperFocus {
 }
 
 // -----------------------------------------------------------------------------
-// Tooth
+// Fragment: Expr, Span, Zipper
 // -----------------------------------------------------------------------------
 
+/// A fragment of syntax.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum Fragment<L> {
+    Span(Span<L>),
+    Zipper(Expr<L>),
+}
+
+/// An expression of syntax.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct Expr<L> {
+    pub label: L,
+    pub kids: Span<L>,
+}
+
+impl<L: Debug> Expr<L> {
+    pub fn at_step<'a>(&'a self, step: &Step) -> &'a Expr<L> {
+        self.kids.at_step(step)
+    }
+
+    pub fn at_path<'a>(&'a self, path: &Path) -> &'a Expr<L> {
+        let mut e = self;
+        for step in path.0.iter() {
+            e = e.at_step(step)
+        }
+        e
+    }
+}
+
+/// A span of [Expr]s.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct Span<L>(pub Vec<Expr<L>>);
+
+impl<L: Debug> Span<L> {
+    pub fn at_step<'a>(&'a self, step: &Step) -> &'a Expr<L> {
+        self.0
+            .get(step.0)
+            .unwrap_or_else(|| panic!("step out of bounds: span = {self:?}; step = {step:?}"))
+    }
+}
+
+/// A tooth of an [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Tooth<L> {
     pub left: Vec<Expr<L>>,
     pub right: Vec<Expr<L>>,
 }
 
-// -----------------------------------------------------------------------------
-// ExprContext
-// -----------------------------------------------------------------------------
-
+/// A context around an [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ExprContext<L>(pub Vec<Tooth<L>>);
 
-// -----------------------------------------------------------------------------
-// SpanContext
-// -----------------------------------------------------------------------------
-
+/// A context around a [Span].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct SpanContext<L> {
     pub outer: ExprContext<L>,
     pub inner: Tooth<L>,
 }
 
-// -----------------------------------------------------------------------------
-// Zipper
-// -----------------------------------------------------------------------------
-
+/// A zipper between two [SpanHandle]s.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Zipper<L> {
     pub outer_left: Vec<Expr<L>>,
     pub outer_right: Vec<Expr<L>>,
     pub inner: SpanContext<L>,
-}
-
-// -----------------------------------------------------------------------------
-// Expr
-// -----------------------------------------------------------------------------
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct Expr<L> {
-    pub label: L,
-    pub kids: Vec<Expr<L>>,
 }
