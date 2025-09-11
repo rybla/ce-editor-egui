@@ -145,16 +145,19 @@ pub struct Expr<L> {
 }
 
 impl<L: Debug> Expr<L> {
+    pub fn height(&self) -> u32 {
+        self.kids
+            .0
+            .iter()
+            .fold(0, |h, e| std::cmp::max(h, 1 + e.height()))
+    }
+
     pub fn at_step<'a>(&'a self, step: &Step) -> &'a Expr<L> {
         self.kids.at_step(step)
     }
 
     pub fn at_path<'a>(&'a self, path: &Path) -> &'a Expr<L> {
-        let mut e = self;
-        for step in path.0.iter() {
-            e = e.at_step(step)
-        }
-        e
+        path.0.iter().fold(self, |e, step| e.at_step(step))
     }
 
     pub fn kids_and_steps<'a>(
