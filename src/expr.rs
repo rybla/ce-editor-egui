@@ -63,7 +63,12 @@ pub struct ZipperH {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub enum ZipperFocus {}
+pub enum ZipperFocus {
+    OuterLeft,
+    InnerLeft,
+    OuterRight,
+    InnerRight,
+}
 
 // -----------------------------------------------------------------------------
 // Expr
