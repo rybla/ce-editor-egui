@@ -1,15 +1,38 @@
 use crate::expr::*;
 use egui::Frame;
+use lazy_static::lazy_static;
 use std::fmt::Debug;
 
 pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
 
-pub const NORMAL_BORDER_COLOR: egui::Color32 = egui::Color32::BLACK;
-pub const NORMAL_TEXT_COLOR: egui::Color32 = egui::Color32::BLACK;
-pub const NORMAL_BACKGROUND_COLOR: egui::Color32 = egui::Color32::TRANSPARENT;
-pub const ACTIVE_TEXT_COLOR: egui::Color32 = egui::Color32::WHITE;
-pub const ACTIVE_BACKGROUND_COLOR: egui::Color32 = egui::Color32::BLUE;
-pub const HIGHLIGHT_BACKGROUND_COLOR: egui::Color32 = egui::Color32::LIGHT_BLUE;
+#[derive(Clone)]
+pub struct ColorScheme {
+    pub normal_border: egui::Color32,
+    pub normal_text: egui::Color32,
+    pub normal_background: egui::Color32,
+    pub active_text: egui::Color32,
+    pub active_background: egui::Color32,
+    pub highlight_background: egui::Color32,
+}
+
+lazy_static! {
+    pub static ref dark_color_scheme: ColorScheme = ColorScheme {
+        normal_border: egui::Color32::BLACK,
+        normal_text: egui::Color32::BLACK,
+        normal_background: egui::Color32::TRANSPARENT,
+        active_text: egui::Color32::WHITE,
+        active_background: egui::Color32::BLUE,
+        highlight_background: egui::Color32::DARK_BLUE,
+    };
+    pub static ref light_color_scheme: ColorScheme = ColorScheme {
+        normal_border: egui::Color32::WHITE,
+        normal_text: egui::Color32::BLACK,
+        normal_background: egui::Color32::TRANSPARENT,
+        active_text: egui::Color32::WHITE,
+        active_background: egui::Color32::BLUE,
+        highlight_background: egui::Color32::LIGHT_BLUE,
+    };
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprLabel<Constructor, Diagnostic> {
@@ -46,6 +69,13 @@ pub trait EditorSpec {
         ui: &mut egui::Ui,
         label: &ExprLabel<Self::Constructor, Self::Diagnostic>,
     ) -> egui::Response;
+
+    fn color_scheme(ui: &egui::Ui) -> &'static ColorScheme {
+        match ui.ctx().theme() {
+            egui::Theme::Dark => &dark_color_scheme,
+            egui::Theme::Light => &light_color_scheme,
+        }
+    }
 
     fn update(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ctx: &egui::Context) {
         let mut focus_point = state.handle.focus_point();
@@ -91,16 +121,16 @@ pub trait EditorSpec {
                 bottom: 0,
             })
             .fill(if is_handle {
-                ACTIVE_BACKGROUND_COLOR
+                Self::color_scheme(ui).active_background
             } else {
-                NORMAL_BACKGROUND_COLOR
+                Self::color_scheme(ui).normal_background
             });
 
         frame.show(ui, |ui| {
             let label = ui.label(egui::RichText::new(format!("•")).color(if is_handle {
-                ACTIVE_TEXT_COLOR
+                Self::color_scheme(ui).active_text
             } else {
-                ACTIVE_BACKGROUND_COLOR
+                Self::color_scheme(ui).normal_text
             }));
             if label.clicked() {
                 state.handle = Handle::Point(point.clone())
@@ -118,11 +148,11 @@ pub trait EditorSpec {
             .outer_margin(0)
             .inner_margin(4)
             .fill(if state.handle.contains_path(path) {
-                HIGHLIGHT_BACKGROUND_COLOR
+                Self::color_scheme(ui).highlight_background
             } else {
-                NORMAL_BACKGROUND_COLOR
+                Self::color_scheme(ui).normal_background
             })
-            .stroke(egui::Stroke::new(1.0, NORMAL_BORDER_COLOR));
+            .stroke(egui::Stroke::new(1.0, Self::color_scheme(ui).normal_border));
 
         frame.show(ui, |ui| {
             let label = Self::render_label(ui, &expr.label);
