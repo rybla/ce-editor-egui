@@ -48,6 +48,45 @@ impl Handle {
         }
     }
 
+    pub fn escape(&mut self) {
+        match self {
+            Handle::Point(_point) => (),
+            Handle::Span((span_handle, focus)) => {
+                *self = Handle::Point(span_handle.focus_point(focus))
+            }
+            Handle::Zipper((zipper_handle, focus)) => {
+                *self = Handle::Point(zipper_handle.focus_point(focus))
+            }
+        }
+    }
+
+    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) {
+        match self {
+            Handle::Point(handle) => handle.move_prev(expr),
+            // A little bit weirdly, my intuition indicates that in a span, when
+            // you press left or right arrow, the cursor should jump to the left
+            // or right end of the span and escape the span. But for a zipper, I
+            // don't have that intuition. Instead, I think it should just jump
+            // to the focus of the handle, regardless of whether the left or
+            // right arrow was pressed. I am willing to be convinced otherwise
+            // though.
+            Handle::Span((span_handle, _focus)) => *self = Handle::Point(span_handle.left_point()),
+            Handle::Zipper((zipper_handle, focus)) => {
+                *self = Handle::Point(zipper_handle.focus_point(focus))
+            }
+        }
+    }
+
+    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) {
+        match self {
+            Handle::Point(handle) => handle.move_next(expr),
+            // Same note as in [move_prev]
+            Handle::Span((span_handle, _focus)) => *self = Handle::Point(span_handle.right_point()),
+            Handle::Zipper((zipper_handle, focus)) => {
+                *self = Handle::Point(zipper_handle.focus_point(focus))
+            }
+        }
+    }
     pub fn focus_point<'a>(&'a self) -> Point {
         match self {
             Handle::Point(point) => point.clone(),

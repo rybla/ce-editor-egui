@@ -78,15 +78,20 @@ pub trait EditorSpec {
     }
 
     fn update(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ctx: &egui::Context) {
-        let mut focus_point = state.handle.focus_point();
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            state.handle.escape();
+        } else if ctx.input(|i| i.modifiers.command_only() && i.key_pressed(egui::Key::ArrowLeft)) {
+            state.handle.rotate_focus_prev();
+        } else if ctx.input(|i| i.modifiers.command_only() && i.key_pressed(egui::Key::ArrowRight))
+        {
+            state.handle.rotate_focus_next();
+        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
             state.handle.move_up(&state.expr);
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-            focus_point.move_prev(&state.expr);
-            state.handle = Handle::Point(focus_point);
+            state.handle.move_prev(&state.expr);
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-            focus_point.move_next(&state.expr);
-            state.handle = Handle::Point(focus_point);
+            state.handle.move_next(&state.expr);
+        } else {
         }
     }
 
