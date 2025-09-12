@@ -24,10 +24,7 @@ impl<EditorSpec: editor::EditorSpec> App<EditorSpec> {
 
 impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
     /// Called by the framework to save state before shutdown.
-    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        // TODO: remove this since not doing storage
-        // eframe::set_value(storage, eframe::APP_KEY, self);
-    }
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {}
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
