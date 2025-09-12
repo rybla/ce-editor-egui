@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::fmt::Debug;
 
 // -----------------------------------------------------------------------------
@@ -32,6 +34,9 @@ impl SpanHandleAndFocus {
 pub struct ZipperHandleAndFocus {
     pub zipper_handle: ZipperHandle,
     pub focus: ZipperFocus,
+    // TODO: Actually, this needs to be removed once I transition to the proper
+    // implementation of select_to Where three points are fixed Other than just
+    // the two origin and focus.
     pub origin: ZipperFocus,
 }
 
@@ -308,6 +313,71 @@ impl Point {
         }
     }
 
+    pub fn select_from_outer_to_inner<L: Debug>(
+        outer: &Point,
+        inner: &Point,
+        inner_suffix: &[Step],
+        expr: &Expr<L>,
+    ) -> Option<Handle> {
+        // outer.path is a prefix of inner.path
+        println!("outer.path is a prefix of inner.path");
+        println!("inner_suffix = {:#?}", Path(inner_suffix.to_vec()));
+        if let Some(step) = inner_suffix.first() {
+            // inner.path has an extra step beyond outer.path
+            let kid = expr.at_path(&inner.path);
+
+            if outer.index.is_right_of_step(step) {
+                Some(Handle::Zipper(ZipperHandleAndFocus {
+                    zipper_handle: ZipperHandle {
+                        outer_path: outer.path.clone(),
+                        outer_left: outer.index.clone(),
+                        outer_right: step.right_index(),
+                        middle_path: Path(inner_suffix.to_vec()),
+                        inner_left: kid.kids.extreme_indexes().0,
+                        inner_right: inner.index.clone(),
+                    },
+                    focus: ZipperFocus::InnerRight,
+                    origin: ZipperFocus::OuterRight,
+                }))
+            } else {
+                Some(Handle::Zipper(ZipperHandleAndFocus {
+                    zipper_handle: ZipperHandle {
+                        outer_path: outer.path.clone(),
+                        outer_left: outer.index.clone(),
+                        outer_right: step.right_index(),
+                        middle_path: Path(inner_suffix.to_vec()),
+                        inner_left: inner.index.clone(),
+                        inner_right: kid.kids.extreme_indexes().1,
+                    },
+                    focus: ZipperFocus::InnerLeft,
+                    origin: ZipperFocus::OuterLeft,
+                }))
+            }
+        } else {
+            // outer.path == inner.path
+
+            if outer.index.is_right_of_index(&inner.index) {
+                Some(Handle::Span(SpanHandleAndFocus {
+                    span_handle: SpanHandle {
+                        path: outer.path.clone(),
+                        left: inner.index.clone(),
+                        right: outer.index.clone(),
+                    },
+                    focus: SpanFocus::Left,
+                }))
+            } else {
+                Some(Handle::Span(SpanHandleAndFocus {
+                    span_handle: SpanHandle {
+                        path: outer.path.clone(),
+                        left: outer.index.clone(),
+                        right: inner.index.clone(),
+                    },
+                    focus: SpanFocus::Right,
+                }))
+            }
+        }
+    }
+
     /// Calculates the selection from self to target.
     pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         println!("select_to");
@@ -316,66 +386,10 @@ impl Point {
 
         if let Some(target_suffix) = target.path.strip_prefix(&self.path) {
             // self.path is a prefix of target.path
-            println!("self.path is a prefix of target.path");
-            println!("target_suffix = {:#?}", Path(target_suffix.to_vec()));
-
-            if let Some(step) = target_suffix.first() {
-                // target.path has some more steps than self.path
-                let kid = expr.at_path(&target.path);
-
-                if self.index.is_right_of_step(step) {
-                    Some(Handle::Zipper(ZipperHandleAndFocus {
-                        zipper_handle: ZipperHandle {
-                            outer_path: self.path.clone(),
-                            outer_left: self.index.clone(),
-                            outer_right: step.right_index(),
-                            middle_path: Path(target_suffix.to_vec()),
-                            inner_left: kid.kids.extreme_indexes().0,
-                            inner_right: target.index.clone(),
-                        },
-                        focus: ZipperFocus::InnerRight,
-                        origin: ZipperFocus::OuterRight,
-                    }))
-                } else {
-                    Some(Handle::Zipper(ZipperHandleAndFocus {
-                        zipper_handle: ZipperHandle {
-                            outer_path: self.path.clone(),
-                            outer_left: self.index.clone(),
-                            outer_right: step.right_index(),
-                            middle_path: Path(target_suffix.to_vec()),
-                            inner_left: target.index.clone(),
-                            inner_right: kid.kids.extreme_indexes().1,
-                        },
-                        focus: ZipperFocus::InnerLeft,
-                        origin: ZipperFocus::OuterLeft,
-                    }))
-                }
-            } else {
-                // self.path == target.path
-
-                if self.index.is_right_of_index(&target.index) {
-                    Some(Handle::Span(SpanHandleAndFocus {
-                        span_handle: SpanHandle {
-                            path: self.path.clone(),
-                            left: target.index.clone(),
-                            right: self.index.clone(),
-                        },
-                        focus: SpanFocus::Left,
-                    }))
-                } else {
-                    Some(Handle::Span(SpanHandleAndFocus {
-                        span_handle: SpanHandle {
-                            path: self.path.clone(),
-                            left: self.index.clone(),
-                            right: target.index.clone(),
-                        },
-                        focus: SpanFocus::Right,
-                    }))
-                }
-            }
-        } else if let Some(self_suffix) = self.path.strip_prefix(&target.path) {
+            Self::select_from_outer_to_inner(self, target, target_suffix, expr)
+        } else if let Some(self_suffix) = self.path.strip_prefix(&self.path) {
             // target.path is a prefix of self.path
-            todo!()
+            Self::select_from_outer_to_inner(target, self, self_suffix, expr)
         } else {
             // NOTE: Perhaps want to calculate the smallest span that contains both self and target.
             None
