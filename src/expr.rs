@@ -112,7 +112,9 @@ impl Handle {
     }
 
     pub fn norm(&mut self) {
-        // TODO: Normalize as a handle by collapsing empty SpanHandles and empty sections of ZipperHandle
+        todo!(
+            "Normalize as a handle by collapsing empty SpanHandles and empty sections of ZipperHandle"
+        )
     }
 }
 
