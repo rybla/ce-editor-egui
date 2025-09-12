@@ -22,17 +22,26 @@ impl SpanHandleAndFocus {
     pub fn focus_point(&self) -> Point {
         self.span_handle.focus_point(&self.focus)
     }
+
+    fn origin_point(&self) -> Point {
+        self.span_handle.origin_point(&self.focus)
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ZipperHandleAndFocus {
     pub zipper_handle: ZipperHandle,
     pub focus: ZipperFocus,
+    pub origin: ZipperFocus,
 }
 
 impl ZipperHandleAndFocus {
     pub fn focus_point(&self) -> Point {
         self.zipper_handle.focus_point(&self.focus)
+    }
+
+    fn origin_point(&self) -> Point {
+        self.zipper_handle.focus_point(&self.origin)
     }
 }
 
@@ -64,7 +73,9 @@ impl Handle {
                     handle.span_handle.right = rightmost;
                 }
             }
-            Handle::Zipper(_) => todo!("move_up zipper"),
+            // NOTE: I'm not sure exactly what should happen when you move up at
+            // a zipper, but by default for now, nothing happens.
+            Handle::Zipper(_) => (),
         }
     }
 
@@ -76,7 +87,8 @@ impl Handle {
         }
     }
 
-    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) {
+    /// Returns a boolean indicating if the move hit a boundary.
+    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
         match self {
             Handle::Point(handle) => handle.move_prev(expr),
             // A little bit weirdly, my intuition indicates that in a span, when
@@ -86,17 +98,30 @@ impl Handle {
             // to the focus of the handle, regardless of whether the left or
             // right arrow was pressed. I am willing to be convinced otherwise
             // though.
-            Handle::Span(handle) => *self = Handle::Point(handle.span_handle.left_point()),
-            Handle::Zipper(handle) => *self = Handle::Point(handle.focus_point()),
+            Handle::Span(handle) => {
+                *self = Handle::Point(handle.span_handle.left_point());
+                true
+            }
+            Handle::Zipper(handle) => {
+                *self = Handle::Point(handle.focus_point());
+                true
+            }
         }
     }
 
-    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) {
+    /// Returns a boolean indicating if the move hit a boundary.
+    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
         match self {
             Handle::Point(handle) => handle.move_next(expr),
             // Same note as in [move_prev]
-            Handle::Span(handle) => *self = Handle::Point(handle.span_handle.right_point()),
-            Handle::Zipper(handle) => *self = Handle::Point(handle.focus_point()),
+            Handle::Span(handle) => {
+                *self = Handle::Point(handle.span_handle.right_point());
+                true
+            }
+            Handle::Zipper(handle) => {
+                *self = Handle::Point(handle.focus_point());
+                true
+            }
         }
     }
     pub fn focus_point<'a>(&'a self) -> Point {
@@ -168,12 +193,26 @@ impl Handle {
         )
     }
 
-    pub fn select_prev<L>(&self, _expr: &Expr<L>) {
-        todo!()
+    pub fn origin_point(&self) -> Point {
+        match self {
+            Handle::Point(handle) => handle.clone(),
+            Handle::Span(handle) => handle.origin_point(),
+            Handle::Zipper(handle) => handle.origin_point(),
+        }
     }
 
-    pub fn select_next<L>(&self, _expr: &Expr<L>) {
-        todo!()
+    pub fn select_prev<L: Debug>(&mut self, expr: &Expr<L>) {
+        let origin = self.origin_point();
+        let mut target = self.focus_point();
+        target.move_prev(expr);
+        *self = origin.select_to(&target, expr);
+    }
+
+    pub fn select_next<L: Debug>(&mut self, expr: &Expr<L>) {
+        let origin = self.origin_point();
+        let mut target = self.focus_point();
+        target.move_next(expr);
+        *self = origin.select_to(&target, expr);
     }
 }
 
@@ -191,35 +230,97 @@ pub struct Point {
 }
 
 impl Point {
-    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) {
+    /// Return a boolean indicating if the move hit a boundary.
+    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
         let subexpr = expr.at_path(&self.path);
         let (leftmost, _rightmost) = subexpr.kids.extreme_indexes();
         if self.index == leftmost {
             if let Some(step) = self.path.pop() {
                 self.index = step.left_index();
+                return true;
             }
+            false
         } else {
             let step = self.index.left_step();
             let kid = subexpr.kids.at_step(&step);
             let (_kid_leftmost, kid_rightmost) = kid.kids.extreme_indexes();
             self.path.push(step);
             self.index = kid_rightmost;
+            true
         }
     }
 
-    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) {
+    /// Return a boolean indicating if the move hit a boundary.
+    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
         let subexpr = expr.at_path(&self.path);
         let (_leftmost, rightmost) = subexpr.kids.extreme_indexes();
         if self.index == rightmost {
             if let Some(step) = self.path.pop() {
                 self.index = step.right_index();
+                return true;
             }
+            false
         } else {
             let step = self.index.right_step();
             let kid = subexpr.kids.at_step(&step);
             let (kid_leftmost, _kid_rightmost) = kid.kids.extreme_indexes();
             self.path.push(step);
             self.index = kid_leftmost;
+            true
+        }
+    }
+
+    /// Calculates the selection from self to target.
+    pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Handle {
+        if let Some(target_suffix) = target.path.strip_prefix(&self.path) {
+            // self.path is a prefix of target.path
+
+            let mut target_suffix = target_suffix.into_iter();
+            if let Some(step) = target_suffix.next() {
+                // target.path has some more steps than self.path
+                let kid = expr.at_path(&target.path);
+
+                if self.index.is_right_of_step(step) {
+                    Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: self.path.clone(),
+                            outer_left: self.index.clone(),
+                            outer_right: step.right_index(),
+                            middle_path: Path(target_suffix.cloned().collect()).clone(),
+                            inner_left: target.index.clone(),
+                            inner_right: kid.kids.extreme_indexes().1,
+                        },
+                        focus: ZipperFocus::InnerLeft,
+                        origin: ZipperFocus::OuterLeft,
+                    })
+                } else {
+                    todo!()
+                }
+            } else {
+                // self.path == target.path
+
+                if self.index.is_right_of_index(&target.index) {
+                    Handle::Span(SpanHandleAndFocus {
+                        span_handle: SpanHandle {
+                            path: self.path.clone(),
+                            left: target.index.clone(),
+                            right: self.index.clone(),
+                        },
+                        focus: SpanFocus::Left,
+                    })
+                } else {
+                    Handle::Span(SpanHandleAndFocus {
+                        span_handle: SpanHandle {
+                            path: self.path.clone(),
+                            left: self.index.clone(),
+                            right: target.index.clone(),
+                        },
+                        focus: SpanFocus::Right,
+                    })
+                }
+            }
+        } else {
+            todo!()
         }
     }
 }
@@ -313,6 +414,14 @@ impl Index {
     pub fn is_right_of_index(&self, index: &Index) -> bool {
         self.0 > index.0
     }
+
+    fn is_right_of_step(&self, step: &Step) -> bool {
+        step.is_left_of_index(self)
+    }
+
+    fn is_left_of_step(&self, step: &Step) -> bool {
+        step.is_right_of_index(self)
+    }
 }
 
 /// A handle for a [Span].
@@ -342,6 +451,13 @@ impl SpanHandle {
         match focus {
             SpanFocus::Left => self.left_point(),
             SpanFocus::Right => self.right_point(),
+        }
+    }
+
+    fn origin_point(&self, focus: &SpanFocus) -> Point {
+        match focus {
+            SpanFocus::Left => self.right_point(),
+            SpanFocus::Right => self.left_point(),
         }
     }
 }

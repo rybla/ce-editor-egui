@@ -35,14 +35,14 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprLabel<Constructor, Diagnostic> {
-    pub constructor: Constructor,
-    pub diagnostic: Diagnostic,
+pub struct ExprLabel<C, D> {
+    pub constructor: C,
+    pub diagnostic: D,
 }
 
 #[derive(Debug)]
-pub struct EditorState<Constructor, Diagnostic> {
-    pub expr: Expr<ExprLabel<Constructor, Diagnostic>>,
+pub struct EditorState<C, D> {
+    pub expr: Expr<ExprLabel<C, D>>,
     pub handle: Handle,
 }
 
@@ -64,6 +64,8 @@ pub trait EditorSpec {
     fn get_diagnostics(
         state: EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> Vec<Self::Diagnostic>;
+
+    fn is_valid_handle<L: Debug>(handle: &Handle, expr: &Expr<L>) -> bool;
 
     fn render_label(
         ui: &mut egui::Ui,
@@ -90,9 +92,33 @@ pub trait EditorSpec {
         } else if ctx.input(|i| i.modifiers.shift && i.key_pressed(egui::Key::ArrowRight)) {
             state.handle.select_next(&state.expr);
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-            state.handle.move_prev(&state.expr);
+            let origin = state.handle.clone();
+            let mut success = false;
+            while !success {
+                let moved = state.handle.move_prev(&state.expr);
+                if !moved {
+                    break;
+                }
+                success = Self::is_valid_handle(&state.handle, &state.expr);
+            }
+            if !success {
+                println!("bailed move since move returned false before success");
+                state.handle = origin;
+            }
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-            state.handle.move_next(&state.expr);
+            let origin = state.handle.clone();
+            let mut success = false;
+            while !success {
+                let moved = state.handle.move_next(&state.expr);
+                if !moved {
+                    break;
+                }
+                success = Self::is_valid_handle(&state.handle, &state.expr);
+            }
+            if !success {
+                println!("bailed move since move returned false before success");
+                state.handle = origin;
+            }
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
             state.handle.move_up(&state.expr);
         }
@@ -150,7 +176,10 @@ pub trait EditorSpec {
                 Self::color_scheme(ui).normal_text
             }));
             if label.clicked() {
-                state.handle = Handle::Point(point.clone())
+                let handle = Handle::Point(point.clone());
+                if Self::is_valid_handle(&handle, &state.expr) {
+                    state.handle = handle;
+                }
             }
         });
     }
