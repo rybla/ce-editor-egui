@@ -155,6 +155,14 @@ impl Handle {
             "Normalize as a handle by collapsing empty SpanHandles and empty sections of ZipperHandle"
         )
     }
+
+    pub fn select_prev<L>(&self, expr: &Expr<L>) {
+        todo!()
+    }
+
+    pub fn select_next<L>(&self, expr: &Expr<L>) {
+        todo!()
+    }
 }
 
 impl Default for Handle {

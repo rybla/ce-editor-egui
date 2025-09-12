@@ -85,13 +85,16 @@ pub trait EditorSpec {
         } else if ctx.input(|i| i.modifiers.command_only() && i.key_pressed(egui::Key::ArrowRight))
         {
             state.handle.rotate_focus_next();
-        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            state.handle.move_up(&state.expr);
+        } else if ctx.input(|i| i.modifiers.shift && i.key_pressed(egui::Key::ArrowLeft)) {
+            state.handle.select_prev(&state.expr);
+        } else if ctx.input(|i| i.modifiers.shift && i.key_pressed(egui::Key::ArrowRight)) {
+            state.handle.select_next(&state.expr);
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
             state.handle.move_prev(&state.expr);
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
             state.handle.move_next(&state.expr);
-        } else {
+        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            state.handle.move_up(&state.expr);
         }
     }
 
