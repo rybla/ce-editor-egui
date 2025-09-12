@@ -196,25 +196,18 @@ impl Handle {
         }
     }
 
-    pub fn move_select_prev<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
+    pub fn move_select_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
         let origin = self.origin_point();
         let mut target = self.focus_point();
-        let moved = target.move_dir(MoveDir::Prev, expr);
+        let moved = target.move_dir(dir, expr);
         if moved {
-            *self = origin.select_to(&target, expr);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn move_select_next<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
-        let origin = self.origin_point();
-        let mut target = self.focus_point();
-        let moved = target.move_dir(MoveDir::Next, expr);
-        if moved {
-            *self = origin.select_to(&target, expr);
-            true
+            match origin.select_to(&target, expr) {
+                Some(handle) => {
+                    *self = handle;
+                    true
+                }
+                None => false,
+            }
         } else {
             false
         }
@@ -272,7 +265,7 @@ impl Point {
     }
 
     /// Calculates the selection from self to target.
-    pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Handle {
+    pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         if let Some(target_suffix) = target.path.strip_prefix(&self.path) {
             // self.path is a prefix of target.path
 
@@ -282,7 +275,7 @@ impl Point {
                 let kid = expr.at_path(&target.path);
 
                 if self.index.is_right_of_step(step) {
-                    Handle::Zipper(ZipperHandleAndFocus {
+                    Some(Handle::Zipper(ZipperHandleAndFocus {
                         zipper_handle: ZipperHandle {
                             outer_path: self.path.clone(),
                             outer_left: self.index.clone(),
@@ -293,35 +286,35 @@ impl Point {
                         },
                         focus: ZipperFocus::InnerLeft,
                         origin: ZipperFocus::OuterLeft,
-                    })
+                    }))
                 } else {
-                    todo!()
+                    Some(todo!())
                 }
             } else {
                 // self.path == target.path
 
                 if self.index.is_right_of_index(&target.index) {
-                    Handle::Span(SpanHandleAndFocus {
+                    Some(Handle::Span(SpanHandleAndFocus {
                         span_handle: SpanHandle {
                             path: self.path.clone(),
                             left: target.index.clone(),
                             right: self.index.clone(),
                         },
                         focus: SpanFocus::Left,
-                    })
+                    }))
                 } else {
-                    Handle::Span(SpanHandleAndFocus {
+                    Some(Handle::Span(SpanHandleAndFocus {
                         span_handle: SpanHandle {
                             path: self.path.clone(),
                             left: self.index.clone(),
                             right: target.index.clone(),
                         },
                         focus: SpanFocus::Right,
-                    })
+                    }))
                 }
             }
         } else {
-            todo!()
+            Some(todo!())
         }
     }
 }
