@@ -166,19 +166,11 @@ impl Handle {
         }
     }
 
-    pub fn rotate_focus_prev(&mut self) {
+    pub fn rotate_focus_dir(&mut self, dir: MoveDir) {
         match self {
             Handle::Point(_handle) => (),
-            Handle::Span(handle) => handle.focus = handle.focus.rotate_prev(),
-            Handle::Zipper(handle) => handle.focus = handle.focus.rotate_prev(),
-        }
-    }
-
-    pub fn rotate_focus_next(&mut self) {
-        match self {
-            Handle::Point(_handle) => (),
-            Handle::Span(handle) => handle.focus = handle.focus.rotate_next(),
-            Handle::Zipper(handle) => handle.focus = handle.focus.rotate_next(),
+            Handle::Span(handle) => handle.focus = handle.focus.rotate_dir(dir),
+            Handle::Zipper(handle) => handle.focus = handle.focus.rotate_dir(dir),
         }
     }
 
@@ -477,6 +469,19 @@ impl SpanFocus {
             SpanFocus::Right => SpanFocus::Left,
         }
     }
+
+    fn rotate_dir(&self, dir: MoveDir) -> SpanFocus {
+        match self {
+            SpanFocus::Left => match dir {
+                MoveDir::Prev => SpanFocus::Right,
+                MoveDir::Next => SpanFocus::Right,
+            },
+            SpanFocus::Right => match dir {
+                MoveDir::Prev => SpanFocus::Left,
+                MoveDir::Next => SpanFocus::Left,
+            },
+        }
+    }
 }
 
 /// A hanle for a [Zipper].
@@ -559,6 +564,10 @@ impl ZipperFocus {
             ZipperFocus::InnerRight => ZipperFocus::OuterRight,
             ZipperFocus::OuterRight => ZipperFocus::OuterLeft,
         }
+    }
+
+    fn rotate_dir(&self, dir: MoveDir) -> ZipperFocus {
+        todo!()
     }
 }
 

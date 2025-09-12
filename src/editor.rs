@@ -85,11 +85,16 @@ pub trait EditorSpec {
             state.handle.escape();
         } else
         // rotate focus
-        if ctx.input(|i| i.modifiers.command_only() && i.key_pressed(egui::Key::ArrowLeft)) {
-            state.handle.rotate_focus_prev();
-        } else if ctx.input(|i| i.modifiers.command_only() && i.key_pressed(egui::Key::ArrowRight))
-        {
-            state.handle.rotate_focus_next();
+        if ctx.input(|i| {
+            i.modifiers.command_only()
+                && (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::ArrowRight))
+        }) {
+            let dir = if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+                MoveDir::Prev
+            } else {
+                MoveDir::Next
+            };
+            state.handle.rotate_focus_dir(dir);
         } else
         // move select
         if ctx.input(|i| {
