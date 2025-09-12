@@ -87,10 +87,10 @@ impl Handle {
         }
     }
 
-    /// Returns a boolean indicating if the move hit a boundary.
-    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
+    /// Returns a Boolean indicating whether the move hit a boundary.
+    pub fn move_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
         match self {
-            Handle::Point(handle) => handle.move_prev(expr),
+            Handle::Point(handle) => handle.move_dir(dir, expr),
             // A little bit weirdly, my intuition indicates that in a span, when
             // you press left or right arrow, the cursor should jump to the left
             // or right end of the span and escape the span. But for a zipper, I
@@ -99,7 +99,10 @@ impl Handle {
             // right arrow was pressed. I am willing to be convinced otherwise
             // though.
             Handle::Span(handle) => {
-                *self = Handle::Point(handle.span_handle.left_point());
+                match dir {
+                    MoveDir::Prev => *self = Handle::Point(handle.span_handle.left_point()),
+                    MoveDir::Next => *self = Handle::Point(handle.span_handle.right_point()),
+                }
                 true
             }
             Handle::Zipper(handle) => {
@@ -109,21 +112,6 @@ impl Handle {
         }
     }
 
-    /// Returns a boolean indicating if the move hit a boundary.
-    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
-        match self {
-            Handle::Point(handle) => handle.move_next(expr),
-            // Same note as in [move_prev]
-            Handle::Span(handle) => {
-                *self = Handle::Point(handle.span_handle.right_point());
-                true
-            }
-            Handle::Zipper(handle) => {
-                *self = Handle::Point(handle.focus_point());
-                true
-            }
-        }
-    }
     pub fn focus_point<'a>(&'a self) -> Point {
         match self {
             Handle::Point(point) => point.clone(),
@@ -150,7 +138,7 @@ impl Handle {
         }
     }
 
-    pub(crate) fn contains_point(&self, point: &Point) -> bool {
+    pub fn contains_point(&self, point: &Point) -> bool {
         match self {
             Handle::Point(handle) => handle == point,
             Handle::Span(handle) => point
@@ -201,18 +189,28 @@ impl Handle {
         }
     }
 
-    pub fn select_prev<L: Debug>(&mut self, expr: &Expr<L>) {
+    pub fn move_select_prev<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
         let origin = self.origin_point();
         let mut target = self.focus_point();
-        target.move_prev(expr);
-        *self = origin.select_to(&target, expr);
+        let moved = target.move_dir(MoveDir::Prev, expr);
+        if moved {
+            *self = origin.select_to(&target, expr);
+            true
+        } else {
+            false
+        }
     }
 
-    pub fn select_next<L: Debug>(&mut self, expr: &Expr<L>) {
+    pub fn move_select_next<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
         let origin = self.origin_point();
         let mut target = self.focus_point();
-        target.move_next(expr);
-        *self = origin.select_to(&target, expr);
+        let moved = target.move_dir(MoveDir::Next, expr);
+        if moved {
+            *self = origin.select_to(&target, expr);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -231,41 +229,37 @@ pub struct Point {
 
 impl Point {
     /// Return a boolean indicating if the move hit a boundary.
-    pub fn move_prev<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
+    pub fn move_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
         let subexpr = expr.at_path(&self.path);
-        let (leftmost, _rightmost) = subexpr.kids.extreme_indexes();
-        if self.index == leftmost {
+        let (leftmost, rightmost) = subexpr.kids.extreme_indexes();
+        let is_at_local_boundary = match dir {
+            MoveDir::Prev => self.index == leftmost,
+            MoveDir::Next => self.index == rightmost,
+        };
+        if is_at_local_boundary {
             if let Some(step) = self.path.pop() {
-                self.index = step.left_index();
+                self.index = match dir {
+                    MoveDir::Prev => step.left_index(),
+                    MoveDir::Next => step.right_index(),
+                };
                 return true;
             }
             false
         } else {
-            let step = self.index.left_step();
+            let step = match dir {
+                MoveDir::Prev => self.index.left_step(),
+                MoveDir::Next => self.index.right_step(),
+            };
             let kid = subexpr.kids.at_step(&step);
-            let (_kid_leftmost, kid_rightmost) = kid.kids.extreme_indexes();
+            let kid_boundary = {
+                let (kid_leftmost, kid_rightmost) = kid.kids.extreme_indexes();
+                match dir {
+                    MoveDir::Prev => kid_rightmost,
+                    MoveDir::Next => kid_leftmost,
+                }
+            };
             self.path.push(step);
-            self.index = kid_rightmost;
-            true
-        }
-    }
-
-    /// Return a boolean indicating if the move hit a boundary.
-    pub fn move_next<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
-        let subexpr = expr.at_path(&self.path);
-        let (_leftmost, rightmost) = subexpr.kids.extreme_indexes();
-        if self.index == rightmost {
-            if let Some(step) = self.path.pop() {
-                self.index = step.right_index();
-                return true;
-            }
-            false
-        } else {
-            let step = self.index.right_step();
-            let kid = subexpr.kids.at_step(&step);
-            let (kid_leftmost, _kid_rightmost) = kid.kids.extreme_indexes();
-            self.path.push(step);
-            self.index = kid_leftmost;
+            self.index = kid_boundary;
             true
         }
     }
@@ -668,4 +662,14 @@ pub struct Zipper<L> {
     pub outer_left: Vec<Expr<L>>,
     pub outer_right: Vec<Expr<L>>,
     pub inner: SpanContext<L>,
+}
+
+// -----------------------------------------------------------------------------
+// Miscellaneous
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum MoveDir {
+    Prev,
+    Next,
 }

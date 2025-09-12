@@ -88,14 +88,38 @@ pub trait EditorSpec {
         {
             state.handle.rotate_focus_next();
         } else if ctx.input(|i| i.modifiers.shift && i.key_pressed(egui::Key::ArrowLeft)) {
-            state.handle.select_prev(&state.expr);
+            let origin = state.handle.clone();
+            let mut success = false;
+            while !success {
+                let moved = state.handle.move_select_prev(&state.expr);
+                if !moved {
+                    break;
+                }
+                success = Self::is_valid_handle(&state.handle, &state.expr);
+            }
+            if !success {
+                println!("bailed select since move returned false before success");
+                state.handle = origin;
+            }
         } else if ctx.input(|i| i.modifiers.shift && i.key_pressed(egui::Key::ArrowRight)) {
-            state.handle.select_next(&state.expr);
+            let origin = state.handle.clone();
+            let mut success = false;
+            while !success {
+                let moved = state.handle.move_select_next(&state.expr);
+                if !moved {
+                    break;
+                }
+                success = Self::is_valid_handle(&state.handle, &state.expr);
+            }
+            if !success {
+                println!("bailed select since move returned false before success");
+                state.handle = origin;
+            }
         } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
             let origin = state.handle.clone();
             let mut success = false;
             while !success {
-                let moved = state.handle.move_prev(&state.expr);
+                let moved = state.handle.move_dir(MoveDir::Prev, &state.expr);
                 if !moved {
                     break;
                 }
@@ -109,7 +133,7 @@ pub trait EditorSpec {
             let origin = state.handle.clone();
             let mut success = false;
             while !success {
-                let moved = state.handle.move_next(&state.expr);
+                let moved = state.handle.move_dir(MoveDir::Next, &state.expr);
                 if !moved {
                     break;
                 }
