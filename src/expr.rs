@@ -94,6 +94,26 @@ impl Handle {
             Handle::Zipper((_handle, _focus)) => todo!(),
         }
     }
+
+    pub fn rotate_focus_prev(&mut self) {
+        match self {
+            Handle::Point(_handle) => (),
+            Handle::Span((_handle, focus)) => *focus = focus.rotate_prev(),
+            Handle::Zipper((_handle, focus)) => *focus = focus.rotate_prev(),
+        }
+    }
+
+    pub fn rotate_focus_next(&mut self) {
+        match self {
+            Handle::Point(_handle) => (),
+            Handle::Span((_handle, focus)) => *focus = focus.rotate_next(),
+            Handle::Zipper((_handle, focus)) => *focus = focus.rotate_next(),
+        }
+    }
+
+    pub fn norm(&mut self) {
+        // TODO: Normalize as a handle by collapsing empty SpanHandles and empty sections of ZipperHandle
+    }
 }
 
 impl Default for Handle {
@@ -272,6 +292,22 @@ pub enum SpanFocus {
     Right,
 }
 
+impl SpanFocus {
+    pub fn rotate_prev(&self) -> Self {
+        match self {
+            SpanFocus::Left => SpanFocus::Right,
+            SpanFocus::Right => SpanFocus::Left,
+        }
+    }
+
+    pub fn rotate_next(&self) -> Self {
+        match self {
+            SpanFocus::Left => SpanFocus::Right,
+            SpanFocus::Right => SpanFocus::Left,
+        }
+    }
+}
+
 /// A hanle for a [Zipper].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ZipperHandle {
@@ -333,6 +369,26 @@ pub enum ZipperFocus {
     InnerLeft,
     OuterRight,
     InnerRight,
+}
+
+impl ZipperFocus {
+    pub fn rotate_prev(&self) -> Self {
+        match self {
+            ZipperFocus::OuterLeft => ZipperFocus::OuterRight,
+            ZipperFocus::InnerLeft => ZipperFocus::OuterLeft,
+            ZipperFocus::InnerRight => ZipperFocus::InnerLeft,
+            ZipperFocus::OuterRight => ZipperFocus::InnerRight,
+        }
+    }
+
+    pub fn rotate_next(&self) -> Self {
+        match self {
+            ZipperFocus::OuterLeft => ZipperFocus::InnerLeft,
+            ZipperFocus::InnerLeft => ZipperFocus::InnerRight,
+            ZipperFocus::InnerRight => ZipperFocus::OuterRight,
+            ZipperFocus::OuterRight => ZipperFocus::OuterLeft,
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
