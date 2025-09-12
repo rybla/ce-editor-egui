@@ -221,7 +221,9 @@ pub trait EditorSpec {
         expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
         path: &Path,
     ) {
+        // This is the spacing between items in the horizontal/vertical row
         ui.style_mut().spacing.item_spacing.x = 0f32;
+        ui.style_mut().spacing.item_spacing.y = 0f32;
 
         let frame = Frame::new()
             .outer_margin(0)
