@@ -320,8 +320,6 @@ impl Point {
         expr: &Expr<L>,
     ) -> Option<Handle> {
         // outer.path is a prefix of inner.path
-        println!("outer.path is a prefix of inner.path");
-        println!("inner_suffix = {:#?}", Path(inner_suffix.to_vec()));
         if let Some(step) = inner_suffix.first() {
             // inner.path has an extra step beyond outer.path
             let kid = expr.at_path(&inner.path);

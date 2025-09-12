@@ -188,7 +188,7 @@ pub trait EditorSpec {
             });
 
         frame.show(ui, |ui| {
-            let label = ui.label(egui::RichText::new(format!("•")).color(if is_at_handle {
+            let label = ui.label(egui::RichText::new(format!("•")).color(if is_handle {
                 Self::color_scheme(ui).active_text
             } else {
                 Self::color_scheme(ui).normal_text

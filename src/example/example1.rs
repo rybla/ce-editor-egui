@@ -22,8 +22,8 @@ impl editor::EditorSpec for EditorSpec {
         let mut mk_label = || {
             i += 1;
             editor::ExprLabel {
-                constructor: format!("label_{i}"),
-                diagnostic: format!("diagnostic"),
+                constructor: format!(" label_{i} "),
+                diagnostic: format!(" diagnostic "),
             }
         };
 
