@@ -12,36 +12,56 @@ pub enum Handle {
     Zipper(ZipperHandleAndFocus),
 }
 
-pub type SpanHandleAndFocus = (SpanHandle, SpanFocus);
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct SpanHandleAndFocus {
+    pub span_handle: SpanHandle,
+    pub focus: SpanFocus,
+}
 
-pub type ZipperHandleAndFocus = (ZipperHandle, ZipperFocus);
+impl SpanHandleAndFocus {
+    pub fn focus_point(&self) -> Point {
+        self.span_handle.focus_point(&self.focus)
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct ZipperHandleAndFocus {
+    pub zipper_handle: ZipperHandle,
+    pub focus: ZipperFocus,
+}
+
+impl ZipperHandleAndFocus {
+    pub fn focus_point(&self) -> Point {
+        self.zipper_handle.focus_point(&self.focus)
+    }
+}
 
 impl Handle {
     pub fn move_up<L: Debug>(&mut self, expr: &Expr<L>) {
         match self {
             Handle::Point(Point { path, index: _ }) => {
                 if let Some(step) = path.pop() {
-                    *self = Handle::Span((
-                        SpanHandle {
+                    *self = Handle::Span(SpanHandleAndFocus {
+                        span_handle: SpanHandle {
                             path: path.clone(),
                             left: step.left_index(),
                             right: step.right_index(),
                         },
-                        SpanFocus::Left,
-                    ));
+                        focus: SpanFocus::Left,
+                    });
                 }
             }
-            Handle::Span((SpanHandle { path, left, right }, _focus)) => {
-                let kid = expr.at_path(path);
+            Handle::Span(handle) => {
+                let kid = expr.at_path(&handle.span_handle.path);
                 let (leftmost, rightmost) = kid.kids.extreme_indexes();
-                if *left == leftmost && *right == rightmost {
-                    if let Some(step) = path.pop() {
-                        *left = step.left_index();
-                        *right = step.right_index();
+                if handle.span_handle.left == leftmost && handle.span_handle.right == rightmost {
+                    if let Some(step) = handle.span_handle.path.pop() {
+                        handle.span_handle.left = step.left_index();
+                        handle.span_handle.right = step.right_index();
                     }
                 } else {
-                    *left = leftmost;
-                    *right = rightmost;
+                    handle.span_handle.left = leftmost;
+                    handle.span_handle.right = rightmost;
                 }
             }
             Handle::Zipper(_) => todo!("move_up zipper"),
@@ -51,12 +71,8 @@ impl Handle {
     pub fn escape(&mut self) {
         match self {
             Handle::Point(_point) => (),
-            Handle::Span((span_handle, focus)) => {
-                *self = Handle::Point(span_handle.focus_point(focus))
-            }
-            Handle::Zipper((zipper_handle, focus)) => {
-                *self = Handle::Point(zipper_handle.focus_point(focus))
-            }
+            Handle::Span(handle) => *self = Handle::Point(handle.focus_point()),
+            Handle::Zipper(handle) => *self = Handle::Point(handle.focus_point()),
         }
     }
 
@@ -70,10 +86,8 @@ impl Handle {
             // to the focus of the handle, regardless of whether the left or
             // right arrow was pressed. I am willing to be convinced otherwise
             // though.
-            Handle::Span((span_handle, _focus)) => *self = Handle::Point(span_handle.left_point()),
-            Handle::Zipper((zipper_handle, focus)) => {
-                *self = Handle::Point(zipper_handle.focus_point(focus))
-            }
+            Handle::Span(handle) => *self = Handle::Point(handle.span_handle.left_point()),
+            Handle::Zipper(handle) => *self = Handle::Point(handle.focus_point()),
         }
     }
 
@@ -81,72 +95,70 @@ impl Handle {
         match self {
             Handle::Point(handle) => handle.move_next(expr),
             // Same note as in [move_prev]
-            Handle::Span((span_handle, _focus)) => *self = Handle::Point(span_handle.right_point()),
-            Handle::Zipper((zipper_handle, focus)) => {
-                *self = Handle::Point(zipper_handle.focus_point(focus))
-            }
+            Handle::Span(handle) => *self = Handle::Point(handle.span_handle.right_point()),
+            Handle::Zipper(handle) => *self = Handle::Point(handle.focus_point()),
         }
     }
     pub fn focus_point<'a>(&'a self) -> Point {
         match self {
             Handle::Point(point) => point.clone(),
-            Handle::Span((span, focus)) => span.focus_point(focus),
-            Handle::Zipper((zipper, focus)) => zipper.focus_point(focus),
+            Handle::Span(handle) => handle.focus_point(),
+            Handle::Zipper(handle) => handle.focus_point(),
         }
     }
 
     pub fn contains_path(&self, path: &Path) -> bool {
         match self {
             Handle::Point(_point) => false,
-            Handle::Span((handle, _focus)) => path
-                .strip_prefix(&handle.path)
+            Handle::Span(handle) => path
+                .strip_prefix(&handle.span_handle.path)
                 .and_then(|steps| {
                     steps.first().and_then(|step| {
                         Some(
-                            step.is_right_of_index(&handle.left)
-                                && step.is_left_of_index(&handle.right),
+                            step.is_right_of_index(&handle.span_handle.left)
+                                && step.is_left_of_index(&handle.span_handle.right),
                         )
                     })
                 })
                 .unwrap_or(false),
-            Handle::Zipper((_handle, _focus)) => todo!(),
+            Handle::Zipper(_handle) => todo!(),
         }
     }
 
     pub(crate) fn contains_point(&self, point: &Point) -> bool {
         match self {
             Handle::Point(handle) => handle == point,
-            Handle::Span((handle, _focus)) => point
+            Handle::Span(handle) => point
                 .path
-                .strip_prefix(&handle.path)
+                .strip_prefix(&handle.span_handle.path)
                 .and_then(|steps| match steps.first() {
                     Some(step) => Some(
-                        step.is_right_of_index(&handle.left)
-                            && step.is_left_of_index(&handle.right),
+                        step.is_right_of_index(&handle.span_handle.left)
+                            && step.is_left_of_index(&handle.span_handle.right),
                     ),
                     None => Some(
-                        point.index.is_right_of_index(&handle.left)
-                            && point.index.is_left_of_index(&handle.right),
+                        point.index.is_right_of_index(&handle.span_handle.left)
+                            && point.index.is_left_of_index(&handle.span_handle.right),
                     ),
                 })
                 .unwrap_or(false),
-            Handle::Zipper((_handle, _focus)) => todo!(),
+            Handle::Zipper(_handle) => todo!(),
         }
     }
 
     pub fn rotate_focus_prev(&mut self) {
         match self {
             Handle::Point(_handle) => (),
-            Handle::Span((_handle, focus)) => *focus = focus.rotate_prev(),
-            Handle::Zipper((_handle, focus)) => *focus = focus.rotate_prev(),
+            Handle::Span(handle) => handle.focus = handle.focus.rotate_prev(),
+            Handle::Zipper(handle) => handle.focus = handle.focus.rotate_prev(),
         }
     }
 
     pub fn rotate_focus_next(&mut self) {
         match self {
             Handle::Point(_handle) => (),
-            Handle::Span((_handle, focus)) => *focus = focus.rotate_next(),
-            Handle::Zipper((_handle, focus)) => *focus = focus.rotate_next(),
+            Handle::Span(handle) => handle.focus = handle.focus.rotate_next(),
+            Handle::Zipper(handle) => handle.focus = handle.focus.rotate_next(),
         }
     }
 
@@ -156,11 +168,11 @@ impl Handle {
         )
     }
 
-    pub fn select_prev<L>(&self, expr: &Expr<L>) {
+    pub fn select_prev<L>(&self, _expr: &Expr<L>) {
         todo!()
     }
 
-    pub fn select_next<L>(&self, expr: &Expr<L>) {
+    pub fn select_next<L>(&self, _expr: &Expr<L>) {
         todo!()
     }
 }

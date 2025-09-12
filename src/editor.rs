@@ -111,14 +111,15 @@ pub trait EditorSpec {
 
         let is_at_handle = match &state.handle {
             Handle::Point(handle) => point == handle,
-            Handle::Span((handle, _)) => {
-                *point == handle.left_point() || *point == handle.right_point()
+            Handle::Span(handle) => {
+                *point == handle.span_handle.left_point()
+                    || *point == handle.span_handle.right_point()
             }
-            Handle::Zipper((handle, _)) => {
-                *point == handle.outer_left_point()
-                    || *point == handle.outer_right_point()
-                    || *point == handle.inner_left_point()
-                    || *point == handle.inner_right_point()
+            Handle::Zipper(handle) => {
+                *point == handle.zipper_handle.outer_left_point()
+                    || *point == handle.zipper_handle.outer_right_point()
+                    || *point == handle.zipper_handle.inner_left_point()
+                    || *point == handle.zipper_handle.inner_right_point()
             }
         };
 
@@ -175,14 +176,14 @@ pub trait EditorSpec {
             if label.clicked() {
                 let mut path = path.clone();
                 if let Some(step_parent) = path.pop() {
-                    state.handle = Handle::Span((
-                        SpanHandle {
+                    state.handle = Handle::Span(SpanHandleAndFocus {
+                        span_handle: SpanHandle {
                             path: path,
                             left: step_parent.left_index(),
                             right: step_parent.right_index(),
                         },
-                        SpanFocus::Left,
-                    ));
+                        focus: SpanFocus::Left,
+                    });
                 }
             }
 
