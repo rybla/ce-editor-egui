@@ -64,10 +64,31 @@ impl Handle {
                 .and_then(|steps| {
                     steps.first().and_then(|step| {
                         Some(
-                            step.is_after_index(&handle.left)
-                                && step.is_before_index(&handle.right),
+                            step.is_right_of_index(&handle.left)
+                                && step.is_left_of_index(&handle.right),
                         )
                     })
+                })
+                .unwrap_or(false),
+            Handle::Zipper((_handle, _focus)) => todo!(),
+        }
+    }
+
+    pub(crate) fn contains_point(&self, point: &Point) -> bool {
+        match self {
+            Handle::Point(handle) => handle == point,
+            Handle::Span((handle, _focus)) => point
+                .path
+                .strip_prefix(&handle.path)
+                .and_then(|steps| match steps.first() {
+                    Some(step) => Some(
+                        step.is_right_of_index(&handle.left)
+                            && step.is_left_of_index(&handle.right),
+                    ),
+                    None => Some(
+                        point.index.is_right_of_index(&handle.left)
+                            && point.index.is_left_of_index(&handle.right),
+                    ),
                 })
                 .unwrap_or(false),
             Handle::Zipper((_handle, _focus)) => todo!(),
@@ -165,24 +186,24 @@ impl Step {
         Index(self.0 + 1)
     }
 
-    pub fn is_before_step(&self, step: &Step) -> bool {
+    pub fn is_left_of_step(&self, step: &Step) -> bool {
         self.0 < step.0
     }
 
-    pub fn is_after_step(&self, step: &Step) -> bool {
+    pub fn is_right_of_step(&self, step: &Step) -> bool {
         self.0 > step.0
     }
 
-    pub fn is_before_index(&self, index: &Index) -> bool {
+    pub fn is_left_of_index(&self, index: &Index) -> bool {
         self.0 < index.0
     }
 
-    pub fn is_after_index(&self, index: &Index) -> bool {
+    pub fn is_right_of_index(&self, index: &Index) -> bool {
         self.0 + 1 > index.0
     }
 }
 
-/// An index between kids, or before the first kid, or after the last kid of an
+/// An index between kids, or left the first kid, or right of the last kid of an
 /// [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
 pub struct Index(pub usize);
@@ -202,6 +223,14 @@ impl Index {
 
     pub fn right_step(&self) -> Step {
         Step(self.0)
+    }
+
+    pub fn is_left_of_index(&self, index: &Index) -> bool {
+        self.0 < index.0
+    }
+
+    pub fn is_right_of_index(&self, index: &Index) -> bool {
+        self.0 > index.0
     }
 }
 

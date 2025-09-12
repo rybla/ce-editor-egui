@@ -21,7 +21,7 @@ lazy_static! {
         normal_background: egui::Color32::TRANSPARENT,
         normal_border: egui::Color32::WHITE,
         active_text: egui::Color32::WHITE,
-        active_background: egui::Color32::BLUE,
+        active_background: egui::Color32::PURPLE,
         highlight_background: egui::Color32::DARK_BLUE,
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
@@ -99,7 +99,9 @@ pub trait EditorSpec {
         ui: &mut egui::Ui,
         point: &Point,
     ) {
-        let is_handle = match &state.handle {
+        let is_handle = point == &state.handle.focus_point();
+
+        let is_at_handle = match &state.handle {
             Handle::Point(handle) => point == handle,
             Handle::Span((handle, _)) => {
                 *point == handle.left_point() || *point == handle.right_point()
@@ -112,6 +114,8 @@ pub trait EditorSpec {
             }
         };
 
+        let is_in_handle = state.handle.contains_point(point);
+
         let frame = Frame::new()
             .outer_margin(0)
             .inner_margin(egui::Margin {
@@ -122,12 +126,16 @@ pub trait EditorSpec {
             })
             .fill(if is_handle {
                 Self::color_scheme(ui).active_background
+            } else if is_at_handle {
+                Self::color_scheme(ui).highlight_background
+            } else if is_in_handle {
+                Self::color_scheme(ui).highlight_background
             } else {
                 Self::color_scheme(ui).normal_background
             });
 
         frame.show(ui, |ui| {
-            let label = ui.label(egui::RichText::new(format!("•")).color(if is_handle {
+            let label = ui.label(egui::RichText::new(format!("•")).color(if is_at_handle {
                 Self::color_scheme(ui).active_text
             } else {
                 Self::color_scheme(ui).normal_text
