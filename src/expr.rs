@@ -151,8 +151,8 @@ impl Handle {
                     .first()
                     .and_then(|step| {
                         Some(
-                            step.is_right_of_index(&handle.zipper_handle.inner_left)
-                                && step.is_left_of_index(&handle.zipper_handle.inner_right),
+                            step.is_left_of_index(&handle.zipper_handle.inner_left)
+                                && step.is_right_of_index(&handle.zipper_handle.inner_right),
                         )
                     })
                     .unwrap_or(false),
@@ -194,17 +194,17 @@ impl Handle {
                         .first()
                         .and_then(|step| {
                             Some(
-                                step.is_right_of_index(&handle.zipper_handle.inner_left)
-                                    && step.is_left_of_index(&handle.zipper_handle.inner_right),
+                                step.is_left_of_index(&handle.zipper_handle.inner_left)
+                                    && step.is_right_of_index(&handle.zipper_handle.inner_right),
                             )
                         })
                         .unwrap_or_else(|| {
                             point
                                 .index
-                                .is_right_of_index(&handle.zipper_handle.inner_left)
+                                .is_left_of_index(&handle.zipper_handle.inner_left)
                                 && point
                                     .index
-                                    .is_left_of_index(&handle.zipper_handle.inner_right)
+                                    .is_right_of_index(&handle.zipper_handle.inner_right)
                         }),
                     None => point
                         .path
@@ -494,7 +494,7 @@ impl Index {
     }
 
     pub fn is_right_of_index(&self, index: &Index) -> bool {
-        self.0 > index.0
+        index.0 < self.0
     }
 
     fn is_right_of_step(&self, step: &Step) -> bool {
