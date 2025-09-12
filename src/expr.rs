@@ -141,7 +141,28 @@ impl Handle {
                     })
                 })
                 .unwrap_or(false),
-            Handle::Zipper(_handle) => todo!(),
+            Handle::Zipper(handle) => match path.strip_prefix(&handle.zipper_handle.inner_path()) {
+                Some(path_suffix) => path_suffix
+                    .first()
+                    .and_then(|step| {
+                        Some(
+                            step.is_right_of_index(&handle.zipper_handle.inner_left)
+                                && step.is_left_of_index(&handle.zipper_handle.inner_right),
+                        )
+                    })
+                    .unwrap_or(false),
+                None => path
+                    .strip_prefix(&handle.zipper_handle.outer_path)
+                    .and_then(|steps| {
+                        steps.first().and_then(|step| {
+                            Some(
+                                step.is_right_of_index(&handle.zipper_handle.outer_left)
+                                    && step.is_left_of_index(&handle.zipper_handle.outer_right),
+                            )
+                        })
+                    })
+                    .unwrap_or(false),
+            },
         }
     }
 
@@ -162,7 +183,38 @@ impl Handle {
                     ),
                 })
                 .unwrap_or(false),
-            Handle::Zipper(_handle) => todo!(),
+            Handle::Zipper(handle) => {
+                match point.path.strip_prefix(&handle.zipper_handle.inner_path()) {
+                    Some(path_suffix) => path_suffix
+                        .first()
+                        .and_then(|step| {
+                            Some(
+                                step.is_right_of_index(&handle.zipper_handle.inner_left)
+                                    && step.is_left_of_index(&handle.zipper_handle.inner_right),
+                            )
+                        })
+                        .unwrap_or_else(|| {
+                            point
+                                .index
+                                .is_right_of_index(&handle.zipper_handle.inner_left)
+                                && point
+                                    .index
+                                    .is_left_of_index(&handle.zipper_handle.inner_right)
+                        }),
+                    None => point
+                        .path
+                        .strip_prefix(&handle.zipper_handle.outer_path)
+                        .and_then(|steps| {
+                            steps.first().and_then(|step| {
+                                Some(
+                                    step.is_right_of_index(&handle.zipper_handle.outer_left)
+                                        && step.is_left_of_index(&handle.zipper_handle.outer_right),
+                                )
+                            })
+                        })
+                        .unwrap_or(false),
+                }
+            }
         }
     }
 
@@ -272,15 +324,26 @@ impl Point {
                             outer_path: self.path.clone(),
                             outer_left: self.index.clone(),
                             outer_right: step.right_index(),
-                            middle_path: Path(target_suffix.cloned().collect()).clone(),
+                            middle_path: Path(target_suffix.cloned().collect()),
                             inner_left: target.index.clone(),
                             inner_right: kid.kids.extreme_indexes().1,
+                        },
+                        focus: ZipperFocus::InnerRight,
+                        origin: ZipperFocus::OuterRight,
+                    }))
+                } else {
+                    Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: self.path.clone(),
+                            outer_left: step.left_index(),
+                            outer_right: self.index.clone(),
+                            middle_path: Path(target_suffix.cloned().collect()),
+                            inner_left: kid.kids.extreme_indexes().0,
+                            inner_right: target.index.clone(),
                         },
                         focus: ZipperFocus::InnerLeft,
                         origin: ZipperFocus::OuterLeft,
                     }))
-                } else {
-                    Some(todo!())
                 }
             } else {
                 // self.path == target.path
@@ -305,8 +368,12 @@ impl Point {
                     }))
                 }
             }
+        } else if let Some(self_suffix) = self.path.strip_prefix(&target.path) {
+            // target.path is a prefix of self.path
+            todo!()
         } else {
-            Some(todo!())
+            // NOTE: Perhaps want to calculate the smallest span that contains both self and target.
+            None
         }
     }
 }
@@ -548,26 +615,25 @@ pub enum ZipperFocus {
 }
 
 impl ZipperFocus {
-    pub fn rotate_prev(&self) -> Self {
-        match self {
-            ZipperFocus::OuterLeft => ZipperFocus::OuterRight,
-            ZipperFocus::InnerLeft => ZipperFocus::OuterLeft,
-            ZipperFocus::InnerRight => ZipperFocus::InnerLeft,
-            ZipperFocus::OuterRight => ZipperFocus::InnerRight,
-        }
-    }
-
-    pub fn rotate_next(&self) -> Self {
-        match self {
-            ZipperFocus::OuterLeft => ZipperFocus::InnerLeft,
-            ZipperFocus::InnerLeft => ZipperFocus::InnerRight,
-            ZipperFocus::InnerRight => ZipperFocus::OuterRight,
-            ZipperFocus::OuterRight => ZipperFocus::OuterLeft,
-        }
-    }
-
     fn rotate_dir(&self, dir: MoveDir) -> ZipperFocus {
-        todo!()
+        match self {
+            ZipperFocus::OuterLeft => match dir {
+                MoveDir::Prev => ZipperFocus::OuterRight,
+                MoveDir::Next => ZipperFocus::InnerLeft,
+            },
+            ZipperFocus::InnerLeft => match dir {
+                MoveDir::Prev => ZipperFocus::OuterLeft,
+                MoveDir::Next => ZipperFocus::InnerRight,
+            },
+            ZipperFocus::InnerRight => match dir {
+                MoveDir::Prev => ZipperFocus::InnerLeft,
+                MoveDir::Next => ZipperFocus::OuterRight,
+            },
+            ZipperFocus::OuterRight => match dir {
+                MoveDir::Prev => ZipperFocus::InnerRight,
+                MoveDir::Next => ZipperFocus::OuterLeft,
+            },
+        }
     }
 }
 

@@ -79,33 +79,31 @@ pub trait EditorSpec {
         }
     }
 
+    fn match_input_move_dir(ctx: &egui::Context) -> Option<MoveDir> {
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+            Some(MoveDir::Prev)
+        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+            Some(MoveDir::Next)
+        } else {
+            None
+        }
+    }
+
     fn update(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ctx: &egui::Context) {
         // escape
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             state.handle.escape();
-        } else
+        }
         // rotate focus
-        if ctx.input(|i| {
-            i.modifiers.command_only()
-                && (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::ArrowRight))
-        }) {
-            let dir = if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-                MoveDir::Prev
-            } else {
-                MoveDir::Next
-            };
+        else if ctx.input(|i| i.modifiers.command_only())
+            && let Some(dir) = Self::match_input_move_dir(ctx)
+        {
             state.handle.rotate_focus_dir(dir);
-        } else
+        }
         // move select
-        if ctx.input(|i| {
-            i.modifiers.shift
-                && (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::ArrowRight))
-        }) {
-            let dir = if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-                MoveDir::Prev
-            } else {
-                MoveDir::Next
-            };
+        else if ctx.input(|i| i.modifiers.shift)
+            && let Some(dir) = Self::match_input_move_dir(ctx)
+        {
             let origin = state.handle.clone();
             let mut success = false;
             while !success {
@@ -119,16 +117,9 @@ pub trait EditorSpec {
                 println!("bailed select since move returned false before success");
                 state.handle = origin;
             }
-        } else
+        }
         // move
-        if ctx
-            .input(|i| i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::ArrowRight))
-        {
-            let dir = if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-                MoveDir::Prev
-            } else {
-                MoveDir::Next
-            };
+        else if let Some(dir) = Self::match_input_move_dir(ctx) {
             let origin = state.handle.clone();
             // move until success
             let mut success = false;
@@ -144,9 +135,9 @@ pub trait EditorSpec {
                 println!("bailed move since move returned false before success");
                 state.handle = origin;
             }
-        } else
+        }
         // move up
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+        else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
             state.handle.move_up(&state.expr);
         }
     }
