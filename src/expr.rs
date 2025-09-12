@@ -70,7 +70,7 @@ impl Handle {
                     })
                 })
                 .unwrap_or(false),
-            Handle::Zipper((handle, focus)) => todo!(),
+            Handle::Zipper((_handle, _focus)) => todo!(),
         }
     }
 }
