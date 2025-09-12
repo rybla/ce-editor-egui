@@ -115,25 +115,18 @@ pub trait EditorSpec {
                 println!("bailed select since move returned false before success");
                 state.handle = origin;
             }
-        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+        } else if ctx
+            .input(|i| i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::ArrowRight))
+        {
+            let dir = if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+                MoveDir::Prev
+            } else {
+                MoveDir::Next
+            };
             let origin = state.handle.clone();
             let mut success = false;
             while !success {
-                let moved = state.handle.move_dir(MoveDir::Prev, &state.expr);
-                if !moved {
-                    break;
-                }
-                success = Self::is_valid_handle(&state.handle, &state.expr);
-            }
-            if !success {
-                println!("bailed move since move returned false before success");
-                state.handle = origin;
-            }
-        } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-            let origin = state.handle.clone();
-            let mut success = false;
-            while !success {
-                let moved = state.handle.move_dir(MoveDir::Next, &state.expr);
+                let moved = state.handle.move_dir(dir, &state.expr);
                 if !moved {
                     break;
                 }

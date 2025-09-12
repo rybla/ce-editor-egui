@@ -46,7 +46,7 @@ impl ZipperHandleAndFocus {
 }
 
 impl Handle {
-    pub fn move_up<L: Debug>(&mut self, expr: &Expr<L>) {
+    pub fn move_up<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
         match self {
             Handle::Point(Point { path, index: _ }) => {
                 if let Some(step) = path.pop() {
@@ -58,6 +58,9 @@ impl Handle {
                         },
                         focus: SpanFocus::Left,
                     });
+                    true
+                } else {
+                    false
                 }
             }
             Handle::Span(handle) => {
@@ -67,15 +70,19 @@ impl Handle {
                     if let Some(step) = handle.span_handle.path.pop() {
                         handle.span_handle.left = step.left_index();
                         handle.span_handle.right = step.right_index();
+                        true
+                    } else {
+                        false
                     }
                 } else {
                     handle.span_handle.left = leftmost;
                     handle.span_handle.right = rightmost;
+                    true
                 }
             }
             // NOTE: I'm not sure exactly what should happen when you move up at
             // a zipper, but by default for now, nothing happens.
-            Handle::Zipper(_) => (),
+            Handle::Zipper(_) => false,
         }
     }
 
