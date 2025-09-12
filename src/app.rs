@@ -50,15 +50,15 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("ce-editor-egui");
 
-            ui.label(format!("handle: {:?}", &self.editor_state.handle));
-
             egui::ScrollArea::both()
                 .auto_shrink([false, true])
                 .scroll_source(egui::containers::scroll_area::ScrollSource::MOUSE_WHEEL)
                 .show(ui, |ui| {
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                     EditorSpec::render(&mut self.editor_state, ui);
-                })
+                });
+
+            ui.label(format!("handle: {:#?}", &self.editor_state.handle));
         });
     }
 }

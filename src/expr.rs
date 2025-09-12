@@ -310,11 +310,16 @@ impl Point {
 
     /// Calculates the selection from self to target.
     pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
+        println!("select_to");
+        println!("self   = {:#?}", self);
+        println!("target = {:#?}", target);
+
         if let Some(target_suffix) = target.path.strip_prefix(&self.path) {
             // self.path is a prefix of target.path
+            println!("self.path is a prefix of target.path");
+            println!("target_suffix = {:#?}", Path(target_suffix.to_vec()));
 
-            let mut target_suffix = target_suffix.into_iter();
-            if let Some(step) = target_suffix.next() {
+            if let Some(step) = target_suffix.first() {
                 // target.path has some more steps than self.path
                 let kid = expr.at_path(&target.path);
 
@@ -324,9 +329,9 @@ impl Point {
                             outer_path: self.path.clone(),
                             outer_left: self.index.clone(),
                             outer_right: step.right_index(),
-                            middle_path: Path(target_suffix.cloned().collect()),
-                            inner_left: target.index.clone(),
-                            inner_right: kid.kids.extreme_indexes().1,
+                            middle_path: Path(target_suffix.to_vec()),
+                            inner_left: kid.kids.extreme_indexes().0,
+                            inner_right: target.index.clone(),
                         },
                         focus: ZipperFocus::InnerRight,
                         origin: ZipperFocus::OuterRight,
@@ -335,11 +340,11 @@ impl Point {
                     Some(Handle::Zipper(ZipperHandleAndFocus {
                         zipper_handle: ZipperHandle {
                             outer_path: self.path.clone(),
-                            outer_left: step.left_index(),
-                            outer_right: self.index.clone(),
-                            middle_path: Path(target_suffix.cloned().collect()),
-                            inner_left: kid.kids.extreme_indexes().0,
-                            inner_right: target.index.clone(),
+                            outer_left: self.index.clone(),
+                            outer_right: step.right_index(),
+                            middle_path: Path(target_suffix.to_vec()),
+                            inner_left: target.index.clone(),
+                            inner_right: kid.kids.extreme_indexes().1,
                         },
                         focus: ZipperFocus::InnerLeft,
                         origin: ZipperFocus::OuterLeft,
@@ -401,8 +406,14 @@ impl Path {
 }
 
 /// A step from an [Expr] to one of its kids.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Step(pub usize);
+
+impl Debug for Step {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl Step {
     pub fn left_step(&self) -> Step {
@@ -440,8 +451,14 @@ impl Step {
 
 /// An index between kids, or left the first kid, or right of the last kid of an
 /// [Expr].
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
+#[derive(Clone, serde::Deserialize, serde::Serialize, PartialEq, Default)]
 pub struct Index(pub usize);
+
+impl Debug for Index {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl Index {
     pub fn left_index(&self) -> Index {

@@ -202,15 +202,35 @@ pub trait EditorSpec {
         });
     }
 
+    fn render_expr(
+        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
+        ui: &mut egui::Ui,
+        expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
+        path: &Path,
+    ) {
+        if expr.height() <= MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
+            ui.horizontal_top(|ui| Self::render_expr_contents(state, ui, expr, path));
+        } else {
+            ui.vertical(|ui| Self::render_expr_contents(state, ui, expr, path));
+        }
+    }
+
     fn render_expr_contents(
         state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
         ui: &mut egui::Ui,
         expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
         path: &Path,
     ) {
+        ui.style_mut().spacing.item_spacing.x = 0f32;
+
         let frame = Frame::new()
             .outer_margin(0)
-            .inner_margin(4)
+            .inner_margin(egui::Margin {
+                left: 0,
+                right: 0,
+                top: 4,
+                bottom: 4,
+            })
             .fill(if state.handle.contains_path(path) {
                 Self::color_scheme(ui).highlight_background
             } else {
@@ -263,18 +283,5 @@ pub trait EditorSpec {
         });
 
         ui.set_max_size(ui.min_size());
-    }
-
-    fn render_expr(
-        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
-        ui: &mut egui::Ui,
-        expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
-        path: &Path,
-    ) {
-        if expr.height() <= MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
-            ui.horizontal_top(|ui| Self::render_expr_contents(state, ui, expr, path));
-        } else {
-            ui.vertical(|ui| Self::render_expr_contents(state, ui, expr, path));
-        }
     }
 }
