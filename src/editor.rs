@@ -17,17 +17,17 @@ pub struct ColorScheme {
 
 lazy_static! {
     pub static ref dark_color_scheme: ColorScheme = ColorScheme {
-        normal_border: egui::Color32::BLACK,
-        normal_text: egui::Color32::BLACK,
+        normal_text: egui::Color32::WHITE,
         normal_background: egui::Color32::TRANSPARENT,
+        normal_border: egui::Color32::WHITE,
         active_text: egui::Color32::WHITE,
         active_background: egui::Color32::BLUE,
         highlight_background: egui::Color32::DARK_BLUE,
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
-        normal_border: egui::Color32::WHITE,
         normal_text: egui::Color32::BLACK,
         normal_background: egui::Color32::TRANSPARENT,
+        normal_border: egui::Color32::BLACK,
         active_text: egui::Color32::WHITE,
         active_background: egui::Color32::BLUE,
         highlight_background: egui::Color32::LIGHT_BLUE,
