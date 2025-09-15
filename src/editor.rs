@@ -12,24 +12,30 @@ pub struct ColorScheme {
     pub normal_background: egui::Color32,
     pub active_text: egui::Color32,
     pub active_background: egui::Color32,
+    pub inactive_text: egui::Color32,
+    pub inactive_background: egui::Color32,
     pub highlight_background: egui::Color32,
 }
 
 lazy_static! {
     pub static ref dark_color_scheme: ColorScheme = ColorScheme {
         normal_text: egui::Color32::WHITE,
-        normal_background: egui::Color32::TRANSPARENT,
+        normal_background: egui::Color32::BLACK,
         normal_border: egui::Color32::WHITE,
         active_text: egui::Color32::WHITE,
-        active_background: egui::Color32::PURPLE,
+        active_background: egui::Color32::RED,
+        inactive_text: egui::Color32::WHITE,
+        inactive_background: egui::Color32::PURPLE,
         highlight_background: egui::Color32::DARK_BLUE,
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
         normal_text: egui::Color32::BLACK,
-        normal_background: egui::Color32::TRANSPARENT,
+        normal_background: egui::Color32::WHITE,
         normal_border: egui::Color32::BLACK,
         active_text: egui::Color32::WHITE,
-        active_background: egui::Color32::BLUE,
+        active_background: egui::Color32::RED,
+        inactive_text: egui::Color32::WHITE,
+        inactive_background: egui::Color32::PURPLE,
         highlight_background: egui::Color32::LIGHT_BLUE,
     };
 }
@@ -132,7 +138,7 @@ pub trait EditorSpec {
             }
             // if broke before a success, then reset to origin
             if !success {
-                println!("bailed move since move returned false before success");
+                println!("[move] bailed move since move returned false before success");
                 state.handle = origin;
             }
         }
@@ -180,7 +186,7 @@ pub trait EditorSpec {
             .fill(if is_handle {
                 Self::color_scheme(ui).active_background
             } else if is_at_handle {
-                Self::color_scheme(ui).highlight_background
+                Self::color_scheme(ui).inactive_background
             } else if is_in_handle {
                 Self::color_scheme(ui).highlight_background
             } else {
@@ -190,6 +196,8 @@ pub trait EditorSpec {
         frame.show(ui, |ui| {
             let label = ui.label(egui::RichText::new(format!("•")).color(if is_handle {
                 Self::color_scheme(ui).active_text
+            } else if is_at_handle {
+                Self::color_scheme(ui).inactive_text
             } else {
                 Self::color_scheme(ui).normal_text
             }));

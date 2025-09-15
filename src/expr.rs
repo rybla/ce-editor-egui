@@ -238,12 +238,11 @@ impl Point {
         expr: &Expr<L>,
         inner_is_focus: bool,
     ) -> Option<Handle> {
-        // inner is beside outer
         if let Some(step) = inner_suffix.first() {
-            // inner is beside-down outer
+            println!("[select] inner is beside-down outer");
             let inner_expr = expr.at_path(&inner.path);
             if step.is_left_of_index(&outer.index) {
-                // inner is to the left of outer
+                println!("[select] inner is to the left of outer");
                 Some(Handle::Zipper(ZipperHandleAndFocus {
                     zipper_handle: ZipperHandle {
                         outer_path: outer.path.clone(),
@@ -260,15 +259,15 @@ impl Point {
                     },
                 }))
             } else {
-                // inner is to the right of outer
+                println!("[select] inner is to the right of outer");
                 Some(Handle::Zipper(ZipperHandleAndFocus {
                     zipper_handle: ZipperHandle {
                         outer_path: outer.path.clone(),
-                        outer_left: step.left_index(),
-                        outer_right: outer.index.clone(),
+                        outer_left: outer.index.clone(),
+                        outer_right: step.right_index(),
                         middle_path: Path(inner_suffix.to_vec()),
-                        inner_left: inner_expr.leftmost_index(),
-                        inner_right: inner.index.clone(),
+                        inner_left: inner.index.clone(),
+                        inner_right: inner_expr.rightmost_index(),
                     },
                     focus: if inner_is_focus {
                         ZipperFocus::InnerLeft
@@ -278,9 +277,9 @@ impl Point {
                 }))
             }
         } else {
-            // inner is at or beside self
+            println!("[select] inner is at or beside self");
             if inner.index.is_left_of_index(&outer.index) {
-                // inner is beside outer to the left
+                println!("[select] inner is beside outer to the left");
                 Some(Handle::Span(SpanHandleAndFocus {
                     span_handle: SpanHandle {
                         path: outer.path.clone(),
@@ -294,7 +293,7 @@ impl Point {
                     },
                 }))
             } else if inner.index.is_right_of_index(&outer.index) {
-                // inner is beside outer to the right
+                println!("[select] inner is beside outer to the right");
                 Some(Handle::Span(SpanHandleAndFocus {
                     span_handle: SpanHandle {
                         path: outer.path.clone(),
@@ -308,7 +307,7 @@ impl Point {
                     },
                 }))
             } else {
-                // inner is at outer
+                println!("[select] inner is at outer");
                 Some(Handle::Point(outer.clone()))
             }
         }
@@ -316,15 +315,16 @@ impl Point {
 
     /// Calculates the selection from self to target.
     pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
-        println!("select_to");
-        println!("self   = {:#?}", self);
-        println!("target = {:#?}", target);
-
-        if let Some(target_suffix) = target.path.strip_prefix(&self.path) {
-            // target is inside self
+        println!("[select]");
+        println!("self = {self:#?}");
+        println!("target = {target:#?}");
+        if let Some(target_suffix) = target.path.0.strip_prefix(self.path.0.as_slice()) {
+            println!("[select] target is inside self");
+            println!("target_suffix = {target_suffix:#?}");
             Self::select_from_outer_to_inner(self, target_suffix, target, expr, true)
-        } else if let Some(self_suffix) = self.path.strip_prefix(&self.path) {
-            // self is inside target
+        } else if let Some(self_suffix) = self.path.0.strip_prefix(target.path.0.as_slice()) {
+            println!("[select] self is inside target");
+            println!("self_suffix = {self_suffix:#?}");
             Self::select_from_outer_to_inner(target, self_suffix, self, expr, false)
         } else {
             // NOTE: Perhaps want to calculate the smallest span that contains both self and target
@@ -348,10 +348,6 @@ impl Path {
 
     pub fn starts_with(&self, path: &Path) -> bool {
         self.0.starts_with(&path.0)
-    }
-
-    pub fn strip_prefix(&self, path: &Path) -> Option<&[Step]> {
-        self.0.strip_prefix(path.0.as_slice())
     }
 }
 
@@ -486,7 +482,8 @@ impl SpanHandle {
     }
 
     pub fn contains_path(&self, path: &Path) -> bool {
-        path.strip_prefix(&self.path)
+        path.0
+            .strip_prefix(self.path.0.as_slice())
             .and_then(|steps| {
                 steps.first().and_then(|step| {
                     Some(step.is_right_of_index(&self.left) && step.is_left_of_index(&self.right))
@@ -498,7 +495,8 @@ impl SpanHandle {
     pub fn contains_point(&self, point: &Point) -> bool {
         point
             .path
-            .strip_prefix(&self.path)
+            .0
+            .strip_prefix(self.path.0.as_slice())
             .and_then(|steps| match steps.first() {
                 Some(step) => {
                     Some(step.is_right_of_index(&self.left) && step.is_left_of_index(&self.right))
