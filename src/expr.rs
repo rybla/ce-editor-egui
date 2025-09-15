@@ -461,7 +461,7 @@ impl Step {
     }
 
     pub fn is_right_of_index(&self, index: &Index) -> bool {
-        self.0 + 1 > index.0
+        self.0 > index.0
     }
 }
 
@@ -802,79 +802,6 @@ mod tests {
             });
         }
 
-        mod point {
-            use super::*;
-
-            fn assert_handle_contains_point(point: &Point, result: bool) {
-                assert_eq!(
-                    handle.contains_point(point),
-                    result,
-                    "expected\n{:#?}\nto {}contain\n{:#?}",
-                    *handle,
-                    if result { "" } else { "not " },
-                    point
-                );
-            }
-
-            mod depth1 {
-                use super::*;
-
-                #[test]
-                fn test_index0() {
-                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(0)), false);
-                }
-                #[test]
-                fn test_index1() {
-                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(1)), false);
-                }
-                #[test]
-                fn test_index2() {
-                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(2)), false);
-                }
-                #[test]
-                fn test_index3() {
-                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(3)), false);
-                }
-                #[test]
-                fn test_index4() {
-                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(4)), false);
-                }
-                #[test]
-                fn test_index5() {
-                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(5)), false);
-                }
-            }
-
-            mod depth2 {
-                use super::*;
-
-                #[test]
-                fn test_index0() {
-                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(0)), false);
-                }
-                #[test]
-                fn test_index1() {
-                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(1)), false);
-                }
-                #[test]
-                fn test_index2() {
-                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(2)), true);
-                }
-                #[test]
-                fn test_index3() {
-                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(3)), true);
-                }
-                #[test]
-                fn test_index4() {
-                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(4)), false);
-                }
-                #[test]
-                fn test_index5() {
-                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(5)), false);
-                }
-            }
-        }
-
         mod path {
             use super::*;
 
@@ -974,6 +901,79 @@ mod tests {
                 }
             }
         }
+
+        mod point {
+            use super::*;
+
+            fn assert_handle_contains_point(point: &Point, result: bool) {
+                assert_eq!(
+                    handle.contains_point(point),
+                    result,
+                    "expected\n{:#?}\nto {}contain\n{:#?}",
+                    *handle,
+                    if result { "" } else { "not " },
+                    point
+                );
+            }
+
+            mod depth1 {
+                use super::*;
+
+                #[test]
+                fn test_index0() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(0)), false);
+                }
+                #[test]
+                fn test_index1() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(1)), false);
+                }
+                #[test]
+                fn test_index2() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(2)), false);
+                }
+                #[test]
+                fn test_index3() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(3)), false);
+                }
+                #[test]
+                fn test_index4() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(4)), false);
+                }
+                #[test]
+                fn test_index5() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(5)), false);
+                }
+            }
+
+            mod depth2 {
+                use super::*;
+
+                #[test]
+                fn test_index0() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(0)), false);
+                }
+                #[test]
+                fn test_index1() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(1)), false);
+                }
+                #[test]
+                fn test_index2() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(2)), true);
+                }
+                #[test]
+                fn test_index3() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(3)), true);
+                }
+                #[test]
+                fn test_index4() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(4)), false);
+                }
+                #[test]
+                fn test_index5() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(5)), false);
+                }
+            }
+        }
     }
 
     mod zipper_handle_contains {
@@ -995,21 +995,14 @@ mod tests {
         }
 
         fn assert_handle_contains_path(path: &Path, result: bool) {
-            if result {
-                assert!(
-                    handle.contains_path(path),
-                    "expected\n{:#?}\nto contain the path\n{:#?}",
-                    *handle,
-                    path
-                );
-            } else {
-                assert!(
-                    !handle.contains_path(path),
-                    "expected\n{:#?}\nto NOT contain the path\n{:#?}",
-                    *handle,
-                    path
-                );
-            }
+            assert_eq!(
+                handle.contains_path(path),
+                result,
+                "expected\n{:#?}\nto {}contain\n{:#?}",
+                *handle,
+                if result { "" } else { "not " },
+                path
+            );
         }
 
         // TODO: Something is going horribly wrong here, where a zipper handle seems to not contain ANY paths!
