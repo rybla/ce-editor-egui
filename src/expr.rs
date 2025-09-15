@@ -985,8 +985,6 @@ mod tests {
             );
         }
 
-        // TODO: Something is going horribly wrong here, where a zipper handle seems to not contain ANY paths!
-
         mod path {
             use super::*;
 
