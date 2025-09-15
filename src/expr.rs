@@ -34,19 +34,11 @@ impl SpanHandleAndFocus {
 pub struct ZipperHandleAndFocus {
     pub zipper_handle: ZipperHandle,
     pub focus: ZipperFocus,
-    // TODO: Actually, this needs to be removed once I transition to the proper
-    // implementation of select_to Where three points are fixed Other than just
-    // the two origin and focus.
-    pub origin: ZipperFocus,
 }
 
 impl ZipperHandleAndFocus {
     pub fn focus_point(&self) -> Point {
         self.zipper_handle.focus_point(&self.focus)
-    }
-
-    fn origin_point(&self) -> Point {
-        self.zipper_handle.focus_point(&self.origin)
     }
 }
 
@@ -162,28 +154,25 @@ impl Handle {
         )
     }
 
-    pub fn origin_point(&self) -> Point {
-        match self {
-            Handle::Point(handle) => handle.clone(),
-            Handle::Span(handle) => handle.origin_point(),
-            Handle::Zipper(handle) => handle.origin_point(),
-        }
-    }
-
     pub fn move_select_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
-        let origin = self.origin_point();
-        let mut target = self.focus_point();
-        let moved = target.move_dir(dir, expr);
-        if moved {
-            match origin.select_to(&target, expr) {
-                Some(handle) => {
-                    *self = handle;
-                    true
+        match self {
+            Handle::Point(origin) => {
+                let mut target = origin.clone();
+                let moved = target.move_dir(dir, expr);
+                if moved {
+                    match origin.select_to(&target, expr) {
+                        Some(handle) => {
+                            *self = handle;
+                            true
+                        }
+                        None => false,
+                    }
+                } else {
+                    false
                 }
-                None => false,
             }
-        } else {
-            false
+            Handle::Span(_span_handle_and_focus) => todo!(),
+            Handle::Zipper(_zipper_handle_and_focus) => todo!(),
         }
     }
 }
@@ -244,63 +233,83 @@ impl Point {
 
     pub fn select_from_outer_to_inner<L: Debug>(
         outer: &Point,
-        inner: &Point,
         inner_suffix: &[Step],
+        inner: &Point,
         expr: &Expr<L>,
+        inner_is_focus: bool,
     ) -> Option<Handle> {
-        // outer.path is a prefix of inner.path
+        // inner is beside outer
         if let Some(step) = inner_suffix.first() {
-            // inner.path has an extra step beyond outer.path
-            let kid = expr.at_path(&inner.path);
-
-            if outer.index.is_right_of_step(step) {
+            // inner is beside-down outer
+            let inner_expr = expr.at_path(&inner.path);
+            if step.is_left_of_index(&outer.index) {
+                // inner is to the left of outer
                 Some(Handle::Zipper(ZipperHandleAndFocus {
                     zipper_handle: ZipperHandle {
                         outer_path: outer.path.clone(),
-                        outer_left: outer.index.clone(),
-                        outer_right: step.right_index(),
+                        outer_left: step.left_index(),
+                        outer_right: outer.index.clone(),
                         middle_path: Path(inner_suffix.to_vec()),
-                        inner_left: kid.kids.extreme_indexes().0,
+                        inner_left: inner_expr.leftmost_index(),
                         inner_right: inner.index.clone(),
                     },
-                    focus: ZipperFocus::InnerRight,
-                    origin: ZipperFocus::OuterRight,
+                    focus: if inner_is_focus {
+                        ZipperFocus::InnerRight
+                    } else {
+                        ZipperFocus::OuterRight
+                    },
                 }))
             } else {
+                // inner is to the right of outer
                 Some(Handle::Zipper(ZipperHandleAndFocus {
                     zipper_handle: ZipperHandle {
                         outer_path: outer.path.clone(),
-                        outer_left: outer.index.clone(),
-                        outer_right: step.right_index(),
+                        outer_left: step.left_index(),
+                        outer_right: outer.index.clone(),
                         middle_path: Path(inner_suffix.to_vec()),
-                        inner_left: inner.index.clone(),
-                        inner_right: kid.kids.extreme_indexes().1,
+                        inner_left: inner_expr.leftmost_index(),
+                        inner_right: inner.index.clone(),
                     },
-                    focus: ZipperFocus::InnerLeft,
-                    origin: ZipperFocus::OuterLeft,
+                    focus: if inner_is_focus {
+                        ZipperFocus::InnerLeft
+                    } else {
+                        ZipperFocus::OuterLeft
+                    },
                 }))
             }
         } else {
-            // outer.path == inner.path
-
-            if outer.index.is_right_of_index(&inner.index) {
+            // inner is at or beside self
+            if inner.index.is_left_of_index(&outer.index) {
+                // inner is beside outer to the left
                 Some(Handle::Span(SpanHandleAndFocus {
                     span_handle: SpanHandle {
                         path: outer.path.clone(),
                         left: inner.index.clone(),
                         right: outer.index.clone(),
                     },
-                    focus: SpanFocus::Left,
+                    focus: if inner_is_focus {
+                        SpanFocus::Left
+                    } else {
+                        SpanFocus::Right
+                    },
                 }))
-            } else {
+            } else if inner.index.is_right_of_index(&outer.index) {
+                // inner is beside outer to the right
                 Some(Handle::Span(SpanHandleAndFocus {
                     span_handle: SpanHandle {
                         path: outer.path.clone(),
                         left: outer.index.clone(),
                         right: inner.index.clone(),
                     },
-                    focus: SpanFocus::Right,
+                    focus: if inner_is_focus {
+                        SpanFocus::Right
+                    } else {
+                        SpanFocus::Left
+                    },
                 }))
+            } else {
+                // inner is at outer
+                Some(Handle::Point(outer.clone()))
             }
         }
     }
@@ -312,13 +321,13 @@ impl Point {
         println!("target = {:#?}", target);
 
         if let Some(target_suffix) = target.path.strip_prefix(&self.path) {
-            // self.path is a prefix of target.path
-            Self::select_from_outer_to_inner(self, target, target_suffix, expr)
+            // target is inside self
+            Self::select_from_outer_to_inner(self, target_suffix, target, expr, true)
         } else if let Some(self_suffix) = self.path.strip_prefix(&self.path) {
-            // target.path is a prefix of self.path
-            Self::select_from_outer_to_inner(target, self, self_suffix, expr)
+            // self is inside target
+            Self::select_from_outer_to_inner(target, self_suffix, self, expr, false)
         } else {
-            // NOTE: Perhaps want to calculate the smallest span that contains both self and target.
+            // NOTE: Perhaps want to calculate the smallest span that contains both self and target
             None
         }
     }
@@ -694,6 +703,22 @@ impl<L: Debug> Expr<L> {
             .map(|(i, kid)| (Step(i), kid))
     }
 
+    pub fn leftmost_step(&self) -> Step {
+        Step(0)
+    }
+
+    pub fn rightmost_step(&self) -> Step {
+        Step(self.kids.0.len() - 1)
+    }
+
+    pub fn leftmost_index(&self) -> Index {
+        Index(0)
+    }
+
+    pub fn rightmost_index(&self) -> Index {
+        Index(self.kids.0.len())
+    }
+
     pub fn example<F>(mk_label: &mut F, width: usize, depth: usize) -> Self
     where
         F: FnMut() -> L,
@@ -970,7 +995,6 @@ mod tests {
                     inner_right: Index(4),
                 },
                 focus: ZipperFocus::OuterLeft,
-                origin: ZipperFocus::InnerLeft,
             });
         }
 
