@@ -28,6 +28,199 @@ impl SpanHandleAndFocus {
     fn origin_point(&self) -> Point {
         self.span_handle.origin_point(&self.focus)
     }
+
+    fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
+        println!("[select]");
+        println!("self = {self:#?}");
+        println!("target = {target:#?}");
+        if let Some(target_suffix) = target
+            .path
+            .0
+            .strip_prefix(self.span_handle.path.0.as_slice())
+        {
+            println!("[select] target is inside or beside self");
+            if let Some(step) = target_suffix.first() {
+                println!("[select] target.path is inside self.path");
+                let target_kid = expr.at_path(&target.path);
+                if step.is_left_of_index(&self.span_handle.left) {
+                    println!("[select] target step is left of span's left");
+                    Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: self.span_handle.path.clone(),
+                            outer_left: step.left_index(),
+                            outer_right: match self.focus {
+                                SpanFocus::Left => self.span_handle.right.clone(),
+                                SpanFocus::Right => self.span_handle.left.clone(),
+                            },
+                            middle_path: Path(target_suffix.to_vec()),
+                            inner_left: target_kid.leftmost_index(),
+                            inner_right: target.index.clone(),
+                        },
+                        focus: ZipperFocus::InnerRight,
+                    }))
+                } else if step.is_left_of_index(&self.span_handle.right) {
+                    println!("[select] target step is inside span");
+                    match self.focus {
+                        SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: self.span_handle.path.clone(),
+                                outer_left: step.left_index(),
+                                outer_right: self.span_handle.right.clone(),
+                                middle_path: Path(target_suffix.to_vec()),
+                                inner_left: target.index.clone(),
+                                inner_right: target_kid.rightmost_index(),
+                            },
+                            focus: ZipperFocus::InnerLeft,
+                        })),
+                        SpanFocus::Right => Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: self.span_handle.path.clone(),
+                                outer_left: self.span_handle.left.clone(),
+                                outer_right: step.right_index(),
+                                middle_path: Path(target_suffix.to_vec()),
+                                inner_left: target_kid.leftmost_index(),
+                                inner_right: target.index.clone(),
+                            },
+                            focus: ZipperFocus::InnerRight,
+                        })),
+                    }
+                } else {
+                    println!("[select] target step is right of span's right");
+                    Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: self.span_handle.path.clone(),
+                            outer_left: match self.focus {
+                                SpanFocus::Left => self.span_handle.right.clone(),
+                                SpanFocus::Right => self.span_handle.left.clone(),
+                            },
+                            outer_right: step.right_index(),
+                            middle_path: Path(target_suffix.to_vec()),
+                            inner_left: target.index.clone(),
+                            inner_right: target_kid.rightmost_index(),
+                        },
+                        focus: ZipperFocus::InnerRight,
+                    }))
+                }
+            } else {
+                println!("[select] target is beside self");
+                if target.index.is_left_of_index(&self.span_handle.left) {
+                    println!("[select] target is beside self to the left");
+                    Some(Handle::Span(SpanHandleAndFocus {
+                        span_handle: SpanHandle {
+                            path: self.span_handle.path.clone(),
+                            left: target.index.clone(),
+                            right: match self.focus {
+                                SpanFocus::Left => self.span_handle.right.clone(),
+                                SpanFocus::Right => self.span_handle.left.clone(),
+                            },
+                        },
+                        focus: SpanFocus::Left,
+                    }))
+                } else if target.index.is_left_of_index(&self.span_handle.right) {
+                    println!("[select] target is beside self to the middle");
+                    match self.focus {
+                        SpanFocus::Left => Some(Handle::Span(SpanHandleAndFocus {
+                            span_handle: SpanHandle {
+                                path: self.span_handle.path.clone(),
+                                left: target.index.clone(),
+                                right: self.span_handle.right.clone(),
+                            },
+                            focus: SpanFocus::Left,
+                        })),
+                        SpanFocus::Right => Some(Handle::Span(SpanHandleAndFocus {
+                            span_handle: SpanHandle {
+                                path: self.span_handle.path.clone(),
+                                left: self.span_handle.left.clone(),
+                                right: target.index.clone(),
+                            },
+                            focus: SpanFocus::Right,
+                        })),
+                    }
+                } else {
+                    println!("[select] target is beside self to the right");
+                    Some(Handle::Span(SpanHandleAndFocus {
+                        span_handle: SpanHandle {
+                            path: self.span_handle.path.clone(),
+                            left: match self.focus {
+                                SpanFocus::Left => self.span_handle.right.clone(),
+                                SpanFocus::Right => self.span_handle.left.clone(),
+                            },
+                            right: target.index.clone(),
+                        },
+                        focus: SpanFocus::Right,
+                    }))
+                }
+            }
+        } else if let Some(self_suffix) = self
+            .span_handle
+            .path
+            .0
+            .strip_prefix(target.path.0.as_slice())
+        {
+            println!("[select] self.path is strictly inside target.path");
+            let step = self_suffix.first().unwrap_or_else(|| {
+                panic!("impossible since then would have matched previous strip_suffix pattern")
+            });
+            if target.index.is_left_of_step(step) {
+                println!("[select] self is inside target; target is to the left");
+                let self_kid = expr.at_path(&self.span_handle.path);
+                match self.focus {
+                    SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: target.index.clone(),
+                            outer_right: step.right_index(),
+                            middle_path: Path(self_suffix.to_vec()),
+                            inner_left: self_kid.leftmost_index(),
+                            inner_right: self.span_handle.right.clone(),
+                        },
+                        focus: ZipperFocus::OuterLeft,
+                    })),
+                    SpanFocus::Right => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: step.left_index(),
+                            outer_right: target.index.clone(),
+                            middle_path: Path(self_suffix.to_vec()),
+                            inner_left: self.span_handle.left.clone(),
+                            inner_right: self_kid.rightmost_index(),
+                        },
+                        focus: ZipperFocus::OuterLeft,
+                    })),
+                }
+            } else {
+                println!("[select] self is inside target; target is to the right");
+                let self_kid = expr.at_path(&self.span_handle.path);
+                match self.focus {
+                    SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: step.left_index(),
+                            outer_right: target.index.clone(),
+                            middle_path: Path(self_suffix.to_vec()),
+                            inner_left: self_kid.leftmost_index(),
+                            inner_right: self.span_handle.right.clone(),
+                        },
+                        focus: ZipperFocus::OuterRight,
+                    })),
+                    SpanFocus::Right => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: step.left_index(),
+                            outer_right: target.index.clone(),
+                            middle_path: Path(self_suffix.to_vec()),
+                            inner_left: self.span_handle.left.clone(),
+                            inner_right: self_kid.rightmost_index(),
+                        },
+                        focus: ZipperFocus::OuterRight,
+                    })),
+                }
+            }
+        } else {
+            // NOTE: Perhaps want to calculate the smallest span that contains both self and target
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
@@ -39,6 +232,13 @@ pub struct ZipperHandleAndFocus {
 impl ZipperHandleAndFocus {
     pub fn focus_point(&self) -> Point {
         self.zipper_handle.focus_point(&self.focus)
+    }
+
+    fn select_to<L: Debug>(&self, target: &Point, _expr: &Expr<L>) -> Option<Handle> {
+        println!("[select]");
+        println!("self = {self:#?}");
+        println!("target = {target:#?}");
+        todo!()
     }
 }
 
@@ -156,11 +356,11 @@ impl Handle {
 
     pub fn move_select_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
         match self {
-            Handle::Point(origin) => {
-                let mut target = origin.clone();
+            Handle::Point(handle) => {
+                let mut target = handle.clone();
                 let moved = target.move_dir(dir, expr);
                 if moved {
-                    match origin.select_to(&target, expr) {
+                    match handle.select_to(&target, expr) {
                         Some(handle) => {
                             *self = handle;
                             true
@@ -171,8 +371,36 @@ impl Handle {
                     false
                 }
             }
-            Handle::Span(_span_handle_and_focus) => todo!(),
-            Handle::Zipper(_zipper_handle_and_focus) => todo!(),
+            Handle::Span(handle) => {
+                let mut target = handle.focus_point();
+                let moved = target.move_dir(dir, expr);
+                if moved {
+                    match handle.select_to(&target, expr) {
+                        Some(handle) => {
+                            *self = handle;
+                            true
+                        }
+                        None => false,
+                    }
+                } else {
+                    false
+                }
+            }
+            Handle::Zipper(handle) => {
+                let mut target = handle.focus_point();
+                let moved = target.move_dir(dir, expr);
+                if moved {
+                    match handle.select_to(&target, expr) {
+                        Some(handle) => {
+                            *self = handle;
+                            true
+                        }
+                        None => false,
+                    }
+                } else {
+                    false
+                }
+            }
         }
     }
 }
@@ -319,12 +547,10 @@ impl Point {
         println!("self = {self:#?}");
         println!("target = {target:#?}");
         if let Some(target_suffix) = target.path.0.strip_prefix(self.path.0.as_slice()) {
-            println!("[select] target is inside self");
-            println!("target_suffix = {target_suffix:#?}");
+            println!("[select] target is inside or beside self");
             Self::select_from_outer_to_inner(self, target_suffix, target, expr, true)
         } else if let Some(self_suffix) = self.path.0.strip_prefix(target.path.0.as_slice()) {
-            println!("[select] self is inside target");
-            println!("self_suffix = {self_suffix:#?}");
+            println!("[select] self is inside or beside target");
             Self::select_from_outer_to_inner(target, self_suffix, self, expr, false)
         } else {
             // NOTE: Perhaps want to calculate the smallest span that contains both self and target
@@ -433,14 +659,22 @@ impl Index {
         index.0 < self.0
     }
 
-    fn is_right_of_step(&self, step: &Step) -> bool {
+    pub fn is_right_of_step(&self, step: &Step) -> bool {
         // compare right index and right step to avoid going negative
         self.right_index()
             .is_right_of_index(&step.right_step().left_index())
     }
 
-    fn is_left_of_step(&self, step: &Step) -> bool {
+    pub fn is_left_of_step(&self, step: &Step) -> bool {
         self.is_left_of_index(&step.right_index())
+    }
+
+    pub fn leftmost<'a>(i0: &'a Index, i1: &'a Index) -> &'a Index {
+        if i0.is_left_of_index(i1) { i0 } else { i1 }
+    }
+
+    pub fn rightmost<'a>(i0: &'a Index, i1: &'a Index) -> &'a Index {
+        if i0.is_right_of_index(i1) { i0 } else { i1 }
     }
 }
 
@@ -701,12 +935,20 @@ impl<L: Debug> Expr<L> {
             .map(|(i, kid)| (Step(i), kid))
     }
 
-    pub fn leftmost_step(&self) -> Step {
-        Step(0)
+    pub fn leftmost_step(&self) -> Option<Step> {
+        if self.kids.0.is_empty() {
+            None
+        } else {
+            Some(Step(0))
+        }
     }
 
-    pub fn rightmost_step(&self) -> Step {
-        Step(self.kids.0.len() - 1)
+    pub fn rightmost_step(&self) -> Option<Step> {
+        if self.kids.0.is_empty() {
+            None
+        } else {
+            Some(Step(self.kids.0.len() - 1))
+        }
     }
 
     pub fn leftmost_index(&self) -> Index {
