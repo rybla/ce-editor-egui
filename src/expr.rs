@@ -788,8 +788,7 @@ mod tests {
 
     type Expr = super::Expr<String>;
 
-    #[cfg(test)]
-    mod span_handle_contains_path {
+    mod span_handle_contains {
         use super::*;
 
         lazy_static::lazy_static! {
@@ -803,99 +802,181 @@ mod tests {
             });
         }
 
-        fn assert_handle_contains_point(point: &Point, result: bool) {
-            if result {
-                assert!(
+        mod point {
+            use super::*;
+
+            fn assert_handle_contains_point(point: &Point, result: bool) {
+                assert_eq!(
                     handle.contains_point(point),
-                    "expected\n{:#?}\nto contain\n{:#?}",
+                    result,
+                    "expected\n{:#?}\nto {}contain\n{:#?}",
                     *handle,
-                    point
-                );
-            } else {
-                assert!(
-                    !handle.contains_point(point),
-                    "expected\n{:#?}\nto NOT contain\n{:#?}",
-                    *handle,
+                    if result { "" } else { "not " },
                     point
                 );
             }
+
+            mod depth1 {
+                use super::*;
+
+                #[test]
+                fn test_index0() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(0)), false);
+                }
+                #[test]
+                fn test_index1() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(1)), false);
+                }
+                #[test]
+                fn test_index2() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(2)), false);
+                }
+                #[test]
+                fn test_index3() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(3)), false);
+                }
+                #[test]
+                fn test_index4() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(4)), false);
+                }
+                #[test]
+                fn test_index5() {
+                    assert_handle_contains_point(&Point::new(Path(vec![]), Index(5)), false);
+                }
+            }
+
+            mod depth2 {
+                use super::*;
+
+                #[test]
+                fn test_index0() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(0)), false);
+                }
+                #[test]
+                fn test_index1() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(1)), false);
+                }
+                #[test]
+                fn test_index2() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(2)), true);
+                }
+                #[test]
+                fn test_index3() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(3)), true);
+                }
+                #[test]
+                fn test_index4() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(4)), false);
+                }
+                #[test]
+                fn test_index5() {
+                    assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(5)), false);
+                }
+            }
         }
 
-        fn assert_handle_contains_path(path: &Path, result: bool) {
-            if result {
-                assert!(
+        mod path {
+            use super::*;
+
+            fn assert_handle_contains_path(path: &Path, result: bool) {
+                assert_eq!(
                     handle.contains_path(path),
-                    "expected\n{:#?}\nto contain\n{:#?}",
+                    result,
+                    "expected\n{:#?}\nto {}contain\n{:#?}",
                     *handle,
-                    path
-                );
-            } else {
-                assert!(
-                    !handle.contains_path(path),
-                    "expected\n{:#?}\nto NOT contain\n{:#?}",
-                    *handle,
+                    if result { "" } else { "not " },
                     path
                 );
             }
-        }
 
-        // depth 1
-        #[test]
-        fn test_point_d1_i0() {
-            assert_handle_contains_point(&Point::new(Path(vec![]), Index(0)), false);
-        }
-        #[test]
-        fn test_point_d1_i1() {
-            assert_handle_contains_point(&Point::new(Path(vec![]), Index(1)), false);
-        }
-        #[test]
-        fn test_point_d1_i2() {
-            assert_handle_contains_point(&Point::new(Path(vec![]), Index(2)), false);
-        }
-        #[test]
-        fn test_point_d1_i3() {
-            assert_handle_contains_point(&Point::new(Path(vec![]), Index(3)), false);
-        }
-        #[test]
-        fn test_point_d1_i4() {
-            assert_handle_contains_point(&Point::new(Path(vec![]), Index(4)), false);
-        }
-        #[test]
-        fn test_point_d1_i5() {
-            assert_handle_contains_point(&Point::new(Path(vec![]), Index(5)), false);
-        }
+            mod depth0 {
+                use super::*;
 
-        // depth 2
-        #[test]
-        fn test_point_d2_i0() {
-            assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(0)), false);
-        }
-        #[test]
-        fn test_point_d2_i1() {
-            assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(1)), false);
-        }
-        #[test]
-        fn test_point_d2_i2() {
-            assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(2)), true);
-        }
-        #[test]
-        fn test_point_d2_i3() {
-            assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(3)), true);
-        }
-        #[test]
-        fn test_point_d2_i4() {
-            assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(4)), false);
-        }
-        #[test]
-        fn test_point_d2_i5() {
-            assert_handle_contains_point(&Point::new(Path(vec![Step(2)]), Index(5)), false);
-        }
+                #[test]
+                fn test() {
+                    assert_handle_contains_path(&Path(vec![]), false)
+                }
+            }
 
-        // TODO: test_path_...
+            mod depth1 {
+                use super::*;
+
+                #[test]
+                fn test_step0() {
+                    assert_handle_contains_path(&Path(vec![Step(0)]), false)
+                }
+                #[test]
+                fn test_step1() {
+                    assert_handle_contains_path(&Path(vec![Step(1)]), false)
+                }
+                #[test]
+                fn test_step2() {
+                    assert_handle_contains_path(&Path(vec![Step(2)]), false)
+                }
+                #[test]
+                fn test_step3() {
+                    assert_handle_contains_path(&Path(vec![Step(3)]), false)
+                }
+                #[test]
+                fn test_step4() {
+                    assert_handle_contains_path(&Path(vec![Step(4)]), false)
+                }
+            }
+
+            mod depth2 {
+                use super::*;
+
+                #[test]
+                fn test_step0() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(0)]), false)
+                }
+                #[test]
+                fn test_step1() {
+                    // TODO: this is failing
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(1)]), false)
+                }
+                #[test]
+                fn test_step2() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2)]), true)
+                }
+                #[test]
+                fn test_step3() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(3)]), true)
+                }
+                #[test]
+                fn test_step4() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(4)]), false)
+                }
+            }
+
+            mod depth3 {
+                use super::*;
+
+                #[test]
+                fn test_step0() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(0)]), true)
+                }
+                #[test]
+                fn test_step1() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(1)]), true)
+                }
+                #[test]
+                fn test_step2() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(2)]), true)
+                }
+                #[test]
+                fn test_step3() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(3)]), true)
+                }
+                #[test]
+                fn test_step4() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(4)]), true)
+                }
+            }
+        }
     }
 
-    #[cfg(test)]
-    mod zipper_handle_contains_path {
+    mod zipper_handle_contains {
         use super::*;
 
         lazy_static::lazy_static! {
