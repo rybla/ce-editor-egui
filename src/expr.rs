@@ -349,9 +349,18 @@ impl Handle {
     }
 
     pub fn norm(&mut self) {
-        todo!(
-            "Normalize as a handle by collapsing empty SpanHandles and empty sections of ZipperHandle"
-        )
+        match self {
+            Handle::Point(_handle) => {}
+            Handle::Span(handle) => {
+                if handle.span_handle.left == handle.span_handle.right {
+                    *self = Handle::Point(handle.focus_point())
+                }
+            }
+            // We could have considered handling the case when the middle span
+            // is empty here, but that actually is a bug if it ever happens. So
+            // instead, we're just never going to consider that case.
+            Handle::Zipper(_handle) => {}
+        }
     }
 
     pub fn move_select_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
