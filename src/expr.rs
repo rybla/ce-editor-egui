@@ -135,91 +135,16 @@ impl Handle {
     pub fn contains_path(&self, path: &Path) -> bool {
         match self {
             Handle::Point(_point) => false,
-            Handle::Span(handle) => path
-                .strip_prefix(&handle.span_handle.path)
-                .and_then(|steps| {
-                    steps.first().and_then(|step| {
-                        Some(
-                            step.is_right_of_index(&handle.span_handle.left)
-                                && step.is_left_of_index(&handle.span_handle.right),
-                        )
-                    })
-                })
-                .unwrap_or(false),
-            Handle::Zipper(handle) => match path.strip_prefix(&handle.zipper_handle.inner_path()) {
-                Some(path_suffix) => path_suffix
-                    .first()
-                    .and_then(|step| {
-                        Some(
-                            step.is_left_of_index(&handle.zipper_handle.inner_left)
-                                && step.is_right_of_index(&handle.zipper_handle.inner_right),
-                        )
-                    })
-                    .unwrap_or(false),
-                None => path
-                    .strip_prefix(&handle.zipper_handle.outer_path)
-                    .and_then(|steps| {
-                        steps.first().and_then(|step| {
-                            Some(
-                                step.is_right_of_index(&handle.zipper_handle.outer_left)
-                                    && step.is_left_of_index(&handle.zipper_handle.outer_right),
-                            )
-                        })
-                    })
-                    .unwrap_or(false),
-            },
+            Handle::Span(handle) => handle.span_handle.contains_path(path),
+            Handle::Zipper(handle) => handle.zipper_handle.contains_path(path),
         }
     }
 
     pub fn contains_point(&self, point: &Point) -> bool {
         match self {
             Handle::Point(handle) => handle == point,
-            Handle::Span(handle) => point
-                .path
-                .strip_prefix(&handle.span_handle.path)
-                .and_then(|steps| match steps.first() {
-                    Some(step) => Some(
-                        step.is_right_of_index(&handle.span_handle.left)
-                            && step.is_left_of_index(&handle.span_handle.right),
-                    ),
-                    None => Some(
-                        point.index.is_right_of_index(&handle.span_handle.left)
-                            && point.index.is_left_of_index(&handle.span_handle.right),
-                    ),
-                })
-                .unwrap_or(false),
-            Handle::Zipper(handle) => {
-                match point.path.strip_prefix(&handle.zipper_handle.inner_path()) {
-                    Some(path_suffix) => path_suffix
-                        .first()
-                        .and_then(|step| {
-                            Some(
-                                step.is_left_of_index(&handle.zipper_handle.inner_left)
-                                    && step.is_right_of_index(&handle.zipper_handle.inner_right),
-                            )
-                        })
-                        .unwrap_or_else(|| {
-                            point
-                                .index
-                                .is_left_of_index(&handle.zipper_handle.inner_left)
-                                && point
-                                    .index
-                                    .is_right_of_index(&handle.zipper_handle.inner_right)
-                        }),
-                    None => point
-                        .path
-                        .strip_prefix(&handle.zipper_handle.outer_path)
-                        .and_then(|steps| {
-                            steps.first().and_then(|step| {
-                                Some(
-                                    step.is_right_of_index(&handle.zipper_handle.outer_left)
-                                        && step.is_left_of_index(&handle.zipper_handle.outer_right),
-                                )
-                            })
-                        })
-                        .unwrap_or(false),
-                }
-            }
+            Handle::Span(handle) => handle.span_handle.contains_point(point),
+            Handle::Zipper(handle) => handle.zipper_handle.contains_point(point),
         }
     }
 
@@ -457,11 +382,13 @@ impl Step {
     }
 
     pub fn is_left_of_index(&self, index: &Index) -> bool {
-        self.0 < index.0
+        self.is_left_of_step(&index.right_step())
     }
 
     pub fn is_right_of_index(&self, index: &Index) -> bool {
-        self.0 > index.0
+        // compare right step and right index so don't accidentally go negative
+        self.right_step()
+            .is_right_of_step(&index.right_index().left_step())
     }
 }
 
@@ -502,11 +429,13 @@ impl Index {
     }
 
     fn is_right_of_step(&self, step: &Step) -> bool {
-        step.is_left_of_index(self)
+        // compare right index and right step to avoid going negative
+        self.right_index()
+            .is_right_of_index(&step.right_step().left_index())
     }
 
     fn is_left_of_step(&self, step: &Step) -> bool {
-        step.is_right_of_index(self)
+        self.is_left_of_index(&step.right_index())
     }
 }
 
@@ -540,11 +469,37 @@ impl SpanHandle {
         }
     }
 
-    fn origin_point(&self, focus: &SpanFocus) -> Point {
+    pub fn origin_point(&self, focus: &SpanFocus) -> Point {
         match focus {
             SpanFocus::Left => self.right_point(),
             SpanFocus::Right => self.left_point(),
         }
+    }
+
+    pub fn contains_path(&self, path: &Path) -> bool {
+        path.strip_prefix(&self.path)
+            .and_then(|steps| {
+                steps.first().and_then(|step| {
+                    Some(step.is_right_of_index(&self.left) && step.is_left_of_index(&self.right))
+                })
+            })
+            .unwrap_or(false)
+    }
+
+    pub fn contains_point(&self, point: &Point) -> bool {
+        point
+            .path
+            .strip_prefix(&self.path)
+            .and_then(|steps| match steps.first() {
+                Some(step) => {
+                    Some(step.is_right_of_index(&self.left) && step.is_left_of_index(&self.right))
+                }
+                None => Some(
+                    point.index.is_right_of_index(&self.left)
+                        && point.index.is_left_of_index(&self.right),
+                ),
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -628,13 +583,39 @@ impl ZipperHandle {
         }
     }
 
-    fn focus_point(&self, focus: &ZipperFocus) -> Point {
+    pub fn focus_point(&self, focus: &ZipperFocus) -> Point {
         match focus {
             ZipperFocus::OuterLeft => self.outer_left_point(),
             ZipperFocus::InnerLeft => self.inner_left_point(),
             ZipperFocus::InnerRight => self.inner_right_point(),
             ZipperFocus::OuterRight => self.outer_right_point(),
         }
+    }
+
+    pub fn outer_span_handle(&self) -> SpanHandle {
+        SpanHandle {
+            path: self.outer_path.clone(),
+            left: self.outer_left.clone(),
+            right: self.outer_right.clone(),
+        }
+    }
+
+    pub fn inner_span_handle(&self) -> SpanHandle {
+        SpanHandle {
+            path: self.inner_path(),
+            left: self.inner_left.clone(),
+            right: self.inner_right.clone(),
+        }
+    }
+
+    pub fn contains_path(&self, path: &Path) -> bool {
+        self.outer_span_handle().contains_path(path)
+            && !self.inner_span_handle().contains_path(path)
+    }
+
+    pub fn contains_point(&self, point: &Point) -> bool {
+        self.outer_span_handle().contains_point(point)
+            && !self.inner_span_handle().contains_point(point)
     }
 }
 
@@ -859,8 +840,7 @@ mod tests {
                 }
                 #[test]
                 fn test_step1() {
-                    // TODO: this is failing
-                    assert_handle_contains_path(&Path(vec![Step(2), Step(1)]), false)
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(1)]), true)
                 }
                 #[test]
                 fn test_step2() {
@@ -1007,31 +987,92 @@ mod tests {
 
         // TODO: Something is going horribly wrong here, where a zipper handle seems to not contain ANY paths!
 
-        #[test]
-        fn test_empty() {
-            // depth 0
-            assert_handle_contains_path(&Path(vec![]), false);
+        mod path {
+            use super::*;
 
-            // depth 1
-            assert_handle_contains_path(&Path(vec![Step(0)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1)]), false);
-            assert_handle_contains_path(&Path(vec![Step(2)]), false);
-            assert_handle_contains_path(&Path(vec![Step(3)]), false);
-            assert_handle_contains_path(&Path(vec![Step(4)]), false);
+            mod depth0 {
+                use super::*;
 
-            // depth 2
-            assert_handle_contains_path(&Path(vec![Step(1), Step(0)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(1)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(2)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(3)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(4)]), false);
+                #[test]
+                fn test() {
+                    assert_handle_contains_path(&Path(vec![]), false);
+                }
+            }
 
-            // depth 3
-            assert_handle_contains_path(&Path(vec![Step(1), Step(1), Step(0)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(1), Step(1)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(1), Step(2)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(1), Step(3)]), false);
-            assert_handle_contains_path(&Path(vec![Step(1), Step(1), Step(4)]), false);
+            mod depth1 {
+                use super::*;
+
+                #[test]
+                fn test_step0() {
+                    assert_handle_contains_path(&Path(vec![Step(0)]), false);
+                }
+                #[test]
+                fn test_step1() {
+                    assert_handle_contains_path(&Path(vec![Step(1)]), false);
+                }
+                #[test]
+                fn test_step2() {
+                    assert_handle_contains_path(&Path(vec![Step(2)]), false);
+                }
+                #[test]
+                fn test_step3() {
+                    assert_handle_contains_path(&Path(vec![Step(3)]), false);
+                }
+                #[test]
+                fn test_step4() {
+                    assert_handle_contains_path(&Path(vec![Step(4)]), false);
+                }
+            }
+
+            mod depth2 {
+                use super::*;
+
+                #[test]
+                fn test_step0() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(0)]), false);
+                }
+                #[test]
+                fn test_step1() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(1)]), true);
+                }
+                #[test]
+                fn test_step2() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2)]), true);
+                }
+                #[test]
+                fn test_step3() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(3)]), true);
+                }
+                #[test]
+                fn test_step4() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(4)]), false);
+                }
+            }
+
+            mod depth3 {
+                use super::*;
+
+                #[test]
+                fn test_step0() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(0)]), true);
+                }
+                #[test]
+                fn test_step1() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(1)]), false);
+                }
+                #[test]
+                fn test_step2() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(2)]), false);
+                }
+                #[test]
+                fn test_step3() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(3)]), false);
+                }
+                #[test]
+                fn test_step4() {
+                    assert_handle_contains_path(&Path(vec![Step(2), Step(2), Step(4)]), true);
+                }
+            }
         }
     }
 }
