@@ -238,7 +238,86 @@ impl ZipperHandleAndFocus {
         println!("[select]");
         println!("self = {self:#?}");
         println!("target = {target:#?}");
-        todo!()
+
+        if let Some(target_suffix) = target
+            .path
+            .0
+            .strip_prefix(self.zipper_handle.inner_path().0.as_slice())
+        {
+            // zone: A, B
+            match target_suffix.first() {
+                Some(target_suffix_first_step) => {
+                    // zone: A
+                    todo!()
+                }
+                None => {
+                    // zone: B
+                    if target
+                        .index
+                        .is_left_of_index(&self.zipper_handle.inner_left)
+                    {
+                        // zone: B_left
+                        todo!()
+                    } else if target
+                        .index
+                        .is_left_of_index(&self.zipper_handle.inner_right)
+                    {
+                        // zone: B_middle
+                        todo!()
+                    } else {
+                        // zone: B_right
+                        todo!()
+                    }
+                }
+            }
+        } else if let Some(target_suffix) = target
+            .path
+            .0
+            .strip_prefix(self.zipper_handle.outer_path.0.as_slice())
+        {
+            // zone: C, D
+            match target_suffix.first() {
+                Some(target_suffix_first_step) => {
+                    // zone: C
+                    todo!()
+                }
+                None => {
+                    // zone: D
+                    if target
+                        .index
+                        .is_left_of_index(&self.zipper_handle.outer_left)
+                    {
+                        // zone: D_outer_left
+                        todo!()
+                    } else if target
+                        .index
+                        .is_left_of_step(self.zipper_handle.middle_path.0.first().unwrap())
+                    {
+                        // zone: D_inner_left
+                        todo!()
+                    } else if target
+                        .index
+                        .is_left_of_index(&self.zipper_handle.outer_right)
+                    {
+                        // zone: D_inner_right
+                        todo!()
+                    } else {
+                        // zone: D_outer_right
+                        todo!()
+                    }
+                }
+            }
+        } else if let Some(self_outer_suffix) = self
+            .zipper_handle
+            .outer_path
+            .0
+            .strip_prefix(target.path.0.as_slice())
+        {
+            // E
+            todo!()
+        } else {
+            todo!()
+        }
     }
 }
 
