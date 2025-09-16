@@ -1,5 +1,4 @@
 use crate::{editor, expr::*};
-use std::fmt::Debug;
 
 type Constructor = String;
 type Diagnostic = String;
@@ -53,7 +52,10 @@ impl editor::EditorSpec for EditorSpec {
         ui.label(egui::RichText::new(label.constructor.clone()))
     }
 
-    fn is_valid_handle<L: Debug>(handle: &Handle, expr: &Expr<L>) -> bool {
+    fn is_valid_handle(
+        handle: &Handle,
+        expr: &Expr<editor::ExprLabel<Self::Constructor, Self::Diagnostic>>,
+    ) -> bool {
         match handle {
             Handle::Point(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
             Handle::Span(handle) => expr.at_path(&handle.span_handle.path).kids.0.len() > 0,

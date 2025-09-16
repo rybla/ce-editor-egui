@@ -71,7 +71,10 @@ pub trait EditorSpec {
         state: EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> Vec<Self::Diagnostic>;
 
-    fn is_valid_handle<L: Debug>(handle: &Handle, expr: &Expr<L>) -> bool;
+    fn is_valid_handle(
+        handle: &Handle,
+        expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
+    ) -> bool;
 
     fn render_label(
         ui: &mut egui::Ui,

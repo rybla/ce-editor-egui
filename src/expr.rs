@@ -30,7 +30,7 @@ impl SpanHandleAndFocus {
     }
 
     // TODO: Could make self mut here so that can update in place.
-    fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
+    fn select_to<L: Debug + Clone>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         println!("[select]");
         if let Some(target_suffix) = target
             .path
@@ -225,7 +225,7 @@ impl ZipperHandleAndFocus {
     }
 
     // TODO: Could make self mut here so that can update in place.
-    fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
+    fn select_to<L: Debug + Clone>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         println!("[select]");
         println!("self = {self:#?}");
         println!("target = {target:#?}");
@@ -734,7 +734,7 @@ impl ZipperHandleAndFocus {
 }
 
 impl Handle {
-    pub fn move_up<L: Debug>(&mut self, expr: &Expr<L>) -> bool {
+    pub fn move_up<L: Debug + Clone>(&mut self, expr: &Expr<L>) -> bool {
         match self {
             Handle::Point(Point { path, index: _ }) => {
                 if let Some(step) = path.pop() {
@@ -783,7 +783,7 @@ impl Handle {
     }
 
     /// Returns a Boolean indicating whether the move hit a boundary.
-    pub fn move_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
+    pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
         match self {
             Handle::Point(handle) => handle.move_dir(dir, expr),
             // A little bit weirdly, my intuition indicates that in a span, when
@@ -854,7 +854,7 @@ impl Handle {
         }
     }
 
-    pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
+    pub fn select_to<L: Debug + Clone>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         match self {
             Handle::Point(point) => point.select_to(target, expr),
             Handle::Span(handle) => handle.select_to(target, expr),
@@ -862,7 +862,7 @@ impl Handle {
         }
     }
 
-    pub fn move_select_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
+    pub fn move_select_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
         match self {
             Handle::Point(handle) => {
                 let mut target = handle.clone();
@@ -932,7 +932,7 @@ impl Point {
     }
 
     /// Return a boolean indicating if the move hit a boundary.
-    pub fn move_dir<L: Debug>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
+    pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
         let subexpr = expr.at_path(&self.path);
         let (leftmost, rightmost) = subexpr.kids.extreme_indexes();
         let is_at_local_boundary = match dir {
@@ -967,7 +967,7 @@ impl Point {
         }
     }
 
-    pub fn select_from_outer_to_inner<L: Debug>(
+    pub fn select_from_outer_to_inner<L: Debug + Clone>(
         outer: &Point,
         inner_suffix: &[Step],
         inner: &Point,
@@ -1051,7 +1051,7 @@ impl Point {
 
     /// Calculates the selection from self to target.
     // TODO: Could make self mut here so that can update in place.
-    pub fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
+    pub fn select_to<L: Debug + Clone>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         println!("[select]");
         println!("self = {self:#?}");
         println!("target = {target:#?}");
@@ -1419,7 +1419,7 @@ pub struct Expr<L> {
     pub kids: Span<L>,
 }
 
-impl<L: Debug> Expr<L> {
+impl<L: Debug + Clone> Expr<L> {
     pub fn height(&self) -> u32 {
         self.kids
             .0
@@ -1431,10 +1431,10 @@ impl<L: Debug> Expr<L> {
         path.0.iter().fold(self, |e, step| e.kids.at_step(step))
     }
 
-    // pub fn at_span_handle<'a>(&'a self, handle: &SpanHandle) -> Span<Expr<L>> {
-    //     let outer_expr = self.at_path(&handle.path);
-    //     todo!()
-    // }
+    pub fn at_span_handle<'a>(&'a self, handle: &SpanHandle) -> Span<L> {
+        let outer_expr = self.at_path(&handle.path);
+        outer_expr.kids.between(&handle.left, &handle.right)
+    }
 
     pub fn kids_and_steps<'a>(
         &'a self,
@@ -1494,7 +1494,7 @@ impl<L: Debug> Expr<L> {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Span<L>(pub Vec<Expr<L>>);
 
-impl<L: Debug> Span<L> {
+impl<L: Debug + Clone> Span<L> {
     pub fn at_step<'a>(&'a self, step: &Step) -> &'a Expr<L> {
         self.0
             .get(step.0)
@@ -1503,6 +1503,10 @@ impl<L: Debug> Span<L> {
 
     pub fn extreme_indexes(&self) -> (Index, Index) {
         (Index(0), Index(self.0.len()))
+    }
+
+    fn between(&self, left: &Index, right: &Index) -> Span<L> {
+        Span(self.0[left.0..right.0].to_vec())
     }
 }
 
