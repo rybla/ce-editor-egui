@@ -1431,6 +1431,11 @@ impl<L: Debug> Expr<L> {
         path.0.iter().fold(self, |e, step| e.kids.at_step(step))
     }
 
+    // pub fn at_span_handle<'a>(&'a self, handle: &SpanHandle) -> Span<Expr<L>> {
+    //     let outer_expr = self.at_path(&handle.path);
+    //     todo!()
+    // }
+
     pub fn kids_and_steps<'a>(
         &'a self,
     ) -> std::iter::Map<
