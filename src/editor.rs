@@ -106,21 +106,27 @@ pub trait EditorSpec {
         {
             state.handle.rotate_focus_dir(dir);
         }
-        // move select
+        // select
         else if ctx.input(|i| i.modifiers.shift)
             && let Some(dir) = Self::match_input_move_dir(ctx)
         {
             let origin = state.handle.clone();
+            let mut target = state.handle.focus_point();
             let mut success = false;
             while !success {
-                let moved = state.handle.move_select_dir(dir, &state.expr);
+                let moved = target.move_dir(dir, &state.expr);
                 if !moved {
                     break;
                 }
-                success = Self::is_valid_handle(&state.handle, &state.expr);
+                if let Some(new_handle) = origin.select_to(&target, &state.expr) {
+                    success = Self::is_valid_handle(&new_handle, &state.expr);
+                    if success {
+                        state.handle = new_handle;
+                    }
+                };
             }
             if !success {
-                println!("bailed select since move returned false before success");
+                println!("[select] bailed since a move faield before success");
                 state.handle = origin;
             }
         }
@@ -138,7 +144,7 @@ pub trait EditorSpec {
             }
             // if broke before a success, then reset to origin
             if !success {
-                println!("[move] bailed move since move returned false before success");
+                println!("[move] bailed since a move failed before success");
                 state.handle = origin;
             }
         }

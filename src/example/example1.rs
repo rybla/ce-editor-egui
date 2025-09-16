@@ -29,7 +29,7 @@ impl editor::EditorSpec for EditorSpec {
 
         editor::EditorState {
             // expr: Expr::example(&mut mk_label, 2, 6),
-            expr: Expr::example(&mut mk_label, 2, 2),
+            expr: Expr::example(&mut mk_label, 2, 3),
             handle: Handle::default(),
         }
     }
@@ -58,11 +58,12 @@ impl editor::EditorSpec for EditorSpec {
             Handle::Point(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
             Handle::Span(handle) => expr.at_path(&handle.span_handle.path).kids.0.len() > 0,
             Handle::Zipper(handle) => {
-                expr.at_path(&handle.zipper_handle.inner_path())
-                    .kids
-                    .0
-                    .len()
-                    > 0
+                !handle.zipper_handle.middle_path.0.is_empty()
+                    && !expr
+                        .at_path(&handle.zipper_handle.inner_path())
+                        .kids
+                        .0
+                        .is_empty()
             }
         }
     }
