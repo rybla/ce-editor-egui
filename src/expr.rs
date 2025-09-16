@@ -31,6 +31,188 @@ impl SpanHandleAndFocus {
 
     fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         println!("[select]");
+        if let Some(target_suffix) = target
+            .path
+            .0
+            .strip_prefix(self.span_handle.path.0.as_slice())
+        {
+            println!("zone: A, B");
+            match target_suffix.first() {
+                Some(target_suffix_first_step) => {
+                    if target_suffix_first_step.is_right_of_index(&self.span_handle.left)
+                        && target_suffix_first_step.is_left_of_index(&self.span_handle.right)
+                    {
+                        println!("zone: A");
+                        let subexpr = expr.at_path(&target.path);
+                        match self.focus {
+                            SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.span_handle.path.clone(),
+                                    outer_left: self.span_handle.left.clone(),
+                                    outer_right: self.span_handle.right.clone(),
+                                    middle_path: Path(target_suffix.to_vec()),
+                                    inner_left: target.index.clone(),
+                                    inner_right: subexpr.rightmost_index(),
+                                },
+                                focus: ZipperFocus::InnerLeft,
+                            })),
+                            SpanFocus::Right => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.span_handle.path.clone(),
+                                    outer_left: self.span_handle.left.clone(),
+                                    outer_right: self.span_handle.right.clone(),
+                                    middle_path: Path(target_suffix.to_vec()),
+                                    inner_left: subexpr.leftmost_index(),
+                                    inner_right: target.index.clone(),
+                                },
+                                focus: ZipperFocus::InnerLeft,
+                            })),
+                        }
+                    } else {
+                        None
+                    }
+                }
+                None => {
+                    println!("zone: B");
+                    if target.index.is_left_of_index(&self.span_handle.left) {
+                        println!("zone: B_left");
+                        match self.focus {
+                            SpanFocus::Left => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.span_handle.path.clone(),
+                                    left: target.index.clone(),
+                                    right: self.span_handle.right.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                            SpanFocus::Right => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.span_handle.path.clone(),
+                                    left: target.index.clone(),
+                                    right: self.span_handle.left.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                        }
+                    } else if target.index.is_left_of_index(&self.span_handle.right) {
+                        println!("zone: B_middle");
+                        match self.focus {
+                            SpanFocus::Left => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.span_handle.path.clone(),
+                                    left: target.index.clone(),
+                                    right: self.span_handle.right.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                            SpanFocus::Right => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.span_handle.path.clone(),
+                                    left: self.span_handle.left.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Right,
+                            })),
+                        }
+                    } else {
+                        println!("zone: B_right");
+                        match self.focus {
+                            SpanFocus::Left => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.span_handle.path.clone(),
+                                    left: self.span_handle.right.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Right,
+                            })),
+                            SpanFocus::Right => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.span_handle.path.clone(),
+                                    left: self.span_handle.left.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Right,
+                            })),
+                        }
+                    }
+                }
+            }
+        } else if let Some(self_prefix) = self
+            .span_handle
+            .path
+            .0
+            .strip_prefix(target.path.0.as_slice())
+        {
+            println!("zone: C");
+            let self_prefix_first_step = self_prefix
+                .first()
+                .unwrap_or_else(|| panic!("impossible since then would have matched previous self.span_handle.path.0.strip_prefix pattern"));
+            if target.index.is_left_of_step(self_prefix_first_step) {
+                println!("zone: C_left");
+                match self.focus {
+                    SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: target.index.clone(),
+                            outer_right: self_prefix_first_step.right_index(),
+                            middle_path: Path(self_prefix.to_vec()),
+                            inner_left: self.span_handle.left.clone(),
+                            inner_right: self.span_handle.right.clone(),
+                        },
+                        focus: ZipperFocus::OuterLeft,
+                    })),
+                    SpanFocus::Right => {
+                        let subexpr = expr.at_path(&self.span_handle.path);
+                        Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: target.path.clone(),
+                                outer_left: target.index.clone(),
+                                outer_right: self_prefix_first_step.right_index(),
+                                middle_path: Path(self_prefix.to_vec()),
+                                inner_left: self.span_handle.left.clone(),
+                                inner_right: subexpr.rightmost_index(),
+                            },
+                            focus: ZipperFocus::OuterLeft,
+                        }))
+                    }
+                }
+            } else {
+                println!("zone: C_right");
+                match self.focus {
+                    SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: self_prefix_first_step.left_index(),
+                            outer_right: target.index.clone(),
+                            middle_path: Path(self_prefix.to_vec()),
+                            inner_left: self.span_handle.left.clone(),
+                            inner_right: self.span_handle.right.clone(),
+                        },
+                        focus: ZipperFocus::OuterRight,
+                    })),
+                    SpanFocus::Right => {
+                        let subexpr = expr.at_path(&self.span_handle.path);
+                        Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: target.path.clone(),
+                                outer_left: self_prefix_first_step.left_index(),
+                                outer_right: target.index.clone(),
+                                middle_path: Path(self_prefix.to_vec()),
+                                inner_left: self.span_handle.left.clone(),
+                                inner_right: subexpr.rightmost_index(),
+                            },
+                            focus: ZipperFocus::OuterRight,
+                        }))
+                    }
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    fn select_to_old<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
+        println!("[select]");
         println!("self = {self:#?}");
         println!("target = {target:#?}");
         if let Some(target_suffix) = target
