@@ -1474,9 +1474,23 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn at_zipper<'a>(&'a self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
-        // let outer_expr = self.at_sub_expr(&handle.outer_path);
-        todo!()
+    pub fn at_zipper(self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
+        let (outer_ctx, span) = self.at_span(&handle.outer_span_handle());
+        let (left, expr, right) = span.split_at_step(handle.middle_path.0.first().unwrap());
+        let (span_ctx, inner_span) = expr.at_span(&SpanHandle {
+            path: handle.middle_path.clone(),
+            left: handle.inner_left.clone(),
+            right: handle.inner_right.clone(),
+        });
+        (
+            outer_ctx,
+            Zipper {
+                outer_left: left,
+                outer_right: right,
+                inner: span_ctx,
+            },
+            inner_span,
+        )
     }
 
     pub fn kids_and_steps<'a>(
