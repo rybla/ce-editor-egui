@@ -159,7 +159,7 @@ impl SpanHandleAndFocus {
         {
             println!("[select] self.path is strictly inside target.path");
             let step = self_suffix.first().unwrap_or_else(|| {
-                panic!("impossible since then would have matched previous strip_suffix pattern")
+                panic!("impossible since then would have matched previous self.span_handle.path.0.strip_prefix pattern")
             });
             if target.index.is_left_of_step(step) {
                 println!("[select] self is inside target; target is to the left");
@@ -234,7 +234,8 @@ impl ZipperHandleAndFocus {
         self.zipper_handle.focus_point(&self.focus)
     }
 
-    fn select_to<L: Debug>(&self, target: &Point, _expr: &Expr<L>) -> Option<Handle> {
+    // TODO: Could make self mut here so that can update in place.
+    fn select_to<L: Debug>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         println!("[select]");
         println!("self = {self:#?}");
         println!("target = {target:#?}");
@@ -244,29 +245,200 @@ impl ZipperHandleAndFocus {
             .0
             .strip_prefix(self.zipper_handle.inner_path().0.as_slice())
         {
-            // zone: A, B
-            match target_suffix.first() {
-                Some(target_suffix_first_step) => {
-                    // zone: A
-                    todo!()
+            println!("zone: A, B");
+            match target_suffix.is_empty() {
+                false => {
+                    println!("zone: A");
+                    let subexpr = expr.at_path(&target.path);
+
+                    match self.focus {
+                        ZipperFocus::InnerLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: self.zipper_handle.outer_path.clone(),
+                                outer_left: self.zipper_handle.outer_left.clone(),
+                                outer_right: self.zipper_handle.outer_right.clone(),
+                                middle_path: Path(
+                                    [&self.zipper_handle.middle_path.0.as_slice(), target_suffix]
+                                        .concat(),
+                                ),
+                                inner_left: target.index.clone(),
+                                inner_right: subexpr.rightmost_index(),
+                            },
+                            focus: ZipperFocus::InnerLeft,
+                        })),
+                        ZipperFocus::InnerRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: self.zipper_handle.outer_path.clone(),
+                                outer_left: self.zipper_handle.outer_left.clone(),
+                                outer_right: self.zipper_handle.outer_right.clone(),
+                                middle_path: Path(
+                                    [&self.zipper_handle.inner_path().0.as_slice(), target_suffix]
+                                        .concat(),
+                                ),
+                                inner_left: subexpr.leftmost_index(),
+                                inner_right: target.index.clone(),
+                            },
+                            focus: ZipperFocus::InnerLeft,
+                        })),
+                        ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: self.zipper_handle.inner_path(),
+                                outer_left: self.zipper_handle.inner_left.clone(),
+                                outer_right: self.zipper_handle.inner_right.clone(),
+                                middle_path: Path(target_suffix.to_vec()),
+                                inner_left: target.index.clone(),
+                                inner_right: subexpr.rightmost_index(),
+                            },
+                            focus: ZipperFocus::InnerLeft,
+                        })),
+                        ZipperFocus::OuterRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                            zipper_handle: ZipperHandle {
+                                outer_path: self.zipper_handle.inner_path(),
+                                outer_left: self.zipper_handle.inner_left.clone(),
+                                outer_right: self.zipper_handle.inner_right.clone(),
+                                middle_path: Path(target_suffix.to_vec()),
+                                inner_left: subexpr.leftmost_index(),
+                                inner_right: target.index.clone(),
+                            },
+                            focus: ZipperFocus::InnerRight,
+                        })),
+                    }
                 }
-                None => {
-                    // zone: B
+                true => {
+                    println!("zone: B");
                     if target
                         .index
                         .is_left_of_index(&self.zipper_handle.inner_left)
                     {
-                        // zone: B_left
-                        todo!()
+                        println!("zone: B_left");
+                        match self.focus {
+                            ZipperFocus::InnerLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: target.index.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::InnerLeft,
+                            })),
+                            ZipperFocus::InnerRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: target.index.clone(),
+                                },
+                                focus: ZipperFocus::InnerRight,
+                            })),
+                            ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.inner_path(),
+                                    left: target.index.clone(),
+                                    right: self.zipper_handle.inner_left.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                            ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.inner_path(),
+                                    left: self.zipper_handle.inner_right.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                        }
                     } else if target
                         .index
                         .is_left_of_index(&self.zipper_handle.inner_right)
                     {
-                        // zone: B_middle
-                        todo!()
+                        println!("zone: B_middle");
+                        match self.focus {
+                            ZipperFocus::InnerLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: target.index.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::InnerLeft,
+                            })),
+                            ZipperFocus::InnerRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: target.index.clone(),
+                                },
+                                focus: ZipperFocus::InnerRight,
+                            })),
+                            ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.inner_path(),
+                                    left: self.zipper_handle.inner_left.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                            ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.inner_path(),
+                                    left: target.index.clone(),
+                                    right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: SpanFocus::Right,
+                            })),
+                        }
                     } else {
-                        // zone: B_right
-                        todo!()
+                        println!("zone: B_right");
+                        // turns out this is the same as B_left
+                        match self.focus {
+                            ZipperFocus::InnerLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: target.index.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::InnerLeft,
+                            })),
+                            ZipperFocus::InnerRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: target.index.clone(),
+                                },
+                                focus: ZipperFocus::InnerRight,
+                            })),
+                            ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.inner_path(),
+                                    left: target.index.clone(),
+                                    right: self.zipper_handle.inner_left.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                            ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.inner_path(),
+                                    left: self.zipper_handle.inner_right.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                        }
                     }
                 }
             }
@@ -275,35 +447,236 @@ impl ZipperHandleAndFocus {
             .0
             .strip_prefix(self.zipper_handle.outer_path.0.as_slice())
         {
-            // zone: C, D
-            match target_suffix.first() {
-                Some(target_suffix_first_step) => {
-                    // zone: C
-                    todo!()
+            println!("zone: C, D");
+            match target_suffix.is_empty() {
+                false => {
+                    if let Some(self_middle_path_suffix) = self
+                        .zipper_handle
+                        .middle_path
+                        .0
+                        .strip_prefix(target.path.0.as_slice())
+                    {
+                        println!("zone: C");
+                        let subexpr = expr.at_path(&target.path);
+                        match self.focus {
+                            ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: Path(
+                                        [
+                                            self.zipper_handle.outer_path.0.clone(),
+                                            target_suffix.to_vec(),
+                                        ]
+                                        .concat(),
+                                    ),
+                                    outer_left: target.index.clone(),
+                                    outer_right: subexpr.rightmost_index(),
+                                    middle_path: Path(self_middle_path_suffix.to_vec()),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::OuterLeft,
+                            })),
+                            ZipperFocus::OuterRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: Path(
+                                        [
+                                            self.zipper_handle.outer_path.0.clone(),
+                                            target_suffix.to_vec(),
+                                        ]
+                                        .concat(),
+                                    ),
+                                    outer_left: subexpr.leftmost_index(),
+                                    outer_right: target.index.clone(),
+                                    middle_path: Path(self_middle_path_suffix.to_vec()),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::OuterRight,
+                            })),
+                            ZipperFocus::InnerLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: Path(
+                                        [
+                                            self.zipper_handle.outer_path.0.clone(),
+                                            target_suffix.to_vec(),
+                                        ]
+                                        .concat(),
+                                    ),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: Path(target_suffix.to_vec()),
+                                    inner_left: target.index.clone(),
+                                    inner_right: subexpr.rightmost_index(),
+                                },
+                                focus: ZipperFocus::InnerLeft,
+                            })),
+                            ZipperFocus::InnerRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: Path(
+                                        [
+                                            self.zipper_handle.outer_path.0.clone(),
+                                            target_suffix.to_vec(),
+                                        ]
+                                        .concat(),
+                                    ),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: Path(target_suffix.to_vec()),
+                                    inner_left: subexpr.leftmost_index(),
+                                    inner_right: target.index.clone(),
+                                },
+                                focus: ZipperFocus::InnerRight,
+                            })),
+                        }
+                    } else {
+                        // stepped along a different path from self.zipper_handle.middle_path
+                        None
+                    }
                 }
-                None => {
-                    // zone: D
+                true => {
+                    println!("zone: D");
                     if target
                         .index
                         .is_left_of_index(&self.zipper_handle.outer_left)
                     {
-                        // zone: D_outer_left
-                        todo!()
+                        println!("zone: D_outer_left");
+                        match self.focus {
+                            ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: target.index.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::OuterLeft,
+                            })),
+                            ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.outer_path.clone(),
+                                    left: target.index.clone(),
+                                    right: self.zipper_handle.outer_left.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                            ZipperFocus::InnerLeft | ZipperFocus::InnerRight => {
+                                Some(Handle::Span(SpanHandleAndFocus {
+                                    span_handle: SpanHandle {
+                                        path: self.zipper_handle.outer_path.clone(),
+                                        left: target.index.clone(),
+                                        right: self.zipper_handle.outer_right.clone(),
+                                    },
+                                    focus: SpanFocus::Left,
+                                }))
+                            }
+                        }
                     } else if target
                         .index
                         .is_left_of_step(self.zipper_handle.middle_path.0.first().unwrap())
                     {
-                        // zone: D_inner_left
-                        todo!()
+                        println!("zone: D_inner_left");
+                        match self.focus {
+                            ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: target.index.clone(),
+                                    outer_right: self.zipper_handle.outer_right.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::OuterLeft,
+                            })),
+                            ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.outer_path.clone(),
+                                    left: self.zipper_handle.outer_left.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Left,
+                            })),
+                            ZipperFocus::InnerLeft | ZipperFocus::InnerRight => {
+                                Some(Handle::Span(SpanHandleAndFocus {
+                                    span_handle: SpanHandle {
+                                        path: self.zipper_handle.outer_path.clone(),
+                                        left: target.index.clone(),
+                                        right: self.zipper_handle.outer_right.clone(),
+                                    },
+                                    focus: SpanFocus::Left,
+                                }))
+                            }
+                        }
                     } else if target
                         .index
                         .is_left_of_index(&self.zipper_handle.outer_right)
                     {
-                        // zone: D_inner_right
-                        todo!()
+                        println!("zone: D_inner_right");
+                        match self.focus {
+                            ZipperFocus::OuterRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: target.index.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::OuterRight,
+                            })),
+                            // TODO: what to do special in this case?
+                            ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.outer_path.clone(),
+                                    left: target.index.clone(),
+                                    right: self.zipper_handle.outer_right.clone(),
+                                },
+                                focus: SpanFocus::Right,
+                            })),
+                            ZipperFocus::InnerLeft | ZipperFocus::InnerRight => {
+                                Some(Handle::Span(SpanHandleAndFocus {
+                                    span_handle: SpanHandle {
+                                        path: self.zipper_handle.outer_path.clone(),
+                                        left: self.zipper_handle.outer_left.clone(),
+                                        right: target.index.clone(),
+                                    },
+                                    focus: SpanFocus::Right,
+                                }))
+                            }
+                        }
                     } else {
-                        // zone: D_outer_right
-                        todo!()
+                        println!("zone: D_outer_right");
+                        match self.focus {
+                            ZipperFocus::OuterRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                                zipper_handle: ZipperHandle {
+                                    outer_path: self.zipper_handle.outer_path.clone(),
+                                    outer_left: self.zipper_handle.outer_left.clone(),
+                                    outer_right: target.index.clone(),
+                                    middle_path: self.zipper_handle.middle_path.clone(),
+                                    inner_left: self.zipper_handle.inner_left.clone(),
+                                    inner_right: self.zipper_handle.inner_right.clone(),
+                                },
+                                focus: ZipperFocus::OuterRight,
+                            })),
+                            ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
+                                span_handle: SpanHandle {
+                                    path: self.zipper_handle.outer_path.clone(),
+                                    left: self.zipper_handle.outer_right.clone(),
+                                    right: target.index.clone(),
+                                },
+                                focus: SpanFocus::Right,
+                            })),
+                            ZipperFocus::InnerLeft | ZipperFocus::InnerRight => {
+                                Some(Handle::Span(SpanHandleAndFocus {
+                                    span_handle: SpanHandle {
+                                        path: self.zipper_handle.outer_path.clone(),
+                                        left: self.zipper_handle.outer_left.clone(),
+                                        right: target.index.clone(),
+                                    },
+                                    focus: SpanFocus::Right,
+                                }))
+                            }
+                        }
                     }
                 }
             }
@@ -313,10 +686,60 @@ impl ZipperHandleAndFocus {
             .0
             .strip_prefix(target.path.0.as_slice())
         {
-            // E
-            todo!()
+            println!("zone: E");
+            let self_outer_suffix_first_step = self_outer_suffix.first().unwrap_or_else(|| panic!("impossible since then would have matched previous self.zipper_handle.outer_path.0.strip_prefix pattern"));
+            if target.index.is_left_of_step(self_outer_suffix_first_step) {
+                println!("zone: E_left");
+                match self.focus {
+                    ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: target.index.clone(),
+                            outer_right: self_outer_suffix_first_step.right_index(),
+                            middle_path: Path(
+                                [
+                                    self_outer_suffix.to_vec(),
+                                    self.zipper_handle.middle_path.0.clone(),
+                                ]
+                                .concat(),
+                            ),
+                            inner_left: self.zipper_handle.inner_left.clone(),
+                            inner_right: self.zipper_handle.inner_right.clone(),
+                        },
+                        focus: ZipperFocus::OuterLeft,
+                    })),
+                    ZipperFocus::OuterRight | ZipperFocus::InnerLeft | ZipperFocus::InnerRight => {
+                        Some(Handle::Point(target.clone()))
+                    }
+                }
+            } else {
+                println!("zone: E_right");
+                match self.focus {
+                    ZipperFocus::OuterRight => Some(Handle::Zipper(ZipperHandleAndFocus {
+                        zipper_handle: ZipperHandle {
+                            outer_path: target.path.clone(),
+                            outer_left: self_outer_suffix_first_step.left_index(),
+                            outer_right: target.index.clone(),
+                            middle_path: Path(
+                                [
+                                    self_outer_suffix.to_vec(),
+                                    self.zipper_handle.middle_path.0.clone(),
+                                ]
+                                .concat(),
+                            ),
+                            inner_left: self.zipper_handle.inner_left.clone(),
+                            inner_right: self.zipper_handle.inner_right.clone(),
+                        },
+                        focus: ZipperFocus::OuterLeft,
+                    })),
+                    ZipperFocus::OuterLeft | ZipperFocus::InnerLeft | ZipperFocus::InnerRight => {
+                        Some(Handle::Point(target.clone()))
+                    }
+                }
+            }
         } else {
-            todo!()
+            // stepped along a different path from self.zipper_handle.outer_path
+            None
         }
     }
 }
