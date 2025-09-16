@@ -54,7 +54,11 @@ fn main() {
             .start(
                 canvas,
                 web_options,
-                Box::new(|cc| Ok(Box::new(tree - editor - with - egui::TemplateApp::new(cc)))),
+                Box::new(|cc| {
+                    Ok(Box::new(ce_editor_egui::App::<
+                        ce_editor_egui::example::example1::EditorSpec,
+                    >::new(cc)))
+                }),
             )
             .await;
 
