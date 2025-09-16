@@ -59,6 +59,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
                 });
 
             ui.label(format!("handle: {:#?}", &self.editor_state.handle));
+            ui.label(format!("clipboard: {:#?}", &self.editor_state.clipboard));
         });
     }
 }

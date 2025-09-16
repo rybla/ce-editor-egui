@@ -1409,7 +1409,7 @@ impl ZipperFocus {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum Fragment<L> {
     Span(Span<L>),
-    Zipper(Expr<L>),
+    Zipper(Zipper<L>),
 }
 
 /// An expression of syntax.
@@ -1474,7 +1474,7 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn at_zipper(self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
+    pub fn at_zipper(&self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
         let (outer_ctx, span) = self.at_span(&handle.outer_span_handle());
         let (left, expr, right) = span.split_at_step(handle.middle_path.0.first().unwrap());
         let (span_ctx, inner_span) = expr.at_span(&SpanHandle {
@@ -1491,6 +1491,16 @@ impl<L: Debug + Clone> Expr<L> {
             },
             inner_span,
         )
+    }
+
+    pub fn get_fragment_at_handle(&self, handle: &Handle) -> Option<Fragment<L>> {
+        match handle {
+            Handle::Point(_point) => None,
+            Handle::Span(handle) => Some(Fragment::Span(self.at_span(&handle.span_handle).1)),
+            Handle::Zipper(handle) => {
+                Some(Fragment::Zipper(self.at_zipper(&handle.zipper_handle).1))
+            }
+        }
     }
 
     pub fn kids_and_steps<'a>(

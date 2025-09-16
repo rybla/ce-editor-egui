@@ -50,6 +50,7 @@ pub struct ExprLabel<C, D> {
 pub struct EditorState<C, D> {
     pub expr: Expr<ExprLabel<C, D>>,
     pub handle: Handle,
+    pub clipboard: Option<Fragment<ExprLabel<C, D>>>,
 }
 
 #[derive(Debug, Default)]
@@ -102,6 +103,14 @@ pub trait EditorSpec {
         // escape
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             state.handle.escape();
+        }
+        // copy
+        else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
+            println!("attempting to copy...");
+            if let Some(frag) = state.expr.get_fragment_at_handle(&state.handle) {
+                println!("copied fragment");
+                state.clipboard = Some(frag)
+            }
         }
         // rotate focus
         else if ctx.input(|i| i.modifiers.command_only())

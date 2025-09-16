@@ -30,6 +30,7 @@ impl editor::EditorSpec for EditorSpec {
             // expr: Expr::example(&mut mk_label, 2, 6),
             expr: Expr::example(&mut mk_label, 2, 3),
             handle: Handle::default(),
+            clipboard: Option::default(),
         }
     }
 
