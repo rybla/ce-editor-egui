@@ -1012,6 +1012,14 @@ impl Handle {
             }
         }
     }
+
+    pub fn insert_span<L: Debug + Clone>(&self, span: Span<L>) -> (Handle, Expr<L>) {
+        match self {
+            Handle::Point(point) => todo!(),
+            Handle::Span(handle) => todo!(),
+            Handle::Zipper(handle) => todo!(),
+        }
+    }
 }
 
 impl Default for Handle {
