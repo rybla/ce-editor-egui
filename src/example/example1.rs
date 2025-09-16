@@ -57,12 +57,12 @@ impl editor::EditorSpec for EditorSpec {
         expr: &Expr<editor::ExprLabel<Self::Constructor, Self::Diagnostic>>,
     ) -> bool {
         match handle {
-            Handle::Point(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
-            Handle::Span(handle) => expr.at_path(&handle.span_handle.path).kids.0.len() > 0,
+            Handle::Point(handle) => expr.at_expr(&handle.path).1.kids.0.len() > 0,
+            Handle::Span(handle) => expr.at_expr(&handle.span_handle.path).1.kids.0.len() > 0,
             Handle::Zipper(handle) => {
                 !handle.zipper_handle.middle_path.0.is_empty()
                     && !expr
-                        .at_path(&handle.zipper_handle.inner_path())
+                        .at_expr(&handle.zipper_handle.inner_path()).1
                         .kids
                         .0
                         .is_empty()
