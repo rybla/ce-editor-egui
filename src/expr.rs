@@ -1569,6 +1569,8 @@ impl<L: Debug + Clone> Expr<L> {
         Index(self.kids.0.len())
     }
 
+    // TODO: could make all these insert/delete method be over mutable references to self so that dont have to clone as much
+
     pub fn insert_span_at_point(
         self,
         span: Span<L>,
