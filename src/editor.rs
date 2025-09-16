@@ -111,6 +111,16 @@ pub trait EditorSpec {
                 println!("[copy] copied fragment");
                 state.clipboard = Some(frag)
             }
+        } else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
+            println!("[paste]");
+            if let Some(frag) = &state.clipboard {
+                let (handle, expr) = state
+                    .expr
+                    .clone()
+                    .insert_fragment_at_handle(frag.clone(), state.handle.clone());
+                state.handle = handle;
+                state.expr = expr;
+            }
         }
         // rotate focus
         else if ctx.input(|i| i.modifiers.command_only())
