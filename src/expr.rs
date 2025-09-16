@@ -624,7 +624,6 @@ impl ZipperHandleAndFocus {
                                 },
                                 focus: ZipperFocus::OuterRight,
                             })),
-                            // TODO: what to do special in this case?
                             ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.outer_path.clone(),
