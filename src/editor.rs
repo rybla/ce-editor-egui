@@ -106,9 +106,9 @@ pub trait EditorSpec {
         }
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-            println!("attempting to copy...");
+            println!("[copy] attempting to copy");
             if let Some(frag) = state.expr.get_fragment_at_handle(&state.handle) {
-                println!("copied fragment");
+                println!("[copy] copied fragment");
                 state.clipboard = Some(frag)
             }
         }
