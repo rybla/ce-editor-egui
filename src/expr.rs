@@ -1450,10 +1450,10 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn at_tooth_between(&self, left: &Index, right: &Index) -> (Tooth<L>, Span<L>) {
+    pub fn at_span_tooth(&self, left: &Index, right: &Index) -> (SpanTooth<L>, Span<L>) {
         let (left, middle, right) = self.kids.between(left, right);
         (
-            Tooth {
+            SpanTooth {
                 label: self.label.clone(),
                 left: left.0,
                 right: right.0,
@@ -1464,7 +1464,7 @@ impl<L: Debug + Clone> Expr<L> {
 
     pub fn at_span(&self, handle: &SpanHandle) -> (SpanContext<L>, Span<L>) {
         let (sub_expr_ctx, sub_expr) = self.at_expr(&handle.path);
-        let (tooth, inner) = sub_expr.at_tooth_between(&handle.left, &handle.right);
+        let (tooth, inner) = sub_expr.at_span_tooth(&handle.left, &handle.right);
         (
             SpanContext {
                 outer: sub_expr_ctx,
@@ -1474,10 +1474,10 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    // pub fn at_zipper<'a>(&'a self, handle: &ZipperHandle) -> Zipper<L> {
-    //     // let outer_expr = self.at_sub_expr(&handle.outer_path);
-    //     todo!()
-    // }
+    pub fn at_zipper<'a>(&'a self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
+        // let outer_expr = self.at_sub_expr(&handle.outer_path);
+        todo!()
+    }
 
     pub fn kids_and_steps<'a>(
         &'a self,
@@ -1563,9 +1563,17 @@ impl<L: Debug + Clone> Span<L> {
     }
 }
 
-/// A tooth of an [Expr].
+/// A tooth of an [Expr] around a [Step].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Tooth<L> {
+    pub label: L,
+    pub left: Vec<Expr<L>>,
+    pub right: Vec<Expr<L>>,
+}
+
+/// A tooth of an [Expr] around a range of [Index]s.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct SpanTooth<L> {
     pub label: L,
     pub left: Vec<Expr<L>>,
     pub right: Vec<Expr<L>>,
@@ -1579,7 +1587,7 @@ pub struct ExprContext<L>(pub Vec<Tooth<L>>);
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct SpanContext<L> {
     pub outer: ExprContext<L>,
-    pub inner: Tooth<L>,
+    pub inner: SpanTooth<L>,
 }
 
 /// A zipper between two [SpanHandle]s.
