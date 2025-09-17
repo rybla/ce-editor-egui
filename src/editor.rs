@@ -1,7 +1,7 @@
 use crate::expr::*;
 use egui::Frame;
 use lazy_static::lazy_static;
-use std::fmt::Debug;
+use std::{cell::LazyCell, fmt::Debug};
 
 pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
 
@@ -51,11 +51,18 @@ pub struct EditorState<C, D> {
     pub expr: Expr<ExprLabel<C, D>>,
     pub handle: Handle,
     pub clipboard: Option<Fragment<ExprLabel<C, D>>>,
+    pub menu: Option<EditMenu<C, D>>,
 }
 
 #[derive(Debug, Default)]
-pub struct EditMenu {
-    // TODO
+pub struct EditMenu<C, D> {
+    pub options: Vec<EditMenuOption<C, D>>,
+}
+
+#[derive(Debug)]
+pub struct EditMenuOption<C, D> {
+    pub label: String,
+    pub edit: LazyCell<Expr<ExprLabel<C, D>>>,
 }
 
 pub trait EditorSpec {
@@ -66,7 +73,9 @@ pub trait EditorSpec {
 
     fn initial_state() -> EditorState<Self::Constructor, Self::Diagnostic>;
 
-    fn get_edit_menu(state: EditorState<Self::Constructor, Self::Diagnostic>) -> EditMenu;
+    fn get_edit_menu(
+        state: EditorState<Self::Constructor, Self::Diagnostic>,
+    ) -> EditMenu<Self::Constructor, Self::Diagnostic>;
 
     fn get_diagnostics(
         state: EditorState<Self::Constructor, Self::Diagnostic>,

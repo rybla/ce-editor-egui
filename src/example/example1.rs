@@ -31,12 +31,13 @@ impl editor::EditorSpec for EditorSpec {
             expr: Expr::example(&mut mk_label, 2, 3),
             handle: Handle::default(),
             clipboard: Option::default(),
+            menu: Option::default(),
         }
     }
 
     fn get_edit_menu(
         _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
-    ) -> editor::EditMenu {
+    ) -> editor::EditMenu<Self::Constructor, Self::Diagnostic> {
         editor::EditMenu::default()
     }
 
@@ -63,7 +64,8 @@ impl editor::EditorSpec for EditorSpec {
             Handle::Zipper(handle) => {
                 !handle.zipper_handle.middle_path.0.is_empty()
                     && !expr
-                        .at_expr(&handle.zipper_handle.inner_path()).1
+                        .at_expr(&handle.zipper_handle.inner_path())
+                        .1
                         .kids
                         .0
                         .is_empty()
