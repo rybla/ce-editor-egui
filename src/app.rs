@@ -28,7 +28,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        EditorSpec::update(&mut self.editor_state, ctx);
+        self.editor_state.update(ctx);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {

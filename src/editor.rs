@@ -112,11 +112,106 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         self.menu = Option::None;
         self.requested_menu_focus = false;
     }
+
+    pub fn update(&mut self, ctx: &egui::Context) {
+        if let Some(menu) = &self.menu {
+            // close menu
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.menu = None;
+            }
+            // submit menu option
+            else if ctx.input(|i| i.key_pressed(egui::Key::Tab)) {
+                todo!("submit menu option");
+            }
+            // move menu option
+            else if let Some(dir) = ES::match_input_move_dir(ctx) {
+                todo!("move menu option");
+            }
+        } else {
+            // open menu
+            if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+                println!("[menu] open");
+                let menu = ES::get_edit_menu(self);
+                self.menu = Some(menu);
+            }
+            // escape
+            else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.handle.escape();
+            }
+            // copy
+            else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
+                println!("[copy] attempting to copy");
+                if let Some(frag) = self.expr.get_fragment_at_handle(&self.handle) {
+                    println!("[copy] copied fragment");
+                    self.clipboard = Some(frag)
+                }
+            }
+            // paste
+            else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
+                println!("[paste]");
+                if let Some(frag) = &self.clipboard {
+                    let (handle, expr) = self
+                        .expr
+                        .clone()
+                        .insert_fragment_at_handle(frag.clone(), self.handle.clone());
+                    self.handle = handle;
+                    self.expr = expr;
+                }
+            }
+            // rotate focus
+            else if ctx.input(|i| i.modifiers.command_only())
+                && let Some(dir) = ES::match_input_move_dir(ctx)
+            {
+                self.handle.rotate_focus_dir(dir);
+            }
+            // select
+            else if ctx.input(|i| i.modifiers.shift)
+                && let Some(dir) = ES::match_input_move_dir(ctx)
+            {
+                let mut target = self.handle.focus_point();
+                loop {
+                    let moved = target.move_dir(dir, &self.expr);
+                    if !moved {
+                        println!("[select] bailed since a move failed");
+                        break;
+                    }
+
+                    if let Some(handle) = self.handle.select_to(&target, &self.expr) {
+                        if ES::is_valid_handle(&handle, &self.expr) {
+                            self.set_handle_unsafe(handle);
+                            break;
+                        }
+                    }
+                }
+            }
+            // move
+            else if let Some(dir) = ES::match_input_move_dir(ctx) {
+                let mut handle = self.handle.clone();
+                loop {
+                    let moved = handle.move_dir(dir, &self.expr);
+                    if !moved {
+                        println!("[move] bailed since a move failed");
+                        break;
+                    }
+
+                    if ES::is_valid_handle(&handle, &self.expr) {
+                        self.set_handle_unsafe(handle);
+                        break;
+                    }
+                }
+            }
+            // move up
+            else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                self.handle.move_up(&self.expr);
+            }
+        }
+    }
 }
 
 pub struct EditMenu<ES: EditorSpec + ?Sized> {
     pub query: String,
     pub options: Vec<EditMenuOption<ES>>,
+    pub index: usize,
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
@@ -133,6 +228,7 @@ impl<ES: EditorSpec + ?Sized> Default for EditMenu<ES> {
         Self {
             query: Default::default(),
             options: Default::default(),
+            index: 0,
         }
     }
 }
@@ -183,100 +279,6 @@ pub trait EditorSpec {
             Some(MoveDir::Next)
         } else {
             None
-        }
-    }
-
-    fn update(state: &mut EditorState<Self>, ctx: &egui::Context) {
-        if let Some(menu) = &state.menu {
-            // close menu
-            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                state.menu = None;
-            }
-            // submit menu option
-            else if ctx.input(|i| i.key_pressed(egui::Key::Tab)) {
-                todo!("submit menu option");
-            }
-            // move menu option
-            else if let Some(dir) = Self::match_input_move_dir(ctx) {
-                todo!("move menu option");
-            }
-        } else {
-            // open menu
-            if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
-                println!("[menu] open");
-                let menu = Self::get_edit_menu(state);
-                state.menu = Some(menu);
-            }
-            // escape
-            else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                state.handle.escape();
-            }
-            // copy
-            else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-                println!("[copy] attempting to copy");
-                if let Some(frag) = state.expr.get_fragment_at_handle(&state.handle) {
-                    println!("[copy] copied fragment");
-                    state.clipboard = Some(frag)
-                }
-            }
-            // paste
-            else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
-                println!("[paste]");
-                if let Some(frag) = &state.clipboard {
-                    let (handle, expr) = state
-                        .expr
-                        .clone()
-                        .insert_fragment_at_handle(frag.clone(), state.handle.clone());
-                    state.handle = handle;
-                    state.expr = expr;
-                }
-            }
-            // rotate focus
-            else if ctx.input(|i| i.modifiers.command_only())
-                && let Some(dir) = Self::match_input_move_dir(ctx)
-            {
-                state.handle.rotate_focus_dir(dir);
-            }
-            // select
-            else if ctx.input(|i| i.modifiers.shift)
-                && let Some(dir) = Self::match_input_move_dir(ctx)
-            {
-                let mut target = state.handle.focus_point();
-                loop {
-                    let moved = target.move_dir(dir, &state.expr);
-                    if !moved {
-                        println!("[select] bailed since a move failed");
-                        break;
-                    }
-
-                    if let Some(handle) = state.handle.select_to(&target, &state.expr) {
-                        if Self::is_valid_handle(&handle, &state.expr) {
-                            state.set_handle_unsafe(handle);
-                            break;
-                        }
-                    }
-                }
-            }
-            // move
-            else if let Some(dir) = Self::match_input_move_dir(ctx) {
-                let mut handle = state.handle.clone();
-                loop {
-                    let moved = handle.move_dir(dir, &state.expr);
-                    if !moved {
-                        println!("[move] bailed since a move failed");
-                        break;
-                    }
-
-                    if Self::is_valid_handle(&handle, &state.expr) {
-                        state.set_handle_unsafe(handle);
-                        break;
-                    }
-                }
-            }
-            // move up
-            else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                state.handle.move_up(&state.expr);
-            }
         }
     }
 
