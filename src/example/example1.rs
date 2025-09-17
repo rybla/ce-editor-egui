@@ -36,10 +36,20 @@ impl EditorSpec for Example1 {
     fn get_edit_menu(_state: &EditorState<Self>) -> EditMenu<Self> {
         EditMenu {
             query: Default::default(),
-            options: vec![EditMenuOption {
-                label: format!("a"),
-                edit: edit_a,
-            }],
+            options: vec![
+                EditMenuOption {
+                    label: format!("a"),
+                    edit: edit_a,
+                },
+                EditMenuOption {
+                    label: format!("b"),
+                    edit: edit_b,
+                },
+                EditMenuOption {
+                    label: format!("c"),
+                    edit: edit_c,
+                },
+            ],
             index: 0,
         }
     }
@@ -70,5 +80,13 @@ impl EditorSpec for Example1 {
 }
 
 fn edit_a<ES: EditorSpec>(_expr: &EditorExpr<ES>, _handle: &Handle) -> Option<EditorExpr<ES>> {
-    todo!()
+    None
+}
+
+fn edit_b<ES: EditorSpec>(_expr: &EditorExpr<ES>, _handle: &Handle) -> Option<EditorExpr<ES>> {
+    None
+}
+
+fn edit_c<ES: EditorSpec>(_expr: &EditorExpr<ES>, _handle: &Handle) -> Option<EditorExpr<ES>> {
+    None
 }
