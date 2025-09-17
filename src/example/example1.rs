@@ -55,7 +55,7 @@ impl EditorSpec for Example1 {
     }
 
     fn get_diagnostics(_state: EditorState<Self>) -> Vec<Self::Diagnostic> {
-        vec![]
+        vec![format!("this is an example diagnostic")]
     }
 
     fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response {
@@ -79,14 +79,23 @@ impl EditorSpec for Example1 {
     }
 }
 
-fn edit_a<ES: EditorSpec>(_expr: &EditorExpr<ES>, _handle: &Handle) -> Option<EditorExpr<ES>> {
+fn edit_a<ES: EditorSpec>(
+    _expr: &EditorExpr<ES>,
+    _handle: &Handle,
+) -> Option<(EditorExpr<ES>, Handle)> {
     None
 }
 
-fn edit_b<ES: EditorSpec>(_expr: &EditorExpr<ES>, _handle: &Handle) -> Option<EditorExpr<ES>> {
+fn edit_b<ES: EditorSpec>(
+    _expr: &EditorExpr<ES>,
+    _handle: &Handle,
+) -> Option<(EditorExpr<ES>, Handle)> {
     None
 }
 
-fn edit_c<ES: EditorSpec>(_expr: &EditorExpr<ES>, _handle: &Handle) -> Option<EditorExpr<ES>> {
+fn edit_c<ES: EditorSpec>(
+    _expr: &EditorExpr<ES>,
+    _handle: &Handle,
+) -> Option<(EditorExpr<ES>, Handle)> {
     None
 }

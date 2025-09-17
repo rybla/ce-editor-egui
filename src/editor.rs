@@ -1,4 +1,4 @@
-use crate::expr::*;
+use crate::{expr::*, utility::modulus_i8_to_usize};
 use egui::Frame;
 use lazy_static::lazy_static;
 use std::fmt::Debug;
@@ -96,15 +96,24 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
     }
 
+    pub fn escape(&mut self) {
+        if self.menu.is_some() {
+            self.menu = None;
+            self.requested_menu_focus = false;
+        } else {
+            self.handle.escape();
+        }
+    }
+
     /// Sets handle and does associated updates after checking if the handle is
-    /// valid (via [EditorSpec::is_valid_handle]). Returns the result of
-    /// checking if the handle is valid.
-    pub fn set_handle(&mut self, handle: Handle) -> bool {
+    /// valid (via [EditorSpec::is_valid_handle]). Returns the handle back if
+    /// the handle is invalid.
+    pub fn set_handle(&mut self, handle: Handle) -> Option<Handle> {
         if !ES::is_valid_handle(&handle, &self.expr) {
-            return false;
+            return Some(handle);
         }
         self.set_handle_unsafe(handle);
-        true
+        None
     }
 
     /// Sets handle and does associated updates without checking if the handle
@@ -116,96 +125,109 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
-        if let Some(_menu) = &self.menu {
-            // close menu
-            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                self.menu = None;
+        if false {
+        }
+        // escape
+        else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.escape();
+        }
+        // when edit menu is open
+        else if let Some(menu) = &mut self.menu {
+            if false {
             }
             // submit menu option
-            else if ctx.input(|i| i.key_pressed(egui::Key::Tab)) {
-                todo!("submit menu option");
+            else if ctx
+                .input(|i| i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::Enter))
+            {
+                if let Some(option) = menu.focus_option() {
+                    if let Some((expr, handle)) = (option.edit)(&self.expr, &self.handle) {
+                        self.set_expr_and_handle(expr, handle);
+                    } else {
+                        println!("Edit failed");
+                    }
+                } else {
+                    println!("No menu option available");
+                }
             }
             // move menu option
-            else if let Some(_dir) = match_input_move_dir(ctx) {
-                todo!("move menu option");
-            }
-        } else {
-            // open menu
-            if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
-                println!("[menu] open");
-                let menu = ES::get_edit_menu(self);
-                self.menu = Some(menu);
-            }
-            // escape
-            else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                self.handle.escape();
-            }
-            // copy
-            else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-                println!("[copy] attempting to copy");
-                if let Some(frag) = self.expr.get_fragment_at_handle(&self.handle) {
-                    println!("[copy] copied fragment");
-                    self.clipboard = Some(frag)
+            else if let Some(dir) = match_input_cycle_dir(ctx) {
+                match dir {
+                    CycleDir::Prev => menu.index -= 1,
+                    CycleDir::Next => menu.index += 1,
                 }
             }
-            // paste
-            else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
-                println!("[paste]");
-                if let Some(frag) = &self.clipboard {
-                    let (handle, expr) = self
-                        .expr
-                        .clone()
-                        .insert_fragment_at_handle(frag.clone(), self.handle.clone());
-                    self.handle = handle;
-                    self.expr = expr;
+        }
+        // open edit menu
+        else if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+            println!("[menu] open");
+            let menu = ES::get_edit_menu(self);
+            self.menu = Some(menu);
+        }
+        // copy
+        else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
+            println!("[copy] attempting to copy");
+            if let Some(frag) = self.expr.get_fragment_at_handle(&self.handle) {
+                println!("[copy] copied fragment");
+                self.clipboard = Some(frag)
+            }
+        }
+        // paste
+        else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
+            println!("[paste]");
+            if let Some(frag) = &self.clipboard {
+                let (handle, expr) = self
+                    .expr
+                    .clone()
+                    .insert_fragment_at_handle(frag.clone(), self.handle.clone());
+                self.handle = handle;
+                self.expr = expr;
+            }
+        }
+        // rotate focus
+        else if ctx.input(|i| i.modifiers.command_only())
+            && let Some(dir) = match_input_move_dir(ctx)
+        {
+            self.handle.rotate_focus_dir(dir);
+        }
+        // select
+        else if ctx.input(|i| i.modifiers.shift)
+            && let Some(dir) = match_input_move_dir(ctx)
+        {
+            let mut target = self.handle.focus_point();
+            loop {
+                let moved = target.move_dir(dir, &self.expr);
+                if !moved {
+                    println!("[select] bailed since a move failed");
+                    break;
                 }
-            }
-            // rotate focus
-            else if ctx.input(|i| i.modifiers.command_only())
-                && let Some(dir) = match_input_move_dir(ctx)
-            {
-                self.handle.rotate_focus_dir(dir);
-            }
-            // select
-            else if ctx.input(|i| i.modifiers.shift)
-                && let Some(dir) = match_input_move_dir(ctx)
-            {
-                let mut target = self.handle.focus_point();
-                loop {
-                    let moved = target.move_dir(dir, &self.expr);
-                    if !moved {
-                        println!("[select] bailed since a move failed");
-                        break;
-                    }
 
-                    if let Some(handle) = self.handle.select_to(&target, &self.expr) {
-                        if ES::is_valid_handle(&handle, &self.expr) {
-                            self.set_handle_unsafe(handle);
-                            break;
-                        }
-                    }
-                }
-            }
-            // move
-            else if let Some(dir) = match_input_move_dir(ctx) {
-                let mut handle = self.handle.clone();
-                loop {
-                    let moved = handle.move_dir(dir, &self.expr);
-                    if !moved {
-                        println!("[move] bailed since a move failed");
-                        break;
-                    }
-
+                if let Some(handle) = self.handle.select_to(&target, &self.expr) {
                     if ES::is_valid_handle(&handle, &self.expr) {
                         self.set_handle_unsafe(handle);
                         break;
                     }
                 }
             }
-            // move up
-            else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                self.handle.move_up(&self.expr);
+        }
+        // move
+        else if let Some(dir) = match_input_move_dir(ctx) {
+            let mut handle = self.handle.clone();
+            loop {
+                let moved = handle.move_dir(dir, &self.expr);
+                if !moved {
+                    println!("[move] bailed since a move failed");
+                    break;
+                }
+
+                if ES::is_valid_handle(&handle, &self.expr) {
+                    self.set_handle_unsafe(handle);
+                    break;
+                }
             }
+        }
+        // move up
+        else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            self.handle.move_up(&self.expr);
         }
     }
 
@@ -267,20 +289,54 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }));
             if label.clicked() {
                 let handle = Handle::Point(point.clone());
-                self.set_handle(handle);
+                let invalid_handle = self.set_handle(handle);
+                if let Some(invalid_handle) = invalid_handle {
+                    println!("Invalid handle: {:?}", invalid_handle);
+                }
             }
 
             if is_handle && let Some(menu) = &mut self.menu {
-                let textedit = egui::TextEdit::singleline(&mut menu.query)
-                    .hint_text("query edit menu")
-                    // 100f32 is a fine width for now
-                    .desired_width(100f32)
-                    .cursor_at_end(true);
-                let response = ui.add(textedit);
-                if !self.requested_menu_focus {
-                    response.request_focus();
-                    self.requested_menu_focus = true;
-                }
+                // render edit menu stuff
+                ui.vertical(|ui| {
+                    let menu_index_usize = menu.index_mod();
+                    // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
+                    let textedit = egui::TextEdit::singleline(&mut menu.query)
+                        .hint_text("query edit menu")
+                        // 100f32 is a fine width for now
+                        .desired_width(100f32)
+                        .cursor_at_end(true);
+
+                    ui.label(egui::RichText::new(format!("index: {}", menu_index_usize)));
+
+                    for (option_index, option) in menu.options.iter().enumerate() {
+                        if option_index == menu_index_usize {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "[{option_index}] {}",
+                                    option.label.clone()
+                                ))
+                                .color(Self::color_scheme(ui).active_text)
+                                .background_color(Self::color_scheme(ui).active_background),
+                            );
+                        } else {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "[{option_index}] {}",
+                                    option.label.clone()
+                                ))
+                                .color(Self::color_scheme(ui).normal_text)
+                                .background_color(Self::color_scheme(ui).normal_background),
+                            );
+                        }
+                    }
+
+                    // on appearance, request menu focus
+                    let response = ui.add(textedit);
+                    if !self.requested_menu_focus {
+                        response.request_focus();
+                        self.requested_menu_focus = true;
+                    }
+                });
             }
         });
     }
@@ -318,7 +374,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             if label.clicked() {
                 let mut path = path.clone();
                 if let Some(step_parent) = path.pop() {
-                    self.set_handle(Handle::Span(SpanHandleAndFocus {
+                    let invalid_handle = self.set_handle(Handle::Span(SpanHandleAndFocus {
                         span_handle: SpanHandle {
                             path: path,
                             left: step_parent.left_index(),
@@ -326,6 +382,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         },
                         focus: SpanFocus::Left,
                     }));
+                    if let Some(invalid_handle) = invalid_handle {
+                        println!("Invalid handle: {:?}", invalid_handle);
+                    }
                 }
             }
 
@@ -357,12 +416,23 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         ui.set_max_size(ui.min_size());
     }
+
+    pub fn set_expr_and_handle(&mut self, expr: Expr<ExprLabel<ES>>, handle: Handle) {
+        self.expr = expr;
+        let invalid_handle = self.set_handle(handle);
+        if let Some(invalid_handle) = invalid_handle {
+            panic!(
+                "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
+                self.expr, invalid_handle
+            );
+        }
+    }
 }
 
 pub struct EditMenu<ES: EditorSpec + ?Sized> {
     pub query: String,
     pub options: Vec<EditMenuOption<ES>>,
-    pub index: usize,
+    pub index: i8,
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
@@ -384,6 +454,16 @@ impl<ES: EditorSpec + ?Sized> Default for EditMenu<ES> {
     }
 }
 
+impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
+    pub fn index_mod(&self) -> usize {
+        modulus_i8_to_usize(self.index, self.options.len())
+    }
+
+    pub fn focus_option(&self) -> Option<&EditMenuOption<ES>> {
+        self.options.get(self.index_mod())
+    }
+}
+
 pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
     pub label: String,
     pub edit: Edit<ES>,
@@ -398,7 +478,7 @@ impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
     }
 }
 
-pub type Edit<ES> = fn(&EditorExpr<ES>, &Handle) -> Option<EditorExpr<ES>>;
+pub type Edit<ES> = fn(&EditorExpr<ES>, &Handle) -> Option<(EditorExpr<ES>, Handle)>;
 
 pub trait EditorSpec {
     type Constructor: Debug + Clone + Sized + PartialEq;
@@ -422,6 +502,16 @@ pub fn match_input_move_dir(ctx: &egui::Context) -> Option<MoveDir> {
         Some(MoveDir::Prev)
     } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
         Some(MoveDir::Next)
+    } else {
+        None
+    }
+}
+
+pub fn match_input_cycle_dir(ctx: &egui::Context) -> Option<CycleDir> {
+    if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+        Some(CycleDir::Prev)
+    } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+        Some(CycleDir::Next)
     } else {
         None
     }

@@ -1950,6 +1950,12 @@ pub enum MoveDir {
     Next,
 }
 
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum CycleDir {
+    Prev,
+    Next,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

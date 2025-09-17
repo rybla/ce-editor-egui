@@ -4,4 +4,5 @@ mod app;
 pub mod editor;
 pub mod example;
 pub mod expr;
+pub mod utility;
 pub use app::App;
