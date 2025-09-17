@@ -1,4 +1,7 @@
-use crate::{editor, expr::*};
+use crate::{
+    editor::{self, EditorState},
+    expr::*,
+};
 
 type Constructor = String;
 type Diagnostic = String;
@@ -26,17 +29,15 @@ impl editor::EditorSpec for EditorSpec {
             }
         };
 
-        editor::EditorState {
-            // expr: Expr::example(&mut mk_label, 2, 6),
-            expr: Expr::example(&mut mk_label, 2, 3),
-            handle: Handle::default(),
-            clipboard: Option::default(),
-            menu: Option::default(),
-        }
+        EditorState::new(
+            // Expr::example(&mut mk_label, 2, 6),
+            Expr::example(&mut mk_label, 2, 3),
+            Default::default(),
+        )
     }
 
     fn get_edit_menu(
-        _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
+        _state: &editor::EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> editor::EditMenu<Self::Constructor, Self::Diagnostic> {
         editor::EditMenu::default()
     }

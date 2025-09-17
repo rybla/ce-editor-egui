@@ -52,11 +52,34 @@ pub struct EditorState<C, D> {
     pub handle: Handle,
     pub clipboard: Option<Fragment<ExprLabel<C, D>>>,
     pub menu: Option<EditMenu<C, D>>,
+    pub requested_menu_focus: bool,
 }
 
-#[derive(Debug, Default)]
+impl<C, D> EditorState<C, D> {
+    pub fn new(expr: Expr<ExprLabel<C, D>>, handle: Handle) -> Self {
+        Self {
+            expr,
+            handle,
+            clipboard: Default::default(),
+            menu: Default::default(),
+            requested_menu_focus: false,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct EditMenu<C, D> {
+    pub query: String,
     pub options: Vec<EditMenuOption<C, D>>,
+}
+
+impl<C, D> Default for EditMenu<C, D> {
+    fn default() -> Self {
+        Self {
+            query: Default::default(),
+            options: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -74,7 +97,7 @@ pub trait EditorSpec {
     fn initial_state() -> EditorState<Self::Constructor, Self::Diagnostic>;
 
     fn get_edit_menu(
-        state: EditorState<Self::Constructor, Self::Diagnostic>,
+        state: &EditorState<Self::Constructor, Self::Diagnostic>,
     ) -> EditMenu<Self::Constructor, Self::Diagnostic>;
 
     fn get_diagnostics(
@@ -85,6 +108,31 @@ pub trait EditorSpec {
         handle: &Handle,
         expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
     ) -> bool;
+
+    /// Sets handle and does associated updates after checking if the handle is
+    /// valid (via [EditorSpec::is_valid_handle]). Returns the result of
+    /// checking if the handle is valid.
+    fn set_handle(
+        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
+        handle: Handle,
+    ) -> bool {
+        if !Self::is_valid_handle(&handle, &state.expr) {
+            return false;
+        }
+        Self::set_handle_unsafe(state, handle);
+        true
+    }
+
+    /// Sets handle and does associated updates without checking if the handle
+    /// is valid first.
+    fn set_handle_unsafe(
+        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
+        handle: Handle,
+    ) {
+        state.handle = handle;
+        state.menu = Option::None;
+        state.requested_menu_focus = false;
+    }
 
     fn render_label(
         ui: &mut egui::Ui,
@@ -109,79 +157,96 @@ pub trait EditorSpec {
     }
 
     fn update(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ctx: &egui::Context) {
-        // escape
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            state.handle.escape();
-        }
-        // copy
-        else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-            println!("[copy] attempting to copy");
-            if let Some(frag) = state.expr.get_fragment_at_handle(&state.handle) {
-                println!("[copy] copied fragment");
-                state.clipboard = Some(frag)
+        if let Some(menu) = &state.menu {
+            // close menu
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                state.menu = None;
             }
-        } else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
-            println!("[paste]");
-            if let Some(frag) = &state.clipboard {
-                let (handle, expr) = state
-                    .expr
-                    .clone()
-                    .insert_fragment_at_handle(frag.clone(), state.handle.clone());
-                state.handle = handle;
-                state.expr = expr;
+            // submit menu option
+            else if ctx.input(|i| i.key_pressed(egui::Key::Tab)) {
+                todo!("submit menu option");
             }
-        }
-        // rotate focus
-        else if ctx.input(|i| i.modifiers.command_only())
-            && let Some(dir) = Self::match_input_move_dir(ctx)
-        {
-            state.handle.rotate_focus_dir(dir);
-        }
-        // select
-        else if ctx.input(|i| i.modifiers.shift)
-            && let Some(dir) = Self::match_input_move_dir(ctx)
-        {
-            let origin = state.handle.clone();
-            let mut target = state.handle.focus_point();
-            let mut success = false;
-            while !success {
-                let moved = target.move_dir(dir, &state.expr);
-                if !moved {
-                    break;
+            // move menu option
+            else if let Some(dir) = Self::match_input_move_dir(ctx) {
+                todo!("move menu option");
+            }
+        } else {
+            // open menu
+            if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+                println!("[menu] open");
+                let menu = Self::get_edit_menu(state);
+                state.menu = Some(menu);
+            }
+            // escape
+            else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                state.handle.escape();
+            }
+            // copy
+            else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
+                println!("[copy] attempting to copy");
+                if let Some(frag) = state.expr.get_fragment_at_handle(&state.handle) {
+                    println!("[copy] copied fragment");
+                    state.clipboard = Some(frag)
                 }
-                if let Some(new_handle) = origin.select_to(&target, &state.expr) {
-                    success = Self::is_valid_handle(&new_handle, &state.expr);
-                    if success {
-                        state.handle = new_handle;
+            }
+            // paste
+            else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
+                println!("[paste]");
+                if let Some(frag) = &state.clipboard {
+                    let (handle, expr) = state
+                        .expr
+                        .clone()
+                        .insert_fragment_at_handle(frag.clone(), state.handle.clone());
+                    state.handle = handle;
+                    state.expr = expr;
+                }
+            }
+            // rotate focus
+            else if ctx.input(|i| i.modifiers.command_only())
+                && let Some(dir) = Self::match_input_move_dir(ctx)
+            {
+                state.handle.rotate_focus_dir(dir);
+            }
+            // select
+            else if ctx.input(|i| i.modifiers.shift)
+                && let Some(dir) = Self::match_input_move_dir(ctx)
+            {
+                let mut target = state.handle.focus_point();
+                loop {
+                    let moved = target.move_dir(dir, &state.expr);
+                    if !moved {
+                        println!("[select] bailed since a move failed");
+                        break;
                     }
-                };
-            }
-            if !success {
-                println!("[select] bailed since a move faield before success");
-                state.handle = origin;
-            }
-        }
-        // move
-        else if let Some(dir) = Self::match_input_move_dir(ctx) {
-            let origin = state.handle.clone();
-            // move until success
-            let mut success = false;
-            while !success {
-                let moved = state.handle.move_dir(dir, &state.expr);
-                if !moved {
-                    break;
+
+                    if let Some(handle) = state.handle.select_to(&target, &state.expr) {
+                        if Self::is_valid_handle(&handle, &state.expr) {
+                            Self::set_handle_unsafe(state, handle);
+                            break;
+                        }
+                    }
                 }
-                success = Self::is_valid_handle(&state.handle, &state.expr);
             }
-            // if broke before a success, then reset to origin
-            if !success {
-                println!("[move] bailed since a move failed before success");
-                state.handle = origin;
+            // move
+            else if let Some(dir) = Self::match_input_move_dir(ctx) {
+                let mut handle = state.handle.clone();
+                loop {
+                    let moved = handle.move_dir(dir, &state.expr);
+                    if !moved {
+                        println!("[move] bailed since a move failed");
+                        break;
+                    }
+
+                    if Self::is_valid_handle(&handle, &state.expr) {
+                        Self::set_handle_unsafe(state, handle);
+                        break;
+                    }
+                }
             }
-        }
-        // move up
-        else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            state.handle.move_up(&state.expr);
+            // move up
+            else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                state.handle.move_up(&state.expr);
+            }
         }
     }
 
@@ -240,8 +305,17 @@ pub trait EditorSpec {
             }));
             if label.clicked() {
                 let handle = Handle::Point(point.clone());
-                if Self::is_valid_handle(&handle, &state.expr) {
-                    state.handle = handle;
+                Self::set_handle(state, handle);
+            }
+
+            if is_handle && let Some(menu) = &mut state.menu {
+                let textedit = egui::TextEdit::singleline(&mut menu.query)
+                    .hint_text("query edit menu")
+                    .cursor_at_end(true);
+                let response = ui.add(textedit);
+                if !state.requested_menu_focus {
+                    response.request_focus();
+                    state.requested_menu_focus = true;
                 }
             }
         });
@@ -290,14 +364,17 @@ pub trait EditorSpec {
             if label.clicked() {
                 let mut path = path.clone();
                 if let Some(step_parent) = path.pop() {
-                    state.handle = Handle::Span(SpanHandleAndFocus {
-                        span_handle: SpanHandle {
-                            path: path,
-                            left: step_parent.left_index(),
-                            right: step_parent.right_index(),
-                        },
-                        focus: SpanFocus::Left,
-                    });
+                    Self::set_handle(
+                        state,
+                        Handle::Span(SpanHandleAndFocus {
+                            span_handle: SpanHandle {
+                                path: path,
+                                left: step_parent.left_index(),
+                                right: step_parent.right_index(),
+                            },
+                            focus: SpanFocus::Left,
+                        }),
+                    );
                 }
             }
 
