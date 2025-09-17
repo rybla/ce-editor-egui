@@ -1,7 +1,7 @@
 use crate::expr::*;
 use egui::Frame;
 use lazy_static::lazy_static;
-use std::{cell::LazyCell, fmt::Debug};
+use std::fmt::Debug;
 
 pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
 
@@ -63,8 +63,10 @@ impl<ES: EditorSpec + ?Sized> Clone for ExprLabel<ES> {
     }
 }
 
+pub type EditorExpr<ES> = Expr<ExprLabel<ES>>;
+
 pub struct EditorState<ES: EditorSpec + ?Sized> {
-    pub expr: Expr<ExprLabel<ES>>,
+    pub expr: EditorExpr<ES>,
     pub handle: Handle,
     pub clipboard: Option<Fragment<ExprLabel<ES>>>,
     pub menu: Option<EditMenu<ES>>,
@@ -84,7 +86,7 @@ impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
 }
 
 impl<ES: EditorSpec + ?Sized> EditorState<ES> {
-    pub fn new(expr: Expr<ExprLabel<ES>>, handle: Handle) -> Self {
+    pub fn new(expr: EditorExpr<ES>, handle: Handle) -> Self {
         Self {
             expr,
             handle,
@@ -114,7 +116,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
-        if let Some(menu) = &self.menu {
+        if let Some(_menu) = &self.menu {
             // close menu
             if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.menu = None;
@@ -124,7 +126,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 todo!("submit menu option");
             }
             // move menu option
-            else if let Some(dir) = match_input_move_dir(ctx) {
+            else if let Some(_dir) = match_input_move_dir(ctx) {
                 todo!("move menu option");
             }
         } else {
@@ -283,7 +285,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         });
     }
 
-    pub fn render_expr(&mut self, ui: &mut egui::Ui, expr: &Expr<ExprLabel<ES>>, path: &Path) {
+    pub fn render_expr(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
         if expr.height() <= MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
             ui.horizontal_top(|ui| self.render_expr_contents(ui, expr, path));
         } else {
@@ -291,12 +293,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
     }
 
-    pub fn render_expr_contents(
-        &mut self,
-        ui: &mut egui::Ui,
-        expr: &Expr<ExprLabel<ES>>,
-        path: &Path,
-    ) {
+    pub fn render_expr_contents(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
         // This is the spacing between items in the horizontal/vertical row
         ui.style_mut().spacing.item_spacing.x = 0f32;
         ui.style_mut().spacing.item_spacing.y = 0f32;
@@ -389,19 +386,19 @@ impl<ES: EditorSpec + ?Sized> Default for EditMenu<ES> {
 
 pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
     pub label: String,
-    // Note that due to this use of LazyCell, we cannot implement [Clone] for
-    // [EditMenuOption] nor [EditorState].
-    pub edit: LazyCell<Expr<ExprLabel<ES>>>,
+    pub edit: Edit<ES>,
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditMenuOption")
             .field("label", &self.label)
-            .field("edit", &self.edit)
+            .field("edit", &format!("<function>"))
             .finish()
     }
 }
+
+pub type Edit<ES> = fn(&EditorExpr<ES>, &Handle) -> Option<EditorExpr<ES>>;
 
 pub trait EditorSpec {
     type Constructor: Debug + Clone + Sized + PartialEq;
@@ -415,7 +412,7 @@ pub trait EditorSpec {
 
     fn get_diagnostics(state: EditorState<Self>) -> Vec<Self::Diagnostic>;
 
-    fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel<Self>>) -> bool;
+    fn is_valid_handle(handle: &Handle, expr: &EditorExpr<Self>) -> bool;
 
     fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response;
 }

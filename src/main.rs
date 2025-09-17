@@ -4,6 +4,8 @@
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
+    use ce_editor_egui::example::example1::Example1;
+
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let native_options = eframe::NativeOptions {
@@ -20,11 +22,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "ce-editor-egui",
         native_options,
-        Box::new(|cc| {
-            Ok(Box::new(ce_editor_egui::App::<
-                ce_editor_egui::example::example1::EditorSpec,
-            >::new(cc)))
-        }), // TODO: specify example being used
+        Box::new(|cc| Ok(Box::new(ce_editor_egui::App::<Example1>::new(cc)))), // TODO: specify example being used
     )
 }
 
