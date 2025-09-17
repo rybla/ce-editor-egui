@@ -18,7 +18,7 @@ impl editor::EditorSpec for EditorSpec {
         format!("example1")
     }
 
-    fn initial_state() -> editor::EditorState<Self::Constructor, Self::Diagnostic> {
+    fn initial_state() -> editor::EditorState<Self> {
         let mut i = 0;
 
         let mut mk_label = || {
@@ -36,29 +36,19 @@ impl editor::EditorSpec for EditorSpec {
         )
     }
 
-    fn get_edit_menu(
-        _state: &editor::EditorState<Self::Constructor, Self::Diagnostic>,
-    ) -> editor::EditMenu<Self::Constructor, Self::Diagnostic> {
+    fn get_edit_menu(_state: &editor::EditorState<Self>) -> editor::EditMenu<Self> {
         editor::EditMenu::default()
     }
 
-    fn get_diagnostics(
-        _state: editor::EditorState<Self::Constructor, Self::Diagnostic>,
-    ) -> Vec<Self::Diagnostic> {
+    fn get_diagnostics(_state: editor::EditorState<Self>) -> Vec<Self::Diagnostic> {
         vec![]
     }
 
-    fn render_label(
-        ui: &mut egui::Ui,
-        label: &editor::ExprLabel<Self::Constructor, Self::Diagnostic>,
-    ) -> egui::Response {
+    fn render_label(ui: &mut egui::Ui, label: &editor::ExprLabel<Self>) -> egui::Response {
         ui.label(egui::RichText::new(label.constructor.clone()))
     }
 
-    fn is_valid_handle(
-        handle: &Handle,
-        expr: &Expr<editor::ExprLabel<Self::Constructor, Self::Diagnostic>>,
-    ) -> bool {
+    fn is_valid_handle(handle: &Handle, expr: &Expr<editor::ExprLabel<Self>>) -> bool {
         match handle {
             Handle::Point(handle) => expr.at_expr(&handle.path).1.kids.0.len() > 0,
             Handle::Span(handle) => expr.at_expr(&handle.span_handle.path).1.kids.0.len() > 0,

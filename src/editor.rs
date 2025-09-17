@@ -40,23 +40,51 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprLabel<C, D> {
-    pub constructor: C,
-    pub diagnostic: D,
+pub struct ExprLabel<ES: EditorSpec + ?Sized> {
+    pub constructor: ES::Constructor,
+    pub diagnostic: ES::Diagnostic,
 }
 
-#[derive(Debug)]
-pub struct EditorState<C, D> {
-    pub expr: Expr<ExprLabel<C, D>>,
+impl<ES: EditorSpec + ?Sized> Debug for ExprLabel<ES> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExprLabel")
+            .field("constructor", &self.constructor)
+            .field("diagnostic", &self.diagnostic)
+            .finish()
+    }
+}
+
+impl<ES: EditorSpec + ?Sized> Clone for ExprLabel<ES> {
+    fn clone(&self) -> Self {
+        Self {
+            constructor: self.constructor.clone(),
+            diagnostic: self.diagnostic.clone(),
+        }
+    }
+}
+
+pub struct EditorState<ES: EditorSpec + ?Sized> {
+    pub expr: Expr<ExprLabel<ES>>,
     pub handle: Handle,
-    pub clipboard: Option<Fragment<ExprLabel<C, D>>>,
-    pub menu: Option<EditMenu<C, D>>,
+    pub clipboard: Option<Fragment<ExprLabel<ES>>>,
+    pub menu: Option<EditMenu<ES>>,
     pub requested_menu_focus: bool,
 }
 
-impl<C, D> EditorState<C, D> {
-    pub fn new(expr: Expr<ExprLabel<C, D>>, handle: Handle) -> Self {
+impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditorState")
+            .field("expr", &self.expr)
+            .field("handle", &self.handle)
+            .field("clipboard", &self.clipboard)
+            .field("menu", &self.menu)
+            .field("requested_menu_focus", &self.requested_menu_focus)
+            .finish()
+    }
+}
+
+impl<ES: EditorSpec + ?Sized> EditorState<ES> {
+    pub fn new(expr: Expr<ExprLabel<ES>>, handle: Handle) -> Self {
         Self {
             expr,
             handle,
@@ -65,15 +93,42 @@ impl<C, D> EditorState<C, D> {
             requested_menu_focus: false,
         }
     }
+
+    /// Sets handle and does associated updates after checking if the handle is
+    /// valid (via [EditorSpec::is_valid_handle]). Returns the result of
+    /// checking if the handle is valid.
+    pub fn set_handle(&mut self, handle: Handle) -> bool {
+        if !ES::is_valid_handle(&handle, &self.expr) {
+            return false;
+        }
+        self.set_handle_unsafe(handle);
+        true
+    }
+
+    /// Sets handle and does associated updates without checking if the handle
+    /// is valid first.
+    pub fn set_handle_unsafe(&mut self, handle: Handle) {
+        self.handle = handle;
+        self.menu = Option::None;
+        self.requested_menu_focus = false;
+    }
 }
 
-#[derive(Debug)]
-pub struct EditMenu<C, D> {
+pub struct EditMenu<ES: EditorSpec + ?Sized> {
     pub query: String,
-    pub options: Vec<EditMenuOption<C, D>>,
+    pub options: Vec<EditMenuOption<ES>>,
 }
 
-impl<C, D> Default for EditMenu<C, D> {
+impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditMenu")
+            .field("query", &self.query)
+            .field("options", &self.options)
+            .finish()
+    }
+}
+
+impl<ES: EditorSpec + ?Sized> Default for EditMenu<ES> {
     fn default() -> Self {
         Self {
             query: Default::default(),
@@ -82,62 +137,37 @@ impl<C, D> Default for EditMenu<C, D> {
     }
 }
 
-#[derive(Debug)]
-pub struct EditMenuOption<C, D> {
+pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
     pub label: String,
-    pub edit: LazyCell<Expr<ExprLabel<C, D>>>,
+    // Note that due to this use of LazyCell, we cannot implement [Clone] for
+    // [EditMenuOption] nor [EditorState].
+    pub edit: LazyCell<Expr<ExprLabel<ES>>>,
+}
+
+impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditMenuOption")
+            .field("label", &self.label)
+            .field("edit", &self.edit)
+            .finish()
+    }
 }
 
 pub trait EditorSpec {
-    type Constructor: Debug + Clone;
-    type Diagnostic: Debug + Clone;
+    type Constructor: Debug + Clone + Sized + PartialEq;
+    type Diagnostic: Debug + Clone + Sized + PartialEq;
 
     fn name() -> String;
 
-    fn initial_state() -> EditorState<Self::Constructor, Self::Diagnostic>;
+    fn initial_state() -> EditorState<Self>;
 
-    fn get_edit_menu(
-        state: &EditorState<Self::Constructor, Self::Diagnostic>,
-    ) -> EditMenu<Self::Constructor, Self::Diagnostic>;
+    fn get_edit_menu(state: &EditorState<Self>) -> EditMenu<Self>;
 
-    fn get_diagnostics(
-        state: EditorState<Self::Constructor, Self::Diagnostic>,
-    ) -> Vec<Self::Diagnostic>;
+    fn get_diagnostics(state: EditorState<Self>) -> Vec<Self::Diagnostic>;
 
-    fn is_valid_handle(
-        handle: &Handle,
-        expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
-    ) -> bool;
+    fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel<Self>>) -> bool;
 
-    /// Sets handle and does associated updates after checking if the handle is
-    /// valid (via [EditorSpec::is_valid_handle]). Returns the result of
-    /// checking if the handle is valid.
-    fn set_handle(
-        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
-        handle: Handle,
-    ) -> bool {
-        if !Self::is_valid_handle(&handle, &state.expr) {
-            return false;
-        }
-        Self::set_handle_unsafe(state, handle);
-        true
-    }
-
-    /// Sets handle and does associated updates without checking if the handle
-    /// is valid first.
-    fn set_handle_unsafe(
-        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
-        handle: Handle,
-    ) {
-        state.handle = handle;
-        state.menu = Option::None;
-        state.requested_menu_focus = false;
-    }
-
-    fn render_label(
-        ui: &mut egui::Ui,
-        label: &ExprLabel<Self::Constructor, Self::Diagnostic>,
-    ) -> egui::Response;
+    fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response;
 
     fn color_scheme(ui: &egui::Ui) -> &'static ColorScheme {
         match ui.ctx().theme() {
@@ -156,7 +186,7 @@ pub trait EditorSpec {
         }
     }
 
-    fn update(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ctx: &egui::Context) {
+    fn update(state: &mut EditorState<Self>, ctx: &egui::Context) {
         if let Some(menu) = &state.menu {
             // close menu
             if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -221,7 +251,7 @@ pub trait EditorSpec {
 
                     if let Some(handle) = state.handle.select_to(&target, &state.expr) {
                         if Self::is_valid_handle(&handle, &state.expr) {
-                            Self::set_handle_unsafe(state, handle);
+                            state.set_handle_unsafe(handle);
                             break;
                         }
                     }
@@ -238,7 +268,7 @@ pub trait EditorSpec {
                     }
 
                     if Self::is_valid_handle(&handle, &state.expr) {
-                        Self::set_handle_unsafe(state, handle);
+                        state.set_handle_unsafe(handle);
                         break;
                     }
                 }
@@ -250,15 +280,11 @@ pub trait EditorSpec {
         }
     }
 
-    fn render(state: &mut EditorState<Self::Constructor, Self::Diagnostic>, ui: &mut egui::Ui) {
+    fn render(state: &mut EditorState<Self>, ui: &mut egui::Ui) {
         Self::render_expr(state, ui, &state.expr.clone(), &Path::default());
     }
 
-    fn render_point(
-        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
-        ui: &mut egui::Ui,
-        point: &Point,
-    ) {
+    fn render_point(state: &mut EditorState<Self>, ui: &mut egui::Ui, point: &Point) {
         let is_handle = point == &state.handle.focus_point();
 
         let is_at_handle = match &state.handle {
@@ -305,12 +331,14 @@ pub trait EditorSpec {
             }));
             if label.clicked() {
                 let handle = Handle::Point(point.clone());
-                Self::set_handle(state, handle);
+                state.set_handle(handle);
             }
 
             if is_handle && let Some(menu) = &mut state.menu {
                 let textedit = egui::TextEdit::singleline(&mut menu.query)
                     .hint_text("query edit menu")
+                    // 100f32 is a fine width for now
+                    .desired_width(100f32)
                     .cursor_at_end(true);
                 let response = ui.add(textedit);
                 if !state.requested_menu_focus {
@@ -322,9 +350,9 @@ pub trait EditorSpec {
     }
 
     fn render_expr(
-        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
+        state: &mut EditorState<Self>,
         ui: &mut egui::Ui,
-        expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
+        expr: &Expr<ExprLabel<Self>>,
         path: &Path,
     ) {
         if expr.height() <= MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
@@ -335,9 +363,9 @@ pub trait EditorSpec {
     }
 
     fn render_expr_contents(
-        state: &mut EditorState<Self::Constructor, Self::Diagnostic>,
+        state: &mut EditorState<Self>,
         ui: &mut egui::Ui,
-        expr: &Expr<ExprLabel<Self::Constructor, Self::Diagnostic>>,
+        expr: &Expr<ExprLabel<Self>>,
         path: &Path,
     ) {
         // This is the spacing between items in the horizontal/vertical row
@@ -364,17 +392,14 @@ pub trait EditorSpec {
             if label.clicked() {
                 let mut path = path.clone();
                 if let Some(step_parent) = path.pop() {
-                    Self::set_handle(
-                        state,
-                        Handle::Span(SpanHandleAndFocus {
-                            span_handle: SpanHandle {
-                                path: path,
-                                left: step_parent.left_index(),
-                                right: step_parent.right_index(),
-                            },
-                            focus: SpanFocus::Left,
-                        }),
-                    );
+                    state.set_handle(Handle::Span(SpanHandleAndFocus {
+                        span_handle: SpanHandle {
+                            path: path,
+                            left: step_parent.left_index(),
+                            right: step_parent.right_index(),
+                        },
+                        focus: SpanFocus::Left,
+                    }));
                 }
             }
 

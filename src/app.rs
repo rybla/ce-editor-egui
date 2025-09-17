@@ -1,7 +1,7 @@
 use crate::editor;
 
 pub struct App<EditorSpec: editor::EditorSpec> {
-    pub editor_state: editor::EditorState<EditorSpec::Constructor, EditorSpec::Diagnostic>,
+    pub editor_state: editor::EditorState<EditorSpec>,
 }
 
 impl<EditorSpec: editor::EditorSpec> Default for App<EditorSpec> {

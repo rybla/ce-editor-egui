@@ -1526,12 +1526,6 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
-    // pub fn insert_span_at_point(&self, point: &Point, span: Span<L>) -> Expr<L> {
-    //     let (expr_ctx, sub_expr) = self.at_expr(&point.path);
-    //     let sub_expr = sub_expr.insert_span_at_index(&point.index, span);
-    //     expr_ctx.unwrap(sub_expr)
-    // }
-
     pub fn kids_and_steps<'a>(
         &'a self,
     ) -> std::iter::Map<
@@ -1805,11 +1799,6 @@ impl<L: Debug + Clone> Span<L> {
     fn offset(&self) -> Offset {
         Offset(self.0.len())
     }
-
-    // fn insert_span_at_index(&self, index: &Index, span: Span<L>) -> Span<L> {
-    //     let (left, right) = self.0.split_at(index.0);
-    //     Span([left, span.0.as_slice(), right].concat())
-    // }
 }
 
 /// A tooth of an [Expr] around a [Step].
