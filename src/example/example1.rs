@@ -5,6 +5,25 @@ type Diagnostic = String;
 
 pub struct Example1 {}
 
+macro_rules! make_edit_menu_option_that_inserts_frag {
+    ($label: expr, $frag:expr) => {
+        EditMenuOption {
+            label: $label,
+            edit: |state| {
+                let (expr, handle) = state
+                    .expr
+                    .clone()
+                    .insert_fragment_at_handle($frag, state.handle.clone());
+                Some(CoreEditorState {
+                    expr,
+                    handle,
+                    clipboard: state.clipboard.clone(),
+                })
+            },
+        }
+    };
+}
+
 impl Example1 {}
 
 impl EditorSpec for Example1 {
@@ -37,17 +56,33 @@ impl EditorSpec for Example1 {
         EditMenu {
             query: Default::default(),
             options: vec![
+                make_edit_menu_option_that_inserts_frag!(
+                    format!("a"),
+                    Fragment::Span(Span(vec![Expr {
+                        label: ExprLabel {
+                            constructor: format!("A"),
+                            diagnostic: Default::default(),
+                        },
+                        kids: Span(vec![]),
+                    }]))
+                ),
                 EditMenuOption {
-                    label: format!("a"),
-                    edit: edit_a,
+                    label: format!("copy"),
+                    edit: |state| {
+                        let frag = state.expr.get_fragment_at_handle(&state.handle)?;
+                        Some(CoreEditorState {
+                            expr: state.expr.clone(),
+                            handle: state.handle.clone(),
+                            clipboard: Some(frag),
+                        })
+                    },
                 },
+                // TODO: paste
+                // TODO: cut
+                // TODO: delete
                 EditMenuOption {
-                    label: format!("b"),
-                    edit: edit_b,
-                },
-                EditMenuOption {
-                    label: format!("c"),
-                    edit: edit_c,
+                    label: format!("id"),
+                    edit: |state| Some(state.clone()),
                 },
             ],
             index: 0,
@@ -77,25 +112,4 @@ impl EditorSpec for Example1 {
             }
         }
     }
-}
-
-fn edit_a<ES: EditorSpec>(
-    _expr: &EditorExpr<ES>,
-    _handle: &Handle,
-) -> Option<(EditorExpr<ES>, Handle)> {
-    None
-}
-
-fn edit_b<ES: EditorSpec>(
-    _expr: &EditorExpr<ES>,
-    _handle: &Handle,
-) -> Option<(EditorExpr<ES>, Handle)> {
-    None
-}
-
-fn edit_c<ES: EditorSpec>(
-    _expr: &EditorExpr<ES>,
-    _handle: &Handle,
-) -> Option<(EditorExpr<ES>, Handle)> {
-    None
 }

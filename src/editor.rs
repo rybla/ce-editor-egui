@@ -81,6 +81,16 @@ impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
     }
 }
 
+impl<ES: EditorSpec + ?Sized> Clone for EditorState<ES> {
+    fn clone(&self) -> Self {
+        Self {
+            core: self.core.clone(),
+            menu: self.menu.clone(),
+            requested_menu_focus: self.requested_menu_focus.clone(),
+        }
+    }
+}
+
 impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     pub fn new(expr: EditorExpr<ES>, handle: Handle) -> Self {
         Self {
@@ -138,9 +148,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .input(|i| i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::Enter))
             {
                 if let Some(option) = menu.focus_option() {
-                    if let Some((expr, handle)) = (option.edit)(&self.core.expr, &self.core.handle)
-                    {
-                        self.set_expr_and_handle(expr, handle);
+                    if let Some(state) = (option.edit)(&self.core) {
+                        self.set_expr_and_handle(state.expr, state.handle);
                     } else {
                         println!("Edit failed");
                     }
@@ -174,7 +183,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
             println!("[paste]");
             if let Some(frag) = &self.core.clipboard {
-                let (handle, expr) = self
+                let (expr, handle) = self
                     .core
                     .expr
                     .clone()
@@ -445,6 +454,16 @@ impl<ES: EditorSpec + ?Sized> Debug for CoreEditorState<ES> {
     }
 }
 
+impl<ES: EditorSpec + ?Sized> Clone for CoreEditorState<ES> {
+    fn clone(&self) -> Self {
+        Self {
+            expr: self.expr.clone(),
+            handle: self.handle.clone(),
+            clipboard: self.clipboard.clone(),
+        }
+    }
+}
+
 pub struct EditMenu<ES: EditorSpec + ?Sized> {
     pub query: String,
     pub options: Vec<EditMenuOption<ES>>,
@@ -457,6 +476,16 @@ impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
             .field("query", &self.query)
             .field("options", &self.options)
             .finish()
+    }
+}
+
+impl<ES: EditorSpec + ?Sized> Clone for EditMenu<ES> {
+    fn clone(&self) -> Self {
+        Self {
+            query: self.query.clone(),
+            options: self.options.clone(),
+            index: self.index.clone(),
+        }
     }
 }
 
@@ -485,6 +514,15 @@ pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
     pub edit: Edit<ES>,
 }
 
+impl<ES: EditorSpec + ?Sized> Clone for EditMenuOption<ES> {
+    fn clone(&self) -> Self {
+        Self {
+            label: self.label.clone(),
+            edit: self.edit.clone(),
+        }
+    }
+}
+
 impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditMenuOption")
@@ -494,7 +532,7 @@ impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
     }
 }
 
-pub type Edit<ES> = fn(&EditorExpr<ES>, &Handle) -> Option<(EditorExpr<ES>, Handle)>;
+pub type Edit<ES> = fn(&CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
 
 pub trait EditorSpec {
     type Constructor: Debug + Clone + Sized + PartialEq;

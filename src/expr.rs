@@ -1709,41 +1709,41 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn insert_span_at_handle(self, span: Span<L>, handle: Handle) -> (Handle, Expr<L>) {
+    pub fn insert_span_at_handle(self, span: Span<L>, handle: Handle) -> (Expr<L>, Handle) {
         match handle {
             Handle::Point(point) => {
                 let (handle, expr) = self.insert_span_at_point(span, point);
-                (Handle::Span(handle), expr)
+                (expr, Handle::Span(handle))
             }
             Handle::Span(handle) => {
                 let (handle, expr) = self.insert_span_at_span_handle(span, handle);
-                (Handle::Span(handle), expr)
+                (expr, Handle::Span(handle))
             }
             Handle::Zipper(handle) => {
                 let (handle, expr) = self.insert_span_at_zipper_handle(span, handle);
-                (Handle::Span(handle), expr)
+                (expr, Handle::Span(handle))
             }
         }
     }
 
-    pub fn insert_zipper_at_handle(self, zipper: Zipper<L>, handle: Handle) -> (Handle, Expr<L>) {
+    pub fn insert_zipper_at_handle(self, zipper: Zipper<L>, handle: Handle) -> (Expr<L>, Handle) {
         match handle {
             Handle::Point(point) => {
                 let (handle, expr) = self.insert_zipper_at_point(zipper, point);
-                (Handle::Span(handle), expr)
+                (expr, Handle::Span(handle))
             }
             Handle::Span(handle) => {
                 let (handle, expr) = self.insert_zipper_at_span_handle(zipper, handle);
-                (Handle::Span(handle), expr)
+                (expr, Handle::Span(handle))
             }
             Handle::Zipper(handle) => {
                 let (handle, expr) = self.insert_zipper_at_zipper_handle(zipper, handle);
-                (Handle::Zipper(handle), expr)
+                (expr, Handle::Zipper(handle))
             }
         }
     }
 
-    pub fn insert_fragment_at_handle(self, frag: Fragment<L>, handle: Handle) -> (Handle, Expr<L>) {
+    pub fn insert_fragment_at_handle(self, frag: Fragment<L>, handle: Handle) -> (Expr<L>, Handle) {
         match frag {
             Fragment::Span(span) => self.insert_span_at_handle(span, handle),
             Fragment::Zipper(zipper) => self.insert_zipper_at_handle(zipper, handle),
