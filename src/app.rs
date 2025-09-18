@@ -58,8 +58,11 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
                     self.editor_state.render(ui);
                 });
 
-            ui.label(format!("handle: {:#?}", &self.editor_state.handle));
-            ui.label(format!("clipboard: {:#?}", &self.editor_state.clipboard));
+            ui.label(format!("handle: {:#?}", &self.editor_state.core.handle));
+            ui.label(format!(
+                "clipboard: {:#?}",
+                &self.editor_state.core.clipboard
+            ));
         });
     }
 }

@@ -66,9 +66,7 @@ impl<ES: EditorSpec + ?Sized> Clone for ExprLabel<ES> {
 pub type EditorExpr<ES> = Expr<ExprLabel<ES>>;
 
 pub struct EditorState<ES: EditorSpec + ?Sized> {
-    pub expr: EditorExpr<ES>,
-    pub handle: Handle,
-    pub clipboard: Option<Fragment<ExprLabel<ES>>>,
+    pub core: CoreEditorState<ES>,
     pub menu: Option<EditMenu<ES>>,
     pub requested_menu_focus: bool,
 }
@@ -76,9 +74,7 @@ pub struct EditorState<ES: EditorSpec + ?Sized> {
 impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditorState")
-            .field("expr", &self.expr)
-            .field("handle", &self.handle)
-            .field("clipboard", &self.clipboard)
+            .field("core", &self.core)
             .field("menu", &self.menu)
             .field("requested_menu_focus", &self.requested_menu_focus)
             .finish()
@@ -88,9 +84,11 @@ impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
 impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     pub fn new(expr: EditorExpr<ES>, handle: Handle) -> Self {
         Self {
-            expr,
-            handle,
-            clipboard: Default::default(),
+            core: CoreEditorState {
+                expr,
+                handle,
+                clipboard: Default::default(),
+            },
             menu: Default::default(),
             requested_menu_focus: false,
         }
@@ -101,7 +99,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.menu = None;
             self.requested_menu_focus = false;
         } else {
-            self.handle.escape();
+            self.core.handle.escape();
         }
     }
 
@@ -109,7 +107,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     /// valid (via [EditorSpec::is_valid_handle]). Returns the handle back if
     /// the handle is invalid.
     pub fn set_handle(&mut self, handle: Handle) -> Option<Handle> {
-        if !ES::is_valid_handle(&handle, &self.expr) {
+        if !ES::is_valid_handle(&handle, &self.core.expr) {
             return Some(handle);
         }
         self.set_handle_unsafe(handle);
@@ -119,7 +117,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     /// Sets handle and does associated updates without checking if the handle
     /// is valid first.
     pub fn set_handle_unsafe(&mut self, handle: Handle) {
-        self.handle = handle;
+        self.core.handle = handle;
         self.menu = Option::None;
         self.requested_menu_focus = false;
     }
@@ -140,7 +138,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .input(|i| i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::Enter))
             {
                 if let Some(option) = menu.focus_option() {
-                    if let Some((expr, handle)) = (option.edit)(&self.expr, &self.handle) {
+                    if let Some((expr, handle)) = (option.edit)(&self.core.expr, &self.core.handle)
+                    {
                         self.set_expr_and_handle(expr, handle);
                     } else {
                         println!("Edit failed");
@@ -166,43 +165,44 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
             println!("[copy] attempting to copy");
-            if let Some(frag) = self.expr.get_fragment_at_handle(&self.handle) {
+            if let Some(frag) = self.core.expr.get_fragment_at_handle(&self.core.handle) {
                 println!("[copy] copied fragment");
-                self.clipboard = Some(frag)
+                self.core.clipboard = Some(frag)
             }
         }
         // paste
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
             println!("[paste]");
-            if let Some(frag) = &self.clipboard {
+            if let Some(frag) = &self.core.clipboard {
                 let (handle, expr) = self
+                    .core
                     .expr
                     .clone()
-                    .insert_fragment_at_handle(frag.clone(), self.handle.clone());
-                self.handle = handle;
-                self.expr = expr;
+                    .insert_fragment_at_handle(frag.clone(), self.core.handle.clone());
+                self.core.handle = handle;
+                self.core.expr = expr;
             }
         }
         // rotate focus
         else if ctx.input(|i| i.modifiers.command_only())
             && let Some(dir) = match_input_move_dir(ctx)
         {
-            self.handle.rotate_focus_dir(dir);
+            self.core.handle.rotate_focus_dir(dir);
         }
         // select
         else if ctx.input(|i| i.modifiers.shift)
             && let Some(dir) = match_input_move_dir(ctx)
         {
-            let mut target = self.handle.focus_point();
+            let mut target = self.core.handle.focus_point();
             loop {
-                let moved = target.move_dir(dir, &self.expr);
+                let moved = target.move_dir(dir, &self.core.expr);
                 if !moved {
                     println!("[select] bailed since a move failed");
                     break;
                 }
 
-                if let Some(handle) = self.handle.select_to(&target, &self.expr) {
-                    if ES::is_valid_handle(&handle, &self.expr) {
+                if let Some(handle) = self.core.handle.select_to(&target, &self.core.expr) {
+                    if ES::is_valid_handle(&handle, &self.core.expr) {
                         self.set_handle_unsafe(handle);
                         break;
                     }
@@ -211,15 +211,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // move
         else if let Some(dir) = match_input_move_dir(ctx) {
-            let mut handle = self.handle.clone();
+            let mut handle = self.core.handle.clone();
             loop {
-                let moved = handle.move_dir(dir, &self.expr);
+                let moved = handle.move_dir(dir, &self.core.expr);
                 if !moved {
                     println!("[move] bailed since a move failed");
                     break;
                 }
 
-                if ES::is_valid_handle(&handle, &self.expr) {
+                if ES::is_valid_handle(&handle, &self.core.expr) {
                     self.set_handle_unsafe(handle);
                     break;
                 }
@@ -227,7 +227,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // move up
         else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            self.handle.move_up(&self.expr);
+            self.core.handle.move_up(&self.core.expr);
         }
     }
 
@@ -239,13 +239,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render(&mut self, ui: &mut egui::Ui) {
-        self.render_expr(ui, &self.expr.clone(), &Path::default());
+        self.render_expr(ui, &self.core.expr.clone(), &Path::default());
     }
 
     pub fn render_point(&mut self, ui: &mut egui::Ui, point: &Point) {
-        let is_handle = point == &self.handle.focus_point();
+        let is_handle = point == &self.core.handle.focus_point();
 
-        let is_at_handle = match &self.handle {
+        let is_at_handle = match &self.core.handle {
             Handle::Point(handle) => point == handle,
             Handle::Span(handle) => {
                 *point == handle.span_handle.left_point()
@@ -259,7 +259,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
         };
 
-        let is_in_handle = self.handle.contains_point(point);
+        let is_in_handle = self.core.handle.contains_point(point);
 
         let frame = Frame::new()
             .outer_margin(0)
@@ -362,7 +362,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 top: 4,
                 bottom: 4,
             })
-            .fill(if self.handle.contains_path(path) {
+            .fill(if self.core.handle.contains_path(path) {
                 Self::color_scheme(ui).highlight_background
             } else {
                 Self::color_scheme(ui).normal_background
@@ -418,14 +418,30 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn set_expr_and_handle(&mut self, expr: Expr<ExprLabel<ES>>, handle: Handle) {
-        self.expr = expr;
+        self.core.expr = expr;
         let invalid_handle = self.set_handle(handle);
         if let Some(invalid_handle) = invalid_handle {
             panic!(
                 "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
-                self.expr, invalid_handle
+                self.core.expr, invalid_handle
             );
         }
+    }
+}
+
+pub struct CoreEditorState<ES: EditorSpec + ?Sized> {
+    pub expr: EditorExpr<ES>,
+    pub handle: Handle,
+    pub clipboard: Option<Fragment<ExprLabel<ES>>>,
+}
+
+impl<ES: EditorSpec + ?Sized> Debug for CoreEditorState<ES> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CoreEditorState")
+            .field("expr", &self.expr)
+            .field("handle", &self.handle)
+            .field("clipboard", &self.clipboard)
+            .finish()
     }
 }
 
