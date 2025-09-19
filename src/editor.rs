@@ -315,8 +315,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         .desired_width(100f32)
                         .cursor_at_end(true);
 
-                    ui.label(egui::RichText::new(format!("index: {}", menu_index_usize)));
-
                     for (option_index, option) in menu.options.iter().enumerate() {
                         if option_index == menu_index_usize {
                             ui.label(
