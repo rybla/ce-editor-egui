@@ -1,23 +1,22 @@
 use crate::editor;
 
-pub struct App<EditorSpec: editor::EditorSpec> {
-    pub editor_state: editor::EditorState<EditorSpec>,
+pub struct App<ES: editor::EditorSpec + 'static> {
+    pub editor_state: editor::EditorState<ES>,
 }
 
-impl<EditorSpec: editor::EditorSpec> Default for App<EditorSpec> {
+impl<ES: editor::EditorSpec> Default for App<ES> {
     fn default() -> Self {
         Self {
-            editor_state: EditorSpec::initial_state(),
+            editor_state: ES::initial_state(),
         }
     }
 }
 
-impl<EditorSpec: editor::EditorSpec> App<EditorSpec> {
+impl<ES: editor::EditorSpec> App<ES> {
     /// Called once before the first frame.
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
         Default::default()
     }
 }

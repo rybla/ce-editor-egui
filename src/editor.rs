@@ -41,12 +41,12 @@ lazy_static! {
     };
 }
 
-pub struct ExprLabel<ES: EditorSpec + ?Sized> {
+pub struct ExprLabel<ES: EditorSpec + ?Sized + 'static> {
     pub constructor: ES::Constructor,
     pub diagnostic: ES::Diagnostic,
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for ExprLabel<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Debug for ExprLabel<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExprLabel")
             .field("constructor", &self.constructor)
@@ -55,7 +55,7 @@ impl<ES: EditorSpec + ?Sized> Debug for ExprLabel<ES> {
     }
 }
 
-impl<ES: EditorSpec + ?Sized> Clone for ExprLabel<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Clone for ExprLabel<ES> {
     fn clone(&self) -> Self {
         Self {
             constructor: self.constructor.clone(),
@@ -66,13 +66,13 @@ impl<ES: EditorSpec + ?Sized> Clone for ExprLabel<ES> {
 
 pub type EditorExpr<ES> = Expr<ExprLabel<ES>>;
 
-pub struct EditorState<ES: EditorSpec + ?Sized> {
+pub struct EditorState<ES: EditorSpec + ?Sized + 'static> {
     pub core: CoreEditorState<ES>,
     pub menu: Option<EditMenu<ES>>,
     pub requested_menu_focus: bool,
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Debug for EditorState<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditorState")
             .field("core", &self.core)
@@ -82,7 +82,7 @@ impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
     }
 }
 
-impl<ES: EditorSpec + ?Sized> EditorState<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> EditorState<ES> {
     pub fn new(expr: EditorExpr<ES>, handle: Handle) -> Self {
         Self {
             core: CoreEditorState {
@@ -330,6 +330,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                     // on appearance, request menu focus
                     let response = ui.add(textedit);
+                    if response.changed() {
+                        menu.update();
+                    }
                     if !self.requested_menu_focus {
                         response.request_focus();
                         self.requested_menu_focus = true;
@@ -427,13 +430,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 }
 
-pub struct CoreEditorState<ES: EditorSpec + ?Sized> {
+pub struct CoreEditorState<ES: EditorSpec + ?Sized + 'static> {
     pub expr: EditorExpr<ES>,
     pub handle: Handle,
     pub clipboard: Option<Fragment<ExprLabel<ES>>>,
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for CoreEditorState<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Debug for CoreEditorState<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CoreEditorState")
             .field("expr", &self.expr)
@@ -443,7 +446,7 @@ impl<ES: EditorSpec + ?Sized> Debug for CoreEditorState<ES> {
     }
 }
 
-impl<ES: EditorSpec + ?Sized> Clone for CoreEditorState<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Clone for CoreEditorState<ES> {
     fn clone(&self) -> Self {
         Self {
             expr: self.expr.clone(),
@@ -453,14 +456,14 @@ impl<ES: EditorSpec + ?Sized> Clone for CoreEditorState<ES> {
     }
 }
 
-pub struct EditMenu<ES: EditorSpec + ?Sized> {
+pub struct EditMenu<ES: EditorSpec + ?Sized + 'static> {
     pub query: String,
     pub options: Vec<EditMenuOption<ES>>,
     pub index: i8,
-    pub nucleo: nucleo::Nucleo<String>,
+    pub nucleo: nucleo::Nucleo<EditMenuOption<ES>>,
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Debug for EditMenu<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditMenu")
             .field("query", &self.query)
@@ -471,10 +474,16 @@ impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
     }
 }
 
-impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> EditMenu<ES> {
     fn new(options: Vec<EditMenuOption<ES>>) -> Self {
+        // TODO
+        let nucleo = nucleo::Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), Some(1), 100);
+        // let injector = nucleo.injector();
+        // for option in options.iter() {
+        //     injector.push(option.label, |s, cols| cols[0] = s.clone().into());
+        // }
         Self {
-            nucleo: nucleo::Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), Some(1), 100),
+            nucleo,
             query: Default::default(),
             options,
             index: 0,
@@ -488,14 +497,19 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     pub fn focus_option(&self) -> Option<&EditMenuOption<ES>> {
         self.options.get(self.index_mod())
     }
+
+    pub fn update(&mut self) {
+        // self.nucleo.
+        todo!()
+    }
 }
 
-pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
+pub struct EditMenuOption<ES: EditorSpec + ?Sized + 'static> {
     pub label: String,
     pub edit: Edit<ES>,
 }
 
-impl<ES: EditorSpec + ?Sized> Clone for EditMenuOption<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Clone for EditMenuOption<ES> {
     fn clone(&self) -> Self {
         Self {
             label: self.label.clone(),
@@ -504,7 +518,7 @@ impl<ES: EditorSpec + ?Sized> Clone for EditMenuOption<ES> {
     }
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
+impl<ES: EditorSpec + ?Sized + 'static> Debug for EditMenuOption<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditMenuOption")
             .field("label", &self.label)
