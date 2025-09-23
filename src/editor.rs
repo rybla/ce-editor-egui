@@ -125,6 +125,7 @@ impl<ES: EditorSpec + ?Sized + 'static> EditorState<ES> {
 
     pub fn update(&mut self, ctx: &egui::Context) {
         if false {
+            // this is just a placeholder so the subsequent branches can all use `else if` syntax
         }
         // escape
         else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
