@@ -124,6 +124,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
+        if let Some(menu) = &mut self.menu {
+            menu.nucleo.tick(10);
+        }
+
         if false {
             // this is just a placeholder so the subsequent branches can all use `else if` syntax
         }
@@ -140,8 +144,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .input(|i| i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::Enter))
             {
                 if let Some(option) = menu.focus_option() {
-                    if let Some(state) = (option.edit)(&self.core) {
-                        self.set_expr_and_handle(state.expr, state.handle);
+                    if let Some(core) = (option.edit)(&self.core) {
+                        self.set_core(core);
                     } else {
                         println!("Edit failed");
                     }
@@ -303,40 +307,36 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
                     let textedit = egui::TextEdit::singleline(&mut menu.query)
                         .hint_text("query edit menu")
-                        // 100f32 is a fine width for now
-                        .desired_width(100f32)
+                        .desired_width(100f32) // 100f32 is a fine width for now
                         .cursor_at_end(true);
-
-                    for (option_index, option) in menu.all_options.iter().enumerate() {
-                        if option_index == menu_index_usize {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "[{option_index}] {}",
-                                    option.label.clone()
-                                ))
-                                .color(Self::color_scheme(ui).active_text)
-                                .background_color(Self::color_scheme(ui).active_background),
-                            );
-                        } else {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "[{option_index}] {}",
-                                    option.label.clone()
-                                ))
-                                .color(Self::color_scheme(ui).normal_text)
-                                .background_color(Self::color_scheme(ui).normal_background),
-                            );
-                        }
-                    }
-
-                    // on appearance, request menu focus
                     let response = ui.add(textedit);
+                    // on change, update menu
                     if response.changed() {
                         menu.update();
+                        // response.request_focus();
                     }
+                    // on appearance, request menu focus
                     if !self.requested_menu_focus {
                         response.request_focus();
                         self.requested_menu_focus = true;
+                    }
+
+                    for (item_index, item) in menu.nucleo.snapshot().matched_items(..).enumerate() {
+                        let rich_text =
+                            egui::RichText::new(format!("[{item_index}] {}", item.data.label));
+                        if item_index == menu_index_usize {
+                            ui.label(
+                                rich_text
+                                    .color(Self::color_scheme(ui).active_text)
+                                    .background_color(Self::color_scheme(ui).active_background),
+                            );
+                        } else {
+                            ui.label(
+                                rich_text
+                                    .color(Self::color_scheme(ui).normal_text)
+                                    .background_color(Self::color_scheme(ui).normal_background),
+                            );
+                        }
                     }
                 });
             }
@@ -429,6 +429,23 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             );
         }
     }
+
+    pub fn set_core(&mut self, core: CoreEditorState<ES>) {
+        self.core.expr = core.expr;
+        let invalid_handle = self.set_handle(core.handle);
+        if let Some(invalid_handle) = invalid_handle {
+            panic!(
+                "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
+                self.core.expr, invalid_handle
+            );
+        }
+        if let Some(clipboard) = core.clipboard {
+            println!("[set_core] update clipboard");
+            self.core.clipboard = Some(clipboard);
+        } else {
+            println!("[set_core] don't update clipboard");
+        }
+    }
 }
 
 pub struct CoreEditorState<ES: EditorSpec + ?Sized> {
@@ -478,19 +495,20 @@ impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
 impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     fn new(all_options: Vec<EditMenuOption<ES>>) -> Self {
         // TODO
-        let mut nucleo =
-            nucleo::Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), Some(1), 100);
+        let nucleo = nucleo::Nucleo::new(
+            nucleo::Config::DEFAULT,
+            Arc::new(|| {
+                // TODO: not sure what this could be useful for
+                println!("[notify]");
+            }),
+            Some(1),
+            1,
+        );
         let injector = nucleo.injector();
         for option in all_options.iter() {
+            println!("[EditMenu.new] inject option with label: {}", option.label);
             injector.push(option.clone(), |x, cols| cols[0] = x.label.clone().into());
         }
-        nucleo.pattern.reparse(
-            0,
-            "",
-            nucleo::pattern::CaseMatching::Smart,
-            nucleo::pattern::Normalization::Smart,
-            false,
-        );
         Self {
             nucleo,
             query: Default::default(),
@@ -508,8 +526,17 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     }
 
     pub fn update(&mut self) {
-        // self.nucleo.
-        todo!()
+        println!("[EditMenu.update] {}", self.query);
+        self.nucleo.pattern.reparse(
+            0,
+            &self.query,
+            nucleo::pattern::CaseMatching::Smart,
+            nucleo::pattern::Normalization::Smart,
+            // TODO: I could store the previous search query somewhere and then
+            // check if it's a prefix of the new search query if I want to make
+            // this `true` sometimes for optimization. But it's not necessary.
+            false,
+        );
     }
 }
 

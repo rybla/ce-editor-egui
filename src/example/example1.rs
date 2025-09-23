@@ -67,12 +67,15 @@ impl EditorSpec for Example1 {
             EditMenuOption {
                 label: format!("copy"),
                 edit: |state| {
+                    println!("[edit] copy");
                     let frag = state.expr.get_fragment_at_handle(&state.handle)?;
-                    Some(CoreEditorState {
+                    let core = Some(CoreEditorState {
                         expr: state.expr.clone(),
                         handle: state.handle.clone(),
                         clipboard: Some(frag),
-                    })
+                    });
+                    println!("core = {core:#?}");
+                    core
                 },
             },
             // TODO: paste
