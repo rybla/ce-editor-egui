@@ -52,41 +52,37 @@ impl EditorSpec for Example1 {
         )
     }
 
-    fn get_edit_menu(_state: &EditorState<Self>) -> EditMenu<Self> {
-        EditMenu {
-            query: Default::default(),
-            options: vec![
-                make_edit_menu_option_that_inserts_frag!(
-                    format!("a"),
-                    Fragment::Span(Span(vec![Expr {
-                        label: ExprLabel {
-                            constructor: format!("A"),
-                            diagnostic: Default::default(),
-                        },
-                        kids: Span(vec![]),
-                    }]))
-                ),
-                EditMenuOption {
-                    label: format!("copy"),
-                    edit: |state| {
-                        let frag = state.expr.get_fragment_at_handle(&state.handle)?;
-                        Some(CoreEditorState {
-                            expr: state.expr.clone(),
-                            handle: state.handle.clone(),
-                            clipboard: Some(frag),
-                        })
+    fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
+        vec![
+            make_edit_menu_option_that_inserts_frag!(
+                format!("a"),
+                Fragment::Span(Span(vec![Expr {
+                    label: ExprLabel {
+                        constructor: format!("A"),
+                        diagnostic: Default::default(),
                     },
+                    kids: Span(vec![]),
+                }]))
+            ),
+            EditMenuOption {
+                label: format!("copy"),
+                edit: |state| {
+                    let frag = state.expr.get_fragment_at_handle(&state.handle)?;
+                    Some(CoreEditorState {
+                        expr: state.expr.clone(),
+                        handle: state.handle.clone(),
+                        clipboard: Some(frag),
+                    })
                 },
-                // TODO: paste
-                // TODO: cut
-                // TODO: delete
-                EditMenuOption {
-                    label: format!("id"),
-                    edit: |state| Some(state.clone()),
-                },
-            ],
-            index: 0,
-        }
+            },
+            // TODO: paste
+            // TODO: cut
+            // TODO: delete
+            EditMenuOption {
+                label: format!("id"),
+                edit: |state| Some(state.clone()),
+            },
+        ]
     }
 
     fn get_diagnostics(_state: EditorState<Self>) -> Vec<Self::Diagnostic> {

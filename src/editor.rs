@@ -1,7 +1,8 @@
 use crate::{expr::*, utility::modulus_i8_to_usize};
 use egui::Frame;
 use lazy_static::lazy_static;
-use std::fmt::Debug;
+use nucleo;
+use std::{fmt::Debug, sync::Arc};
 
 pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
 
@@ -78,16 +79,6 @@ impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
             .field("menu", &self.menu)
             .field("requested_menu_focus", &self.requested_menu_focus)
             .finish()
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> Clone for EditorState<ES> {
-    fn clone(&self) -> Self {
-        Self {
-            core: self.core.clone(),
-            menu: self.menu.clone(),
-            requested_menu_focus: self.requested_menu_focus.clone(),
-        }
     }
 }
 
@@ -168,8 +159,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // open edit menu
         else if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
             println!("[menu] open");
-            let menu = ES::get_edit_menu(self);
-            self.menu = Some(menu);
+            let menu = ES::get_edits(self);
+            self.menu = Some(EditMenu::new(menu));
         }
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
@@ -466,6 +457,7 @@ pub struct EditMenu<ES: EditorSpec + ?Sized> {
     pub query: String,
     pub options: Vec<EditMenuOption<ES>>,
     pub index: i8,
+    pub nucleo: nucleo::Nucleo<String>,
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
@@ -473,31 +465,22 @@ impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
         f.debug_struct("EditMenu")
             .field("query", &self.query)
             .field("options", &self.options)
+            .field("index", &self.index)
+            .field("nucleo", &"nucleo")
             .finish()
     }
 }
 
-impl<ES: EditorSpec + ?Sized> Clone for EditMenu<ES> {
-    fn clone(&self) -> Self {
+impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
+    fn new(options: Vec<EditMenuOption<ES>>) -> Self {
         Self {
-            query: self.query.clone(),
-            options: self.options.clone(),
-            index: self.index.clone(),
-        }
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> Default for EditMenu<ES> {
-    fn default() -> Self {
-        Self {
+            nucleo: nucleo::Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), Some(1), 100),
             query: Default::default(),
-            options: Default::default(),
+            options,
             index: 0,
         }
     }
-}
 
-impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     pub fn index_mod(&self) -> usize {
         modulus_i8_to_usize(self.index, self.options.len())
     }
@@ -540,7 +523,7 @@ pub trait EditorSpec {
 
     fn initial_state() -> EditorState<Self>;
 
-    fn get_edit_menu(state: &EditorState<Self>) -> EditMenu<Self>;
+    fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption<Self>>;
 
     fn get_diagnostics(state: EditorState<Self>) -> Vec<Self::Diagnostic>;
 
