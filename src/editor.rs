@@ -1,4 +1,4 @@
-use crate::{expr::*, utility::modulus_i8_to_usize};
+use crate::expr::*;
 use egui::Frame;
 use lazy_static::lazy_static;
 use nucleo;
@@ -303,7 +303,14 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             if is_handle && let Some(menu) = &mut self.menu {
                 // render edit menu stuff
                 ui.vertical(|ui| {
-                    let menu_index_usize = menu.index_mod();
+                    let snapshot = menu.nucleo.snapshot();
+                    let item_count = snapshot.item_count();
+                    let focus_index = if item_count == 0 {
+                        None
+                    } else {
+                        Some(menu.index.rem_euclid(snapshot.item_count() as i8) as usize)
+                    };
+
                     // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
                     let textedit = egui::TextEdit::singleline(&mut menu.query)
                         .hint_text("query edit menu")
@@ -321,21 +328,25 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         self.requested_menu_focus = true;
                     }
 
-                    for (item_index, item) in menu.nucleo.snapshot().matched_items(..).enumerate() {
-                        let rich_text =
-                            egui::RichText::new(format!("[{item_index}] {}", item.data.label));
-                        if item_index == menu_index_usize {
-                            ui.label(
-                                rich_text
-                                    .color(Self::color_scheme(ui).active_text)
-                                    .background_color(Self::color_scheme(ui).active_background),
-                            );
-                        } else {
-                            ui.label(
-                                rich_text
-                                    .color(Self::color_scheme(ui).normal_text)
-                                    .background_color(Self::color_scheme(ui).normal_background),
-                            );
+                    if let Some(focus_index) = focus_index {
+                        for (item_index, item) in
+                            menu.nucleo.snapshot().matched_items(..).enumerate()
+                        {
+                            let rich_text =
+                                egui::RichText::new(format!("[{item_index}] {}", item.data.label));
+                            if item_index == focus_index {
+                                ui.label(
+                                    rich_text
+                                        .color(Self::color_scheme(ui).active_text)
+                                        .background_color(Self::color_scheme(ui).active_background),
+                                );
+                            } else {
+                                ui.label(
+                                    rich_text
+                                        .color(Self::color_scheme(ui).normal_text)
+                                        .background_color(Self::color_scheme(ui).normal_background),
+                                );
+                            }
                         }
                     }
                 });
@@ -517,12 +528,15 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
         }
     }
 
-    pub fn index_mod(&self) -> usize {
-        modulus_i8_to_usize(self.index, self.all_options.len())
-    }
-
     pub fn focus_option(&self) -> Option<&EditMenuOption<ES>> {
-        self.all_options.get(self.index_mod())
+        let snapshot = self.nucleo.snapshot();
+        let item_count = snapshot.item_count() as i8;
+        if item_count == 0 {
+            return None;
+        }
+        let index = self.index.rem_euclid(item_count) as u32;
+        let item = snapshot.get_item(index)?;
+        Some(item.data)
     }
 
     pub fn update(&mut self) {
