@@ -28,23 +28,33 @@ impl EditorSpec for Ce {
         )
     }
 
-    fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
-        vec![EditMenuOption::new(
-            EditMenuPattern::Static(format!("lambda")),
-            insert_node,
-        )]
+    fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
+        vec![
+            EditMenuOption::new(
+                EditMenuPattern::Dynamic(|query| Some(query.clone())),
+                insert_node,
+            ),
+            EditMenuOption::new(EditMenuPattern::Static(format!("copy")), |_query, state| {
+                let frag = state.expr.get_fragment_at_handle(&state.handle)?;
+                Some(CoreEditorState {
+                    expr: state.expr.clone(),
+                    handle: state.handle.clone(),
+                    clipboard: Some(frag),
+                })
+            }),
+        ]
     }
 
-    fn get_diagnostics(state: EditorState<Self>) -> Vec<Self::Diagnostic> {
-        todo!()
+    fn get_diagnostics(_state: EditorState<Self>) -> Vec<Self::Diagnostic> {
+        Default::default()
     }
 
-    fn is_valid_handle(handle: &Handle, expr: &EditorExpr<Self>) -> bool {
-        todo!()
+    fn is_valid_handle(_handle: &Handle, _expr: &EditorExpr<Self>) -> bool {
+        true
     }
 
     fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response {
-        todo!()
+        ui.label(egui::RichText::new(label.constructor.clone()))
     }
 }
 

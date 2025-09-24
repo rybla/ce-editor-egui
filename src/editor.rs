@@ -312,13 +312,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             if is_handle && let Some(menu) = &mut self.menu {
                 // render edit menu stuff
                 ui.vertical(|ui| {
-                    let snapshot = menu.nucleo.snapshot();
-                    let item_count = snapshot.item_count();
-                    let focus_index = if item_count == 0 {
-                        None
-                    } else {
-                        Some(menu.index.rem_euclid(snapshot.item_count() as i8) as usize)
-                    };
+                    // query
 
                     // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
                     let textedit = egui::TextEdit::singleline(&mut menu.query)
@@ -337,17 +331,39 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         self.requested_menu_focus = true;
                     }
 
+                    // options
+
+                    let snapshot = menu.nucleo.snapshot();
+                    let matched_dynamic_items = menu
+                        .all_options
+                        .iter()
+                        .filter_map(|item| match item.pattern {
+                            EditMenuPattern::Static(_) => None,
+                            EditMenuPattern::Dynamic(f) => Some((f(&menu.query)?, item)),
+                        })
+                        .collect::<Vec<_>>();
+                    let matched_items_count =
+                        snapshot.item_count() + matched_dynamic_items.len() as u32;
+                    let focus_index = if matched_items_count == 0 {
+                        None
+                    } else {
+                        Some(menu.index.rem_euclid(matched_items_count as i8) as usize)
+                    };
+
                     if let Some(focus_index) = focus_index {
-                        for (item_index, item) in
-                            menu.nucleo.snapshot().matched_items(..).enumerate()
-                        {
-                            let rich_text = egui::RichText::new(format!(
-                                "[{item_index}] {}",
-                                // (item.data.pattern)(&menu.query)
-                                match &item.data.pattern {
-                                    EditMenuPattern::Static(s) => s,
-                                }
-                            ));
+                        let matched_static_items = menu
+                            .nucleo
+                            .snapshot()
+                            .matched_items(..)
+                            .map(|item| (item.data.pattern.label(), item.data))
+                            .collect::<Vec<_>>();
+                        // include dynamic before static
+                        let matched_items = matched_dynamic_items
+                            .iter()
+                            .chain(matched_static_items.iter());
+                        for (item_index, (label, _item)) in matched_items.enumerate() {
+                            let rich_text =
+                                egui::RichText::new(format!("[{item_index}] {}", label));
                             if item_index == focus_index {
                                 ui.label(
                                     rich_text
@@ -542,6 +558,7 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
         for option in all_options.iter() {
             injector.push(option.clone(), |x, cols| match &x.pattern {
                 EditMenuPattern::Static(s) => cols[0] = s.clone().into(),
+                EditMenuPattern::Dynamic(_) => {}
             });
         }
         Self {
@@ -610,6 +627,16 @@ impl<ES: EditorSpec + ?Sized> EditMenuOption<ES> {
 #[derive(Debug, Clone)]
 pub enum EditMenuPattern {
     Static(String),
+    Dynamic(fn(&String) -> Option<String>),
+}
+
+impl EditMenuPattern {
+    pub fn label(&self) -> String {
+        match self {
+            EditMenuPattern::Static(s) => s.clone(),
+            EditMenuPattern::Dynamic(_f) => format!("<dynamic>"), // TODO: instead of just this tring, have dynamic patterns also have a static laberl that's shown in this situation
+        }
+    }
 }
 
 pub type Edit<ES> = fn(&String, &CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
