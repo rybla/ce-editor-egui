@@ -320,7 +320,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     // on change, update menu
                     if response.changed() {
                         menu.update();
-                        // response.request_focus();
+                        // response.request_focus(); // turns out i dont think this is necessary
                     }
                     // on appearance, request menu focus
                     if !self.requested_menu_focus {
