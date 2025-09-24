@@ -1447,6 +1447,13 @@ pub struct Expr<L> {
 }
 
 impl<L: Debug + Clone> Expr<L> {
+    pub fn new(label: L, kids: Vec<Self>) -> Self {
+        Expr {
+            label,
+            kids: Span(kids),
+        }
+    }
+
     pub fn height(&self) -> u32 {
         self.kids
             .0

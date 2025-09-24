@@ -64,6 +64,15 @@ impl<ES: EditorSpec + ?Sized> Clone for ExprLabel<ES> {
     }
 }
 
+impl<ES: EditorSpec + ?Sized> ExprLabel<ES> {
+    pub fn new(constructor: ES::Constructor, diagnostic: ES::Diagnostic) -> Self {
+        Self {
+            constructor,
+            diagnostic,
+        }
+    }
+}
+
 pub type EditorExpr<ES> = Expr<ExprLabel<ES>>;
 
 pub struct EditorState<ES: EditorSpec + ?Sized> {
@@ -144,7 +153,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .input(|i| i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::Enter))
             {
                 if let Some(option) = menu.focus_option() {
-                    if let Some(core) = (option.edit)(&self.core) {
+                    if let Some(core) = (option.edit)(&menu.query, &self.core) {
                         self.set_core(core);
                     } else {
                         println!("Edit failed");
@@ -332,8 +341,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         for (item_index, item) in
                             menu.nucleo.snapshot().matched_items(..).enumerate()
                         {
-                            let rich_text =
-                                egui::RichText::new(format!("[{item_index}] {}", item.data.label));
+                            let rich_text = egui::RichText::new(format!(
+                                "[{item_index}] {}",
+                                // (item.data.pattern)(&menu.query)
+                                match &item.data.pattern {
+                                    EditMenuPattern::Static(s) => s,
+                                }
+                            ));
                             if item_index == focus_index {
                                 ui.label(
                                     rich_text
@@ -485,6 +499,16 @@ impl<ES: EditorSpec + ?Sized> Clone for CoreEditorState<ES> {
     }
 }
 
+impl<ES: EditorSpec + ?Sized> CoreEditorState<ES> {
+    pub fn new(expr: EditorExpr<ES>, handle: Handle) -> Self {
+        CoreEditorState {
+            expr,
+            handle,
+            clipboard: Option::None,
+        }
+    }
+}
+
 pub struct EditMenu<ES: EditorSpec + ?Sized> {
     pub query: String,
     pub all_options: Vec<EditMenuOption<ES>>,
@@ -505,7 +529,6 @@ impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
 
 impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     fn new(all_options: Vec<EditMenuOption<ES>>) -> Self {
-        // TODO
         let nucleo = nucleo::Nucleo::new(
             nucleo::Config::DEFAULT,
             Arc::new(|| {
@@ -517,8 +540,9 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
         );
         let injector = nucleo.injector();
         for option in all_options.iter() {
-            println!("[EditMenu.new] inject option with label: {}", option.label);
-            injector.push(option.clone(), |x, cols| cols[0] = x.label.clone().into());
+            injector.push(option.clone(), |x, cols| match &x.pattern {
+                EditMenuPattern::Static(s) => cols[0] = s.clone().into(),
+            });
         }
         Self {
             nucleo,
@@ -555,14 +579,14 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
 }
 
 pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
-    pub label: String,
+    pub pattern: EditMenuPattern,
     pub edit: Edit<ES>,
 }
 
 impl<ES: EditorSpec + ?Sized> Clone for EditMenuOption<ES> {
     fn clone(&self) -> Self {
         Self {
-            label: self.label.clone(),
+            pattern: self.pattern.clone(),
             edit: self.edit.clone(),
         }
     }
@@ -571,13 +595,24 @@ impl<ES: EditorSpec + ?Sized> Clone for EditMenuOption<ES> {
 impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditMenuOption")
-            .field("label", &self.label)
+            .field("label", &self.pattern)
             .field("edit", &format!("<function>"))
             .finish()
     }
 }
 
-pub type Edit<ES> = fn(&CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
+impl<ES: EditorSpec + ?Sized> EditMenuOption<ES> {
+    pub fn new(pattern: EditMenuPattern, edit: Edit<ES>) -> Self {
+        Self { pattern, edit }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum EditMenuPattern {
+    Static(String),
+}
+
+pub type Edit<ES> = fn(&String, &CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
 
 pub trait EditorSpec: 'static {
     type Constructor: Debug + Clone + Sized + PartialEq;
@@ -585,7 +620,7 @@ pub trait EditorSpec: 'static {
 
     fn name() -> String;
 
-    fn initial_state() -> EditorState<Self>;
+    fn initial_state() -> CoreEditorState<Self>;
 
     fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption<Self>>;
 

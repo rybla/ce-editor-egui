@@ -7,7 +7,11 @@ pub struct App<ES: editor::EditorSpec + 'static> {
 impl<ES: editor::EditorSpec> Default for App<ES> {
     fn default() -> Self {
         Self {
-            editor_state: ES::initial_state(),
+            editor_state: editor::EditorState {
+                core: ES::initial_state(),
+                menu: Option::None,
+                requested_menu_focus: false,
+            },
         }
     }
 }

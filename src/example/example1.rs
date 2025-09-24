@@ -6,10 +6,10 @@ type Diagnostic = String;
 pub struct Example1 {}
 
 macro_rules! make_edit_menu_option_that_inserts_frag {
-    ($label: expr, $frag:expr) => {
+    ($label: expr, $frag: expr) => {
         EditMenuOption {
-            label: $label,
-            edit: |state| {
+            pattern: EditMenuPattern::Static($label),
+            edit: |_query, state| {
                 let (expr, handle) = state
                     .expr
                     .clone()
@@ -34,7 +34,7 @@ impl EditorSpec for Example1 {
         format!("example1")
     }
 
-    fn initial_state() -> EditorState<Self> {
+    fn initial_state() -> CoreEditorState<Self> {
         let mut i = 0;
 
         let mut mk_label = || {
@@ -45,11 +45,7 @@ impl EditorSpec for Example1 {
             }
         };
 
-        EditorState::new(
-            // Expr::example(&mut mk_label, 2, 6),
-            Expr::example(&mut mk_label, 2, 3),
-            Default::default(),
-        )
+        CoreEditorState::new(Expr::example(&mut mk_label, 2, 3), Default::default())
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
@@ -65,8 +61,8 @@ impl EditorSpec for Example1 {
                 }]))
             ),
             EditMenuOption {
-                label: format!("copy"),
-                edit: |state| {
+                pattern: EditMenuPattern::Static(format!("copy")),
+                edit: |_query, state| {
                     println!("[edit] copy");
                     let frag = state.expr.get_fragment_at_handle(&state.handle)?;
                     let core = Some(CoreEditorState {
@@ -82,8 +78,8 @@ impl EditorSpec for Example1 {
             // TODO: cut
             // TODO: delete
             EditMenuOption {
-                label: format!("id"),
-                edit: |state| Some(state.clone()),
+                pattern: EditMenuPattern::Static(format!("id")),
+                edit: |_query, state| Some(state.clone()),
             },
         ]
     }
