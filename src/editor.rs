@@ -334,48 +334,84 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     // options
 
                     let snapshot = menu.nucleo.snapshot();
-                    let matched_dynamic_items = menu
-                        .all_options
-                        .iter()
-                        .filter_map(|item| match item.pattern {
-                            EditMenuPattern::Static(_) => None,
-                            EditMenuPattern::Dynamic(f) => Some((f(&menu.query)?, item)),
-                        })
-                        .collect::<Vec<_>>();
-                    let matched_items_count =
-                        snapshot.item_count() + matched_dynamic_items.len() as u32;
-                    let focus_index = if matched_items_count == 0 {
-                        None
-                    } else {
-                        Some(menu.index.rem_euclid(matched_items_count as i8) as usize)
-                    };
 
-                    if let Some(focus_index) = focus_index {
-                        let matched_static_items = menu
-                            .nucleo
-                            .snapshot()
-                            .matched_items(..)
-                            .map(|item| (item.data.pattern.label(), item.data))
-                            .collect::<Vec<_>>();
-                        // include dynamic before static
-                        let matched_items = matched_dynamic_items
+                    if menu.query.is_empty() {
+                        if menu.all_options.is_empty() {
+                            todo!("show some info message");
+                        } else {
+                            let focus_index =
+                                menu.index.rem_euclid(menu.all_options.len() as i8) as usize;
+                            for (item_index, option) in menu.all_options.iter().enumerate() {
+                                let label = option.pattern.label();
+                                let rich_text =
+                                    egui::RichText::new(format!("[{item_index}] {}", label));
+                                if item_index == focus_index {
+                                    ui.label(
+                                        rich_text
+                                            .color(Self::color_scheme(ui).active_text)
+                                            .background_color(
+                                                Self::color_scheme(ui).active_background,
+                                            ),
+                                    );
+                                } else {
+                                    ui.label(
+                                        rich_text
+                                            .color(Self::color_scheme(ui).normal_text)
+                                            .background_color(
+                                                Self::color_scheme(ui).normal_background,
+                                            ),
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        let matched_dynamic_items = menu
+                            .all_options
                             .iter()
-                            .chain(matched_static_items.iter());
-                        for (item_index, (label, _item)) in matched_items.enumerate() {
-                            let rich_text =
-                                egui::RichText::new(format!("[{item_index}] {}", label));
-                            if item_index == focus_index {
-                                ui.label(
-                                    rich_text
-                                        .color(Self::color_scheme(ui).active_text)
-                                        .background_color(Self::color_scheme(ui).active_background),
-                                );
-                            } else {
-                                ui.label(
-                                    rich_text
-                                        .color(Self::color_scheme(ui).normal_text)
-                                        .background_color(Self::color_scheme(ui).normal_background),
-                                );
+                            .filter_map(|item| match item.pattern {
+                                EditMenuPattern::Static(_) => None,
+                                EditMenuPattern::Dynamic(_, f) => Some((f(&menu.query)?, item)),
+                            })
+                            .collect::<Vec<_>>();
+                        let matched_items_count =
+                            snapshot.item_count() + matched_dynamic_items.len() as u32;
+                        let focus_index = if matched_items_count == 0 {
+                            None
+                        } else {
+                            Some(menu.index.rem_euclid(matched_items_count as i8) as usize)
+                        };
+
+                        if let Some(focus_index) = focus_index {
+                            let matched_static_items = menu
+                                .nucleo
+                                .snapshot()
+                                .matched_items(..)
+                                .map(|item| (item.data.pattern.label(), item.data))
+                                .collect::<Vec<_>>();
+                            // include dynamic before static
+                            let matched_items = matched_dynamic_items
+                                .iter()
+                                .chain(matched_static_items.iter());
+                            for (item_index, (label, _item)) in matched_items.enumerate() {
+                                let rich_text =
+                                    egui::RichText::new(format!("[{item_index}] {}", label));
+                                if item_index == focus_index {
+                                    ui.label(
+                                        rich_text
+                                            .color(Self::color_scheme(ui).active_text)
+                                            .background_color(
+                                                Self::color_scheme(ui).active_background,
+                                            ),
+                                    );
+                                } else {
+                                    ui.label(
+                                        rich_text
+                                            .color(Self::color_scheme(ui).normal_text)
+                                            .background_color(
+                                                Self::color_scheme(ui).normal_background,
+                                            ),
+                                    );
+                                }
                             }
                         }
                     }
@@ -556,10 +592,12 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
         );
         let injector = nucleo.injector();
         for option in all_options.iter() {
-            injector.push(option.clone(), |x, cols| match &x.pattern {
-                EditMenuPattern::Static(s) => cols[0] = s.clone().into(),
-                EditMenuPattern::Dynamic(_) => {}
-            });
+            match option.pattern {
+                EditMenuPattern::Static(_) => {
+                    injector.push(option.clone(), |x, cols| cols[0] = x.pattern.label().into());
+                }
+                EditMenuPattern::Dynamic(_, _) => {}
+            };
         }
         Self {
             nucleo,
@@ -627,14 +665,14 @@ impl<ES: EditorSpec + ?Sized> EditMenuOption<ES> {
 #[derive(Debug, Clone)]
 pub enum EditMenuPattern {
     Static(String),
-    Dynamic(fn(&String) -> Option<String>),
+    Dynamic(String, fn(&String) -> Option<String>),
 }
 
 impl EditMenuPattern {
     pub fn label(&self) -> String {
         match self {
             EditMenuPattern::Static(s) => s.clone(),
-            EditMenuPattern::Dynamic(_f) => format!("<dynamic>"), // TODO: instead of just this tring, have dynamic patterns also have a static laberl that's shown in this situation
+            EditMenuPattern::Dynamic(s, _f) => s.clone(), // TODO: instead of just this tring, have dynamic patterns also have a static laberl that's shown in this situation
         }
     }
 }

@@ -19,7 +19,7 @@ impl EditorSpec for Ce {
         CoreEditorState::new(
             Expr::new(
                 ExprLabel {
-                    constructor: format!("label"),
+                    constructor: format!("root"),
                     diagnostic: Default::default(),
                 },
                 Default::default(),
@@ -31,7 +31,9 @@ impl EditorSpec for Ce {
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
         vec![
             EditMenuOption::new(
-                EditMenuPattern::Dynamic(|query| Some(query.clone())),
+                EditMenuPattern::Dynamic(format!("<name> (constructor)"), |query| {
+                    Some(format!("{} (constructor)", query))
+                }),
                 insert_node,
             ),
             EditMenuOption::new(EditMenuPattern::Static(format!("copy")), |_query, state| {
