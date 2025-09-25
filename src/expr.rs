@@ -748,46 +748,6 @@ pub enum MoveError {
 }
 
 impl Handle {
-    // pub fn move_up<L: Debug + Clone>(&mut self, expr: &Expr<L>) -> bool {
-    //     match self {
-    //         Handle::Point(Point { path, index: _ }) => {
-    //             if let Some(step) = path.pop() {
-    //                 *self = Handle::Span(SpanHandleAndFocus {
-    //                     span_handle: SpanHandle {
-    //                         path: path.clone(),
-    //                         left: step.left_index(),
-    //                         right: step.right_index(),
-    //                     },
-    //                     focus: SpanFocus::Left,
-    //                 });
-    //                 true
-    //             } else {
-    //                 false
-    //             }
-    //         }
-    //         Handle::Span(handle) => {
-    //             let kid = expr.at_expr(&handle.span_handle.path).1;
-    //             let (leftmost, rightmost) = kid.kids.extreme_indexes();
-    //             if handle.span_handle.left == leftmost && handle.span_handle.right == rightmost {
-    //                 if let Some(step) = handle.span_handle.path.pop() {
-    //                     handle.span_handle.left = step.left_index();
-    //                     handle.span_handle.right = step.right_index();
-    //                     true
-    //                 } else {
-    //                     false
-    //                 }
-    //             } else {
-    //                 handle.span_handle.left = leftmost;
-    //                 handle.span_handle.right = rightmost;
-    //                 true
-    //             }
-    //         }
-    //         // NOTE: I'm not sure exactly what should happen when you move up at
-    //         // a zipper, but by default for now, nothing happens.
-    //         Handle::Zipper(_) => false,
-    //     }
-    // }
-
     pub fn move_up<L: Debug + Clone>(&mut self, expr: &Expr<L>) -> MoveStatus {
         match self {
             Handle::Point(handle) => {
