@@ -109,7 +109,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.menu = None;
             self.requested_menu_focus = false;
         } else {
-            self.core.handle.escape();
+            self.core
+                .handle
+                .escape()
+                .unwrap_or_else(|err| println!("Failed to move: {err:?}"));
         }
     }
 
@@ -208,8 +211,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         {
             let mut target = self.core.handle.focus_point();
             loop {
-                let moved = target.move_dir(dir, &self.core.expr);
-                if !moved {
+                let move_status = target.move_dir(dir, &self.core.expr);
+                if !move_status.is_ok() {
                     println!("[select] bailed since a move failed");
                     break;
                 }
@@ -226,8 +229,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if let Some(dir) = match_input_move_dir(ctx) {
             let mut handle = self.core.handle.clone();
             loop {
-                let moved = handle.move_dir(dir, &self.core.expr);
-                if !moved {
+                let move_status = handle.move_dir(dir, &self.core.expr);
+                if !move_status.is_ok() {
                     println!("[move] bailed since a move failed");
                     break;
                 }
@@ -240,7 +243,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // move up
         else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            self.core.handle.move_up(&self.core.expr);
+            self.core
+                .handle
+                .move_up(&self.core.expr)
+                .unwrap_or_else(|err| println!("Failed to move up: {err:?}"));
         }
     }
 
@@ -334,9 +340,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                     if menu.query.is_empty() {
                         if menu.all_options.is_empty() {
-                            let rich_text = egui::RichText::new(format!(
-                                "no edit options available here!"
-                            ));
+                            let rich_text =
+                                egui::RichText::new(format!("no edit options available here!"));
                             ui.label(
                                 rich_text
                                     .color(Self::color_scheme(ui).active_text)

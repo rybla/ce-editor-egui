@@ -733,57 +733,124 @@ impl ZipperHandleAndFocus {
     }
 }
 
+// #[derive(Debug, Clone)]
+// pub struct MoveStatus {
+//     pub success: bool,
+// }
+
+pub type MoveStatus = Result<(), MoveError>;
+
+#[derive(Debug, Clone)]
+pub enum MoveError {
+    Boundary,
+    Undefined,
+    Invalid,
+}
+
 impl Handle {
-    pub fn move_up<L: Debug + Clone>(&mut self, expr: &Expr<L>) -> bool {
+    // pub fn move_up<L: Debug + Clone>(&mut self, expr: &Expr<L>) -> bool {
+    //     match self {
+    //         Handle::Point(Point { path, index: _ }) => {
+    //             if let Some(step) = path.pop() {
+    //                 *self = Handle::Span(SpanHandleAndFocus {
+    //                     span_handle: SpanHandle {
+    //                         path: path.clone(),
+    //                         left: step.left_index(),
+    //                         right: step.right_index(),
+    //                     },
+    //                     focus: SpanFocus::Left,
+    //                 });
+    //                 true
+    //             } else {
+    //                 false
+    //             }
+    //         }
+    //         Handle::Span(handle) => {
+    //             let kid = expr.at_expr(&handle.span_handle.path).1;
+    //             let (leftmost, rightmost) = kid.kids.extreme_indexes();
+    //             if handle.span_handle.left == leftmost && handle.span_handle.right == rightmost {
+    //                 if let Some(step) = handle.span_handle.path.pop() {
+    //                     handle.span_handle.left = step.left_index();
+    //                     handle.span_handle.right = step.right_index();
+    //                     true
+    //                 } else {
+    //                     false
+    //                 }
+    //             } else {
+    //                 handle.span_handle.left = leftmost;
+    //                 handle.span_handle.right = rightmost;
+    //                 true
+    //             }
+    //         }
+    //         // NOTE: I'm not sure exactly what should happen when you move up at
+    //         // a zipper, but by default for now, nothing happens.
+    //         Handle::Zipper(_) => false,
+    //     }
+    // }
+
+    /// Returns a boolean indicating whether or not the move was successful.
+    pub fn move_up<L: Debug + Clone>(&mut self, expr: &Expr<L>) -> MoveStatus {
         match self {
-            Handle::Point(Point { path, index: _ }) => {
-                if let Some(step) = path.pop() {
+            Handle::Point(handle) => {
+                if let Some(step) = handle.path.pop() {
                     *self = Handle::Span(SpanHandleAndFocus {
                         span_handle: SpanHandle {
-                            path: path.clone(),
+                            path: handle.path.clone(),
                             left: step.left_index(),
                             right: step.right_index(),
                         },
                         focus: SpanFocus::Left,
                     });
-                    true
+                    MoveStatus::Ok(())
                 } else {
-                    false
+                    MoveStatus::Err(MoveError::Boundary)
                 }
             }
             Handle::Span(handle) => {
                 let kid = expr.at_expr(&handle.span_handle.path).1;
                 let (leftmost, rightmost) = kid.kids.extreme_indexes();
-                if handle.span_handle.left == leftmost && handle.span_handle.right == rightmost {
-                    if let Some(step) = handle.span_handle.path.pop() {
-                        handle.span_handle.left = step.left_index();
-                        handle.span_handle.right = step.right_index();
-                        true
-                    } else {
-                        false
-                    }
-                } else {
+                if handle.span_handle.left.is_left_of_index(&leftmost)
+                    || handle.span_handle.right.is_right_of_index(&rightmost)
+                {
+                    // expand the span to stretch between the leftmost and rightmost indices
                     handle.span_handle.left = leftmost;
                     handle.span_handle.right = rightmost;
-                    true
+                    MoveStatus::Ok(())
+                } else {
+                    // span is already stretching between the leftmost and rightmost indices
+                    if let Some(step) = handle.span_handle.path.pop() {
+                        // move span to be around parent
+                        handle.span_handle.left = step.left_index();
+                        handle.span_handle.right = step.right_index();
+                        MoveStatus::Ok(())
+                    } else {
+                        // alredy stretching around entire program
+                        MoveStatus::Err(MoveError::Boundary)
+                    }
                 }
             }
             // NOTE: I'm not sure exactly what should happen when you move up at
             // a zipper, but by default for now, nothing happens.
-            Handle::Zipper(_) => false,
+            Handle::Zipper(_) => MoveStatus::Err(MoveError::Undefined),
         }
     }
 
-    pub fn escape(&mut self) {
+    pub fn escape(&mut self) -> MoveStatus {
         match self {
-            Handle::Point(_point) => (),
-            Handle::Span(handle) => *self = Handle::Point(handle.focus_point()),
-            Handle::Zipper(handle) => *self = Handle::Point(handle.focus_point()),
+            Handle::Point(_point) => MoveStatus::Err(MoveError::Invalid),
+            Handle::Span(handle) => {
+                *self = Handle::Point(handle.focus_point());
+                MoveStatus::Ok(())
+            }
+            Handle::Zipper(handle) => {
+                *self = Handle::Point(handle.focus_point());
+                MoveStatus::Ok(())
+            }
         }
     }
 
     /// Returns a Boolean indicating whether the move hit a boundary.
-    pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
+    pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> MoveStatus {
         match self {
             Handle::Point(handle) => handle.move_dir(dir, expr),
             // A little bit weirdly, my intuition indicates that in a span, when
@@ -798,11 +865,11 @@ impl Handle {
                     MoveDir::Prev => *self = Handle::Point(handle.span_handle.left_point()),
                     MoveDir::Next => *self = Handle::Point(handle.span_handle.right_point()),
                 }
-                true
+                MoveStatus::Ok(())
             }
             Handle::Zipper(handle) => {
                 *self = Handle::Point(handle.focus_point());
-                true
+                MoveStatus::Ok(())
             }
         }
     }
@@ -866,8 +933,8 @@ impl Handle {
         match self {
             Handle::Point(handle) => {
                 let mut target = handle.clone();
-                let moved = target.move_dir(dir, expr);
-                if moved {
+                let move_status = target.move_dir(dir, expr);
+                if move_status.is_ok() {
                     match handle.select_to(&target, expr) {
                         Some(handle) => {
                             *self = handle;
@@ -881,8 +948,8 @@ impl Handle {
             }
             Handle::Span(handle) => {
                 let mut target = handle.focus_point();
-                let moved = target.move_dir(dir, expr);
-                if moved {
+                let move_status = target.move_dir(dir, expr);
+                if move_status.is_ok() {
                     match handle.select_to(&target, expr) {
                         Some(handle) => {
                             *self = handle;
@@ -896,8 +963,8 @@ impl Handle {
             }
             Handle::Zipper(handle) => {
                 let mut target = handle.focus_point();
-                let moved = target.move_dir(dir, expr);
-                if moved {
+                let move_status = target.move_dir(dir, expr);
+                if move_status.is_ok() {
                     match handle.select_to(&target, expr) {
                         Some(handle) => {
                             *self = handle;
@@ -932,7 +999,7 @@ impl Point {
     }
 
     /// Return a boolean indicating if the move hit a boundary.
-    pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> bool {
+    pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> MoveStatus {
         let subexpr = expr.at_expr(&self.path).1;
         let (leftmost, rightmost) = subexpr.kids.extreme_indexes();
         let is_at_local_boundary = match dir {
@@ -945,9 +1012,9 @@ impl Point {
                     MoveDir::Prev => step.left_index(),
                     MoveDir::Next => step.right_index(),
                 };
-                return true;
+                return MoveStatus::Ok(());
             }
-            false
+            MoveStatus::Err(MoveError::Boundary)
         } else {
             let step = match dir {
                 MoveDir::Prev => self.index.left_step(),
@@ -963,7 +1030,7 @@ impl Point {
             };
             self.path.push(step);
             self.index = kid_boundary;
-            true
+            MoveStatus::Ok(())
         }
     }
 
