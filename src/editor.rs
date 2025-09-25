@@ -129,7 +129,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     pub fn set_handle_unsafe(&mut self, handle: Handle) {
         self.core.handle = handle;
         self.menu = Option::None;
-        self.requested_menu_focus = false;
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
@@ -323,12 +322,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     // on change, update menu
                     if response.changed() {
                         menu.update();
-                        // response.request_focus(); // turns out i dont think this is necessary
                     }
-                    // on appearance, request menu focus
-                    if !self.requested_menu_focus {
+                    // when the menu is open, the query should always have focus
+                    if !response.has_focus() {
                         response.request_focus();
-                        self.requested_menu_focus = true;
                     }
 
                     // options
