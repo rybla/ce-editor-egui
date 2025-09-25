@@ -158,7 +158,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         println!("Edit failed");
                     }
                 } else {
-                    println!("No menu option available");
+                    println!("There are no edit options available")
                 }
             }
             // move menu option
@@ -334,7 +334,14 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                     if menu.query.is_empty() {
                         if menu.all_options.is_empty() {
-                            todo!("show some info message");
+                            let rich_text = egui::RichText::new(format!(
+                                "no edit options available here!"
+                            ));
+                            ui.label(
+                                rich_text
+                                    .color(Self::color_scheme(ui).active_text)
+                                    .background_color(Self::color_scheme(ui).active_background),
+                            );
                         } else {
                             let focus_index =
                                 menu.index.rem_euclid(menu.all_options.len() as i8) as usize;
