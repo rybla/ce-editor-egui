@@ -788,7 +788,6 @@ impl Handle {
     //     }
     // }
 
-    /// Returns a boolean indicating whether or not the move was successful.
     pub fn move_up<L: Debug + Clone>(&mut self, expr: &Expr<L>) -> MoveStatus {
         match self {
             Handle::Point(handle) => {
@@ -849,7 +848,6 @@ impl Handle {
         }
     }
 
-    /// Returns a Boolean indicating whether the move hit a boundary.
     pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> MoveStatus {
         match self {
             Handle::Point(handle) => handle.move_dir(dir, expr),
@@ -998,7 +996,6 @@ impl Point {
         Point { path, index }
     }
 
-    /// Return a boolean indicating if the move hit a boundary.
     pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> MoveStatus {
         let subexpr = expr.at_expr(&self.path).1;
         let (leftmost, rightmost) = subexpr.kids.extreme_indexes();
