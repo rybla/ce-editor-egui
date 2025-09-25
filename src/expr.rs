@@ -951,7 +951,31 @@ pub struct Point {
     pub index: Index,
 }
 
+pub struct PointRef<'a> {
+    pub path: &'a Path,
+    pub index: &'a Index,
+}
+
+pub struct PointMutRef<'a> {
+    pub path: &'a mut Path,
+    pub index: &'a mut Index,
+}
+
 impl Point {
+    pub fn to_ref<'a>(&'a self) -> PointRef<'a> {
+        PointRef {
+            path: &self.path,
+            index: &self.index,
+        }
+    }
+
+    pub fn to_mut_ref<'a>(&'a mut self) -> PointMutRef<'a> {
+        PointMutRef {
+            path: &mut self.path,
+            index: &mut self.index,
+        }
+    }
+
     pub fn new(path: Path, index: Index) -> Self {
         Point { path, index }
     }
