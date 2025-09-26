@@ -209,7 +209,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx.input(|i| i.modifiers.shift)
             && let Some(dir) = match_input_move_dir(ctx)
         {
-            let mut target: Point = self.core.handle.focus_point().from_ref();
+            let mut target: Point = self.core.handle.focus_point().cloned();
             loop {
                 let move_status = target.move_dir(dir, &self.core.expr);
                 if !move_status.is_ok() {

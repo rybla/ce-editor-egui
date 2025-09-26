@@ -230,11 +230,8 @@ impl ZipperHandleAndFocus {
         println!("self = {self:#?}");
         println!("target = {target:#?}");
 
-        if let Some(target_suffix) = target
-            .path
-            .0
-            .strip_prefix(self.zipper_handle.inner_path().0.as_slice())
-        {
+        let prefix = self.zipper_handle.inner_path().cloned();
+        if let Some(target_suffix) = target.path.0.strip_prefix(prefix.0.as_slice()) {
             println!("zone: A, B");
             match target_suffix.is_empty() {
                 false => {
@@ -262,7 +259,7 @@ impl ZipperHandleAndFocus {
                                 outer_left: self.zipper_handle.outer_left.clone(),
                                 outer_right: self.zipper_handle.outer_right.clone(),
                                 middle_path: Path(
-                                    [&self.zipper_handle.inner_path().0.as_slice(), target_suffix]
+                                    [&self.zipper_handle.inner_path().cloned().0, target_suffix]
                                         .concat(),
                                 ),
                                 inner_left: subexpr.leftmost_index(),
@@ -272,7 +269,7 @@ impl ZipperHandleAndFocus {
                         })),
                         ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
                             zipper_handle: ZipperHandle {
-                                outer_path: self.zipper_handle.inner_path().from_ref(),
+                                outer_path: self.zipper_handle.inner_path().cloned(),
                                 outer_left: self.zipper_handle.inner_left.clone(),
                                 outer_right: self.zipper_handle.inner_right.clone(),
                                 middle_path: Path(target_suffix.to_vec()),
@@ -283,7 +280,7 @@ impl ZipperHandleAndFocus {
                         })),
                         ZipperFocus::OuterRight => Some(Handle::Zipper(ZipperHandleAndFocus {
                             zipper_handle: ZipperHandle {
-                                outer_path: self.zipper_handle.inner_path().from_ref(),
+                                outer_path: self.zipper_handle.inner_path().cloned(),
                                 outer_left: self.zipper_handle.inner_left.clone(),
                                 outer_right: self.zipper_handle.inner_right.clone(),
                                 middle_path: Path(target_suffix.to_vec()),
@@ -326,7 +323,7 @@ impl ZipperHandleAndFocus {
                             })),
                             ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
-                                    path: self.zipper_handle.inner_path().from_ref(),
+                                    path: self.zipper_handle.inner_path().cloned(),
                                     left: target.index.clone(),
                                     right: self.zipper_handle.inner_left.clone(),
                                 },
@@ -334,7 +331,7 @@ impl ZipperHandleAndFocus {
                             })),
                             ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
-                                    path: self.zipper_handle.inner_path().from_ref(),
+                                    path: self.zipper_handle.inner_path().cloned(),
                                     left: self.zipper_handle.inner_right.clone(),
                                     right: target.index.clone(),
                                 },
@@ -371,7 +368,7 @@ impl ZipperHandleAndFocus {
                             })),
                             ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
-                                    path: self.zipper_handle.inner_path().from_ref(),
+                                    path: self.zipper_handle.inner_path().cloned(),
                                     left: self.zipper_handle.inner_left.clone(),
                                     right: target.index.clone(),
                                 },
@@ -379,7 +376,7 @@ impl ZipperHandleAndFocus {
                             })),
                             ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
-                                    path: self.zipper_handle.inner_path().from_ref(),
+                                    path: self.zipper_handle.inner_path().cloned(),
                                     left: target.index.clone(),
                                     right: self.zipper_handle.inner_right.clone(),
                                 },
@@ -414,7 +411,7 @@ impl ZipperHandleAndFocus {
                             })),
                             ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
-                                    path: self.zipper_handle.inner_path().from_ref(),
+                                    path: self.zipper_handle.inner_path().cloned(),
                                     left: target.index.clone(),
                                     right: self.zipper_handle.inner_left.clone(),
                                 },
@@ -422,7 +419,7 @@ impl ZipperHandleAndFocus {
                             })),
                             ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
-                                    path: self.zipper_handle.inner_path().from_ref(),
+                                    path: self.zipper_handle.inner_path().cloned(),
                                     left: self.zipper_handle.inner_right.clone(),
                                     right: target.index.clone(),
                                 },
@@ -798,11 +795,11 @@ impl Handle {
         match self {
             Handle::Point(_point) => MoveStatus::Err(MoveError::Invalid),
             Handle::Span(handle) => {
-                *self = Handle::Point(handle.focus_point().from_ref());
+                *self = Handle::Point(handle.focus_point().cloned());
                 MoveStatus::Ok(())
             }
             Handle::Zipper(handle) => {
-                *self = Handle::Point(handle.focus_point().from_ref());
+                *self = Handle::Point(handle.focus_point().cloned());
                 MoveStatus::Ok(())
             }
         }
@@ -821,16 +818,16 @@ impl Handle {
             Handle::Span(handle) => {
                 match dir {
                     MoveDir::Prev => {
-                        *self = Handle::Point(handle.span_handle.left_point().from_ref())
+                        *self = Handle::Point(handle.span_handle.left_point().cloned())
                     }
                     MoveDir::Next => {
-                        *self = Handle::Point(handle.span_handle.right_point().from_ref())
+                        *self = Handle::Point(handle.span_handle.right_point().cloned())
                     }
                 }
                 MoveStatus::Ok(())
             }
             Handle::Zipper(handle) => {
-                *self = Handle::Point(handle.focus_point().from_ref());
+                *self = Handle::Point(handle.focus_point().cloned());
                 MoveStatus::Ok(())
             }
         }
@@ -873,7 +870,7 @@ impl Handle {
             Handle::Point(_handle) => {}
             Handle::Span(handle) => {
                 if handle.span_handle.left == handle.span_handle.right {
-                    *self = Handle::Point(handle.focus_point().from_ref())
+                    *self = Handle::Point(handle.focus_point().cloned())
                 }
             }
             // We could have considered handling the case when the middle span
@@ -909,7 +906,7 @@ impl Handle {
                 }
             }
             Handle::Span(handle) => {
-                let mut target: Point = handle.focus_point().from_ref();
+                let mut target: Point = handle.focus_point().cloned();
                 let move_status = target.move_dir(dir, expr);
                 if move_status.is_ok() {
                     match handle.select_to(&target, expr) {
@@ -924,7 +921,7 @@ impl Handle {
                 }
             }
             Handle::Zipper(handle) => {
-                let mut target: Point = handle.focus_point().from_ref();
+                let mut target: Point = handle.focus_point().cloned();
                 let move_status = target.move_dir(dir, expr);
                 if move_status.is_ok() {
                     match handle.select_to(&target, expr) {
@@ -963,9 +960,9 @@ pub struct PointRef<'a> {
 }
 
 impl<'a> PointRef<'a> {
-    pub fn from_ref(self) -> Point {
+    pub fn cloned(self) -> Point {
         Point {
-            path: self.path.from_ref(),
+            path: self.path.cloned(),
             index: self.index.clone(),
         }
     }
@@ -1137,7 +1134,7 @@ pub struct Path(pub Vec<Step>);
 
 impl Path {
     pub fn to_ref<'a>(&'a self) -> PathRef<'a> {
-        PathRef(self.0.iter())
+        PathRef::Single(&self)
     }
 
     pub fn pop(&mut self) -> Option<Step> {
@@ -1154,21 +1151,48 @@ impl Path {
 }
 
 #[derive(Debug, Clone)]
-pub struct PathRef<'a>(core::slice::Iter<'a, Step>);
+pub enum PathRef<'a> {
+    Single(&'a Path),
+    Concat(Box<PathRef<'a>>, Box<PathRef<'a>>),
+}
 
 impl<'a> PartialEq for PathRef<'a> {
     fn eq(&self, other: &Self) -> bool {
-        self.0.as_slice() == other.0.as_slice()
+        self.to_vec().eq(&other.to_vec())
     }
 }
 
 impl<'a> PathRef<'a> {
-    pub fn from_ref(self) -> Path {
-        Path(())
+    fn to_vec_helper(&self, steps: &mut Vec<&'a Step>) {
+        match self {
+            PathRef::Single(path) => {
+                for step in path.0.iter() {
+                    steps.push(step);
+                }
+            }
+            PathRef::Concat(left, right) => {
+                left.to_vec_helper(steps);
+                right.to_vec_helper(steps);
+            }
+        }
+    }
+
+    pub fn to_vec(&self) -> Vec<&'a Step> {
+        let mut steps: Vec<&'a Step> = vec![];
+        self.to_vec_helper(&mut steps);
+        steps
+    }
+
+    pub fn cloned(self) -> Path {
+        let mut steps: Vec<Step> = vec![];
+        for step in self.to_vec() {
+            steps.push(step.clone());
+        }
+        Path(steps)
     }
 
     pub fn chain(self, other: PathRef<'a>) -> PathRef<'a> {
-        PathRef(self.0.chain(other.0))
+        PathRef::Concat(Box::new(self), Box::new(other))
     }
 }
 
@@ -1407,7 +1431,7 @@ pub struct ZipperHandle {
 
 impl ZipperHandle {
     pub fn inner_path<'a>(&'a self) -> PathRef<'a> {
-        Path([self.outer_path.0.clone(), self.middle_path.0.clone()].concat())
+        self.outer_path.to_ref().chain(self.middle_path.to_ref())
     }
 
     pub fn outer_left_point<'a>(&'a self) -> PointRef<'a> {
@@ -1457,7 +1481,7 @@ impl ZipperHandle {
 
     pub fn inner_span_handle(&self) -> SpanHandle {
         SpanHandle {
-            path: self.inner_path().from_ref(),
+            path: self.inner_path().cloned(),
             left: self.inner_left.clone(),
             right: self.inner_right.clone(),
         }
