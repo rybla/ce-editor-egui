@@ -99,7 +99,7 @@ impl EditorSpec for Example1 {
             Handle::Zipper(handle) => {
                 !handle.zipper_handle.middle_path.0.is_empty()
                     && !expr
-                        .at_expr(&handle.zipper_handle.inner_path())
+                        .at_expr(&handle.zipper_handle.inner_path().from_ref())
                         .1
                         .kids
                         .0

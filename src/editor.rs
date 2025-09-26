@@ -209,7 +209,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx.input(|i| i.modifiers.shift)
             && let Some(dir) = match_input_move_dir(ctx)
         {
-            let mut target = self.core.handle.focus_point();
+            let mut target: Point = self.core.handle.focus_point().from_ref();
             loop {
                 let move_status = target.move_dir(dir, &self.core.expr);
                 if !move_status.is_ok() {
@@ -262,19 +262,21 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render_point(&mut self, ui: &mut egui::Ui, point: &Point) {
-        let is_handle = point == &self.core.handle.focus_point();
+        let is_handle = point.to_ref() == self.core.handle.focus_point();
 
         let is_at_handle = match &self.core.handle {
             Handle::Point(handle) => point == handle,
             Handle::Span(handle) => {
-                *point == handle.span_handle.left_point()
-                    || *point == handle.span_handle.right_point()
+                let point_ref = point.to_ref();
+                point_ref == handle.span_handle.left_point()
+                    || point_ref == handle.span_handle.right_point()
             }
             Handle::Zipper(handle) => {
-                *point == handle.zipper_handle.outer_left_point()
-                    || *point == handle.zipper_handle.outer_right_point()
-                    || *point == handle.zipper_handle.inner_left_point()
-                    || *point == handle.zipper_handle.inner_right_point()
+                let point_ref = point.to_ref();
+                point_ref == handle.zipper_handle.outer_left_point()
+                    || point_ref == handle.zipper_handle.outer_right_point()
+                    || point_ref == handle.zipper_handle.inner_left_point()
+                    || point_ref == handle.zipper_handle.inner_right_point()
             }
         };
 
