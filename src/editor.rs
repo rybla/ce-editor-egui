@@ -194,7 +194,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     .core
                     .expr
                     .clone()
-                    .insert_fragment_at_handle(frag.clone(), self.core.handle.clone());
+                    .insert_fragment_at_handle_old(frag.clone(), self.core.handle.clone());
                 self.core.handle = handle;
                 self.core.expr = expr;
             }

@@ -13,7 +13,7 @@ macro_rules! make_edit_menu_option_that_inserts_frag {
                 let (expr, handle) = state
                     .expr
                     .clone()
-                    .insert_fragment_at_handle($frag, state.handle.clone());
+                    .insert_fragment_at_handle_old($frag, state.handle.clone());
                 Some(CoreEditorState {
                     expr,
                     handle,

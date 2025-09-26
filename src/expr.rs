@@ -2001,7 +2001,15 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
-    pub fn insert_zipper_at_handle(self, zipper: Zipper<L>, handle: Handle) -> (Expr<L>, Handle) {
+    pub fn insert_zipper_at_handle(&mut self, handle: &mut Handle, zipper: Zipper<L>) {
+        todo!()
+    }
+
+    pub fn insert_zipper_at_handle_old(
+        self,
+        zipper: Zipper<L>,
+        handle: Handle,
+    ) -> (Expr<L>, Handle) {
         match handle {
             Handle::Point(point) => {
                 let (handle, expr) = self.insert_zipper_at_point(zipper, point);
@@ -2018,10 +2026,21 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
-    pub fn insert_fragment_at_handle(self, frag: Fragment<L>, handle: Handle) -> (Expr<L>, Handle) {
+    pub fn insert_fragment_at_handle_old(
+        self,
+        frag: Fragment<L>,
+        handle: Handle,
+    ) -> (Expr<L>, Handle) {
         match frag {
             Fragment::Span(span) => self.insert_span_at_handle_old(span, handle),
-            Fragment::Zipper(zipper) => self.insert_zipper_at_handle(zipper, handle),
+            Fragment::Zipper(zipper) => self.insert_zipper_at_handle_old(zipper, handle),
+        }
+    }
+
+    pub fn insert_fragment_at_handle(&mut self, handle: &mut Handle, frag: Fragment<L>) {
+        match frag {
+            Fragment::Span(span) => self.insert_span_at_handle(handle, span),
+            Fragment::Zipper(zipper) => self.insert_zipper_at_handle(handle, zipper),
         }
     }
 
