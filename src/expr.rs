@@ -59,7 +59,7 @@ impl SpanHandleAndFocus {
                                     outer_left: self.span_handle.left.clone(),
                                     outer_right: self.span_handle.right.clone(),
                                     middle_path: Path(target_suffix.to_vec()),
-                                    inner_left: target.index.clone(),
+                                    inner_left: target.index,
                                     inner_right: subexpr.rightmost_index(),
                                 },
                                 focus: ZipperFocus::InnerLeft,
@@ -71,7 +71,7 @@ impl SpanHandleAndFocus {
                                     outer_right: self.span_handle.right.clone(),
                                     middle_path: Path(target_suffix.to_vec()),
                                     inner_left: subexpr.leftmost_index(),
-                                    inner_right: target.index.clone(),
+                                    inner_right: target.index,
                                 },
                                 focus: ZipperFocus::InnerLeft,
                             })),
@@ -88,7 +88,7 @@ impl SpanHandleAndFocus {
                             SpanFocus::Left => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.span_handle.path.clone(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.span_handle.right.clone(),
                                 },
                                 focus: SpanFocus::Left,
@@ -96,7 +96,7 @@ impl SpanHandleAndFocus {
                             SpanFocus::Right => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.span_handle.path.clone(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.span_handle.left.clone(),
                                 },
                                 focus: SpanFocus::Left,
@@ -108,7 +108,7 @@ impl SpanHandleAndFocus {
                             SpanFocus::Left => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.span_handle.path.clone(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.span_handle.right.clone(),
                                 },
                                 focus: SpanFocus::Left,
@@ -117,7 +117,7 @@ impl SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.span_handle.path.clone(),
                                     left: self.span_handle.left.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Right,
                             })),
@@ -129,7 +129,7 @@ impl SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.span_handle.path.clone(),
                                     left: self.span_handle.right.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Right,
                             })),
@@ -137,7 +137,7 @@ impl SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.span_handle.path.clone(),
                                     left: self.span_handle.left.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Right,
                             })),
@@ -161,7 +161,7 @@ impl SpanHandleAndFocus {
                     SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
                         zipper_handle: ZipperHandle {
                             outer_path: target.path.clone(),
-                            outer_left: target.index.clone(),
+                            outer_left: target.index,
                             outer_right: self_prefix_first_step.right_index(),
                             middle_path: Path(self_prefix.to_vec()),
                             inner_left: self.span_handle.left.clone(),
@@ -174,7 +174,7 @@ impl SpanHandleAndFocus {
                         Some(Handle::Zipper(ZipperHandleAndFocus {
                             zipper_handle: ZipperHandle {
                                 outer_path: target.path.clone(),
-                                outer_left: target.index.clone(),
+                                outer_left: target.index,
                                 outer_right: self_prefix_first_step.right_index(),
                                 middle_path: Path(self_prefix.to_vec()),
                                 inner_left: self.span_handle.left.clone(),
@@ -191,7 +191,7 @@ impl SpanHandleAndFocus {
                         zipper_handle: ZipperHandle {
                             outer_path: target.path.clone(),
                             outer_left: self_prefix_first_step.left_index(),
-                            outer_right: target.index.clone(),
+                            outer_right: target.index,
                             middle_path: Path(self_prefix.to_vec()),
                             inner_left: self.span_handle.left.clone(),
                             inner_right: self.span_handle.right.clone(),
@@ -204,7 +204,7 @@ impl SpanHandleAndFocus {
                             zipper_handle: ZipperHandle {
                                 outer_path: target.path.clone(),
                                 outer_left: self_prefix_first_step.left_index(),
-                                outer_right: target.index.clone(),
+                                outer_right: target.index,
                                 middle_path: Path(self_prefix.to_vec()),
                                 inner_left: self.span_handle.left.clone(),
                                 inner_right: subexpr.rightmost_index(),
@@ -269,7 +269,7 @@ impl ZipperHandleAndFocus {
                                     [&self.zipper_handle.middle_path.0.as_slice(), target_suffix]
                                         .concat(),
                                 ),
-                                inner_left: target.index.clone(),
+                                inner_left: target.index,
                                 inner_right: subexpr.rightmost_index(),
                             },
                             focus: ZipperFocus::InnerLeft,
@@ -284,7 +284,7 @@ impl ZipperHandleAndFocus {
                                         .concat(),
                                 ),
                                 inner_left: subexpr.leftmost_index(),
-                                inner_right: target.index.clone(),
+                                inner_right: target.index,
                             },
                             focus: ZipperFocus::InnerLeft,
                         })),
@@ -294,7 +294,7 @@ impl ZipperHandleAndFocus {
                                 outer_left: self.zipper_handle.inner_left.clone(),
                                 outer_right: self.zipper_handle.inner_right.clone(),
                                 middle_path: Path(target_suffix.to_vec()),
-                                inner_left: target.index.clone(),
+                                inner_left: target.index,
                                 inner_right: subexpr.rightmost_index(),
                             },
                             focus: ZipperFocus::InnerLeft,
@@ -306,7 +306,7 @@ impl ZipperHandleAndFocus {
                                 outer_right: self.zipper_handle.inner_right.clone(),
                                 middle_path: Path(target_suffix.to_vec()),
                                 inner_left: subexpr.leftmost_index(),
-                                inner_right: target.index.clone(),
+                                inner_right: target.index,
                             },
                             focus: ZipperFocus::InnerRight,
                         })),
@@ -323,7 +323,7 @@ impl ZipperHandleAndFocus {
                                     outer_left: self.zipper_handle.outer_left.clone(),
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
-                                    inner_left: target.index.clone(),
+                                    inner_left: target.index,
                                     inner_right: self.zipper_handle.inner_right.clone(),
                                 },
                                 focus: ZipperFocus::InnerLeft,
@@ -335,14 +335,14 @@ impl ZipperHandleAndFocus {
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
                                     inner_left: self.zipper_handle.inner_left.clone(),
-                                    inner_right: target.index.clone(),
+                                    inner_right: target.index,
                                 },
                                 focus: ZipperFocus::InnerRight,
                             })),
                             ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.inner_path().cloned(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.zipper_handle.inner_left.clone(),
                                 },
                                 focus: SpanFocus::Left,
@@ -351,7 +351,7 @@ impl ZipperHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.inner_path().cloned(),
                                     left: self.zipper_handle.inner_right.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Left,
                             })),
@@ -368,7 +368,7 @@ impl ZipperHandleAndFocus {
                                     outer_left: self.zipper_handle.outer_left.clone(),
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
-                                    inner_left: target.index.clone(),
+                                    inner_left: target.index,
                                     inner_right: self.zipper_handle.inner_right.clone(),
                                 },
                                 focus: ZipperFocus::InnerLeft,
@@ -380,7 +380,7 @@ impl ZipperHandleAndFocus {
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
                                     inner_left: self.zipper_handle.inner_left.clone(),
-                                    inner_right: target.index.clone(),
+                                    inner_right: target.index,
                                 },
                                 focus: ZipperFocus::InnerRight,
                             })),
@@ -388,14 +388,14 @@ impl ZipperHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.inner_path().cloned(),
                                     left: self.zipper_handle.inner_left.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Left,
                             })),
                             ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.inner_path().cloned(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.zipper_handle.inner_right.clone(),
                                 },
                                 focus: SpanFocus::Right,
@@ -411,7 +411,7 @@ impl ZipperHandleAndFocus {
                                     outer_left: self.zipper_handle.outer_left.clone(),
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
-                                    inner_left: target.index.clone(),
+                                    inner_left: target.index,
                                     inner_right: self.zipper_handle.inner_right.clone(),
                                 },
                                 focus: ZipperFocus::InnerLeft,
@@ -423,14 +423,14 @@ impl ZipperHandleAndFocus {
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
                                     inner_left: self.zipper_handle.inner_left.clone(),
-                                    inner_right: target.index.clone(),
+                                    inner_right: target.index,
                                 },
                                 focus: ZipperFocus::InnerRight,
                             })),
                             ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.inner_path().cloned(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.zipper_handle.inner_left.clone(),
                                 },
                                 focus: SpanFocus::Left,
@@ -439,7 +439,7 @@ impl ZipperHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.inner_path().cloned(),
                                     left: self.zipper_handle.inner_right.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Left,
                             })),
@@ -473,7 +473,7 @@ impl ZipperHandleAndFocus {
                                         ]
                                         .concat(),
                                     ),
-                                    outer_left: target.index.clone(),
+                                    outer_left: target.index,
                                     outer_right: subexpr.rightmost_index(),
                                     middle_path: Path(self_middle_path_suffix.to_vec()),
                                     inner_left: self.zipper_handle.inner_left.clone(),
@@ -491,7 +491,7 @@ impl ZipperHandleAndFocus {
                                         .concat(),
                                     ),
                                     outer_left: subexpr.leftmost_index(),
-                                    outer_right: target.index.clone(),
+                                    outer_right: target.index,
                                     middle_path: Path(self_middle_path_suffix.to_vec()),
                                     inner_left: self.zipper_handle.inner_left.clone(),
                                     inner_right: self.zipper_handle.inner_right.clone(),
@@ -510,7 +510,7 @@ impl ZipperHandleAndFocus {
                                     outer_left: self.zipper_handle.outer_left.clone(),
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: Path(target_suffix.to_vec()),
-                                    inner_left: target.index.clone(),
+                                    inner_left: target.index,
                                     inner_right: subexpr.rightmost_index(),
                                 },
                                 focus: ZipperFocus::InnerLeft,
@@ -528,7 +528,7 @@ impl ZipperHandleAndFocus {
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: Path(target_suffix.to_vec()),
                                     inner_left: subexpr.leftmost_index(),
-                                    inner_right: target.index.clone(),
+                                    inner_right: target.index,
                                 },
                                 focus: ZipperFocus::InnerRight,
                             })),
@@ -546,7 +546,7 @@ impl ZipperHandleAndFocus {
                             ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
                                 zipper_handle: ZipperHandle {
                                     outer_path: self.zipper_handle.outer_path.clone(),
-                                    outer_left: target.index.clone(),
+                                    outer_left: target.index,
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
                                     inner_left: self.zipper_handle.inner_left.clone(),
@@ -557,7 +557,7 @@ impl ZipperHandleAndFocus {
                             ZipperFocus::OuterRight => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.outer_path.clone(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.zipper_handle.outer_left.clone(),
                                 },
                                 focus: SpanFocus::Left,
@@ -566,7 +566,7 @@ impl ZipperHandleAndFocus {
                                 Some(Handle::Span(SpanHandleAndFocus {
                                     span_handle: SpanHandle {
                                         path: self.zipper_handle.outer_path.clone(),
-                                        left: target.index.clone(),
+                                        left: target.index,
                                         right: self.zipper_handle.outer_right.clone(),
                                     },
                                     focus: SpanFocus::Left,
@@ -582,7 +582,7 @@ impl ZipperHandleAndFocus {
                             ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
                                 zipper_handle: ZipperHandle {
                                     outer_path: self.zipper_handle.outer_path.clone(),
-                                    outer_left: target.index.clone(),
+                                    outer_left: target.index,
                                     outer_right: self.zipper_handle.outer_right.clone(),
                                     middle_path: self.zipper_handle.middle_path.clone(),
                                     inner_left: self.zipper_handle.inner_left.clone(),
@@ -594,7 +594,7 @@ impl ZipperHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.outer_path.clone(),
                                     left: self.zipper_handle.outer_left.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Left,
                             })),
@@ -602,7 +602,7 @@ impl ZipperHandleAndFocus {
                                 Some(Handle::Span(SpanHandleAndFocus {
                                     span_handle: SpanHandle {
                                         path: self.zipper_handle.outer_path.clone(),
-                                        left: target.index.clone(),
+                                        left: target.index,
                                         right: self.zipper_handle.outer_right.clone(),
                                     },
                                     focus: SpanFocus::Left,
@@ -619,7 +619,7 @@ impl ZipperHandleAndFocus {
                                 zipper_handle: ZipperHandle {
                                     outer_path: self.zipper_handle.outer_path.clone(),
                                     outer_left: self.zipper_handle.outer_left.clone(),
-                                    outer_right: target.index.clone(),
+                                    outer_right: target.index,
                                     middle_path: self.zipper_handle.middle_path.clone(),
                                     inner_left: self.zipper_handle.inner_left.clone(),
                                     inner_right: self.zipper_handle.inner_right.clone(),
@@ -629,7 +629,7 @@ impl ZipperHandleAndFocus {
                             ZipperFocus::OuterLeft => Some(Handle::Span(SpanHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.outer_path.clone(),
-                                    left: target.index.clone(),
+                                    left: target.index,
                                     right: self.zipper_handle.outer_right.clone(),
                                 },
                                 focus: SpanFocus::Right,
@@ -639,7 +639,7 @@ impl ZipperHandleAndFocus {
                                     span_handle: SpanHandle {
                                         path: self.zipper_handle.outer_path.clone(),
                                         left: self.zipper_handle.outer_left.clone(),
-                                        right: target.index.clone(),
+                                        right: target.index,
                                     },
                                     focus: SpanFocus::Right,
                                 }))
@@ -652,7 +652,7 @@ impl ZipperHandleAndFocus {
                                 zipper_handle: ZipperHandle {
                                     outer_path: self.zipper_handle.outer_path.clone(),
                                     outer_left: self.zipper_handle.outer_left.clone(),
-                                    outer_right: target.index.clone(),
+                                    outer_right: target.index,
                                     middle_path: self.zipper_handle.middle_path.clone(),
                                     inner_left: self.zipper_handle.inner_left.clone(),
                                     inner_right: self.zipper_handle.inner_right.clone(),
@@ -663,7 +663,7 @@ impl ZipperHandleAndFocus {
                                 span_handle: SpanHandle {
                                     path: self.zipper_handle.outer_path.clone(),
                                     left: self.zipper_handle.outer_right.clone(),
-                                    right: target.index.clone(),
+                                    right: target.index,
                                 },
                                 focus: SpanFocus::Right,
                             })),
@@ -672,7 +672,7 @@ impl ZipperHandleAndFocus {
                                     span_handle: SpanHandle {
                                         path: self.zipper_handle.outer_path.clone(),
                                         left: self.zipper_handle.outer_left.clone(),
-                                        right: target.index.clone(),
+                                        right: target.index,
                                     },
                                     focus: SpanFocus::Right,
                                 }))
@@ -695,7 +695,7 @@ impl ZipperHandleAndFocus {
                     ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
                         zipper_handle: ZipperHandle {
                             outer_path: target.path.clone(),
-                            outer_left: target.index.clone(),
+                            outer_left: target.index,
                             outer_right: self_outer_suffix_first_step.right_index(),
                             middle_path: Path(
                                 [
@@ -720,7 +720,7 @@ impl ZipperHandleAndFocus {
                         zipper_handle: ZipperHandle {
                             outer_path: target.path.clone(),
                             outer_left: self_outer_suffix_first_step.left_index(),
-                            outer_right: target.index.clone(),
+                            outer_right: target.index,
                             middle_path: Path(
                                 [
                                     self_outer_suffix.to_vec(),
@@ -994,7 +994,7 @@ impl<'a> PointRef<'a> {
     pub fn cloned(self) -> Point {
         Point {
             path: self.path.cloned(),
-            index: self.index.clone(),
+            index: self.index,
         }
     }
 }
@@ -1074,10 +1074,10 @@ impl Point {
                     zipper_handle: ZipperHandle {
                         outer_path: outer.path.clone(),
                         outer_left: step.left_index(),
-                        outer_right: outer.index.clone(),
+                        outer_right: outer.index,
                         middle_path: Path(inner_suffix.to_vec()),
                         inner_left: inner_expr.leftmost_index(),
-                        inner_right: inner.index.clone(),
+                        inner_right: inner.index,
                     },
                     focus: if inner_is_focus {
                         ZipperFocus::InnerRight
@@ -1090,10 +1090,10 @@ impl Point {
                 Some(Handle::Zipper(ZipperHandleAndFocus {
                     zipper_handle: ZipperHandle {
                         outer_path: outer.path.clone(),
-                        outer_left: outer.index.clone(),
+                        outer_left: outer.index,
                         outer_right: step.right_index(),
                         middle_path: Path(inner_suffix.to_vec()),
-                        inner_left: inner.index.clone(),
+                        inner_left: inner.index,
                         inner_right: inner_expr.rightmost_index(),
                     },
                     focus: if inner_is_focus {
@@ -1110,8 +1110,8 @@ impl Point {
                 Some(Handle::Span(SpanHandleAndFocus {
                     span_handle: SpanHandle {
                         path: outer.path.clone(),
-                        left: inner.index.clone(),
-                        right: outer.index.clone(),
+                        left: inner.index,
+                        right: outer.index,
                     },
                     focus: if inner_is_focus {
                         SpanFocus::Left
@@ -1124,8 +1124,8 @@ impl Point {
                 Some(Handle::Span(SpanHandleAndFocus {
                     span_handle: SpanHandle {
                         path: outer.path.clone(),
-                        left: outer.index.clone(),
-                        right: inner.index.clone(),
+                        left: outer.index,
+                        right: inner.index,
                     },
                     focus: if inner_is_focus {
                         SpanFocus::Right
@@ -1217,7 +1217,7 @@ impl<'a> PathRef<'a> {
     pub fn cloned(self) -> Path {
         let mut steps: Vec<Step> = vec![];
         for step in self.to_vec() {
-            steps.push(step.clone());
+            steps.push(step);
         }
         Path(steps)
     }
@@ -1789,7 +1789,7 @@ impl<L: Debug + Clone> Expr<L> {
             SpanHandleAndFocus {
                 span_handle: SpanHandle {
                     path: point.path,
-                    left: point.index.clone(),
+                    left: point.index,
                     right: point.index,
                 },
                 focus: SpanFocus::Left,
@@ -1826,8 +1826,8 @@ impl<L: Debug + Clone> Expr<L> {
             SpanHandleAndFocus {
                 span_handle: SpanHandle {
                     path: point.path.clone(),
-                    left: point.index.clone(),
-                    right: point.index.clone(),
+                    left: point.index,
+                    right: point.index,
                 },
                 focus: SpanFocus::Left,
             },
@@ -1835,16 +1835,57 @@ impl<L: Debug + Clone> Expr<L> {
     }
 
     pub fn insert_zipper_at_point(
+        &mut self,
+        point: Point,
+        zipper: Zipper<L>,
+    ) -> SpanHandleAndFocus {
+        self.insert_zipper_at_span_handle(
+            SpanHandle {
+                path: point.path,
+                left: point.index,
+                right: point.index,
+            },
+            zipper,
+        )
+    }
+
+    pub fn insert_zipper_at_span_handle(
+        &mut self,
+        handle: SpanHandleAndFocus,
+        zipper: Zipper<L>,
+    ) -> SpanHandleAndFocus {
+        let mut zipper = zipper;
+        let (inner_index, inner_span) = zipper.unwrap_mut();
+        let span = self.get_span_at_path_mut(handle.span_handle.path.to_ref());
+        let new_inner_span = Span(span.0.drain(0..0).collect::<Vec<_>>()); // TODO: does this clone the kids??
+        inner_span.insert_span_at_index(inner_index, new_inner_span);
+        span.insert_span_at_index_range(
+            handle.span_handle.left,
+            handle.span_handle.right,
+            inner_span.clone(), // TODO: this clone feel unecessary
+        );
+        todo!()
+    }
+
+    pub fn insert_zipper_at_zipper_handle(
+        &mut self,
+        handle: ZipperHandleAndFocus,
+        zipper: Zipper<L>,
+    ) -> SpanHandleAndFocus {
+        todo!()
+    }
+
+    pub fn insert_zipper_at_point_old(
         self,
         zipper: Zipper<L>,
         point: Point,
     ) -> (SpanHandleAndFocus, Expr<L>) {
-        self.insert_zipper_at_span_handle(
+        self.insert_zipper_at_span_handle_old(
             zipper,
             SpanHandleAndFocus {
                 span_handle: SpanHandle {
                     path: point.path,
-                    left: point.index.clone(),
+                    left: point.index,
                     right: point.index,
                 },
                 focus: SpanFocus::Left,
@@ -1873,7 +1914,7 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn insert_zipper_at_span_handle(
+    pub fn insert_zipper_at_span_handle_old(
         self,
         zipper: Zipper<L>,
         handle: SpanHandleAndFocus,
@@ -1935,7 +1976,7 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn insert_zipper_at_zipper_handle(
+    pub fn insert_zipper_at_zipper_handle_old(
         self,
         zipper: Zipper<L>,
         handle: ZipperHandleAndFocus,
@@ -2002,7 +2043,11 @@ impl<L: Debug + Clone> Expr<L> {
     }
 
     pub fn insert_zipper_at_handle(&mut self, handle: &mut Handle, zipper: Zipper<L>) {
-        todo!()
+        match handle {
+            Handle::Point(point) => todo!(),
+            Handle::Span(span_handle_and_focus) => todo!(),
+            Handle::Zipper(zipper_handle_and_focus) => todo!(),
+        }
     }
 
     pub fn insert_zipper_at_handle_old(
@@ -2012,15 +2057,15 @@ impl<L: Debug + Clone> Expr<L> {
     ) -> (Expr<L>, Handle) {
         match handle {
             Handle::Point(point) => {
-                let (handle, expr) = self.insert_zipper_at_point(zipper, point);
+                let (handle, expr) = self.insert_zipper_at_point_old(zipper, point);
                 (expr, Handle::Span(handle))
             }
             Handle::Span(handle) => {
-                let (handle, expr) = self.insert_zipper_at_span_handle(zipper, handle);
+                let (handle, expr) = self.insert_zipper_at_span_handle_old(zipper, handle);
                 (expr, Handle::Span(handle))
             }
             Handle::Zipper(handle) => {
-                let (handle, expr) = self.insert_zipper_at_zipper_handle(zipper, handle);
+                let (handle, expr) = self.insert_zipper_at_zipper_handle_old(zipper, handle);
                 (expr, Handle::Zipper(handle))
             }
         }
@@ -2229,6 +2274,10 @@ pub struct Zipper<L> {
 }
 
 impl<L: Debug + Clone> Zipper<L> {
+    pub fn unwrap_mut<'a>(&'a mut self) -> (Index, &'a mut Span<L>) {
+        todo!()
+    }
+
     pub fn unwrap(&self, span: Span<L>) -> Span<L> {
         Span(
             [
