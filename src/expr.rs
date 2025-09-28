@@ -985,27 +985,6 @@ pub struct Point {
     pub index: Index,
 }
 
-// TODO: should this impl Copy?
-#[derive(Debug, Clone, PartialEq)]
-pub struct PointRef<'a> {
-    pub path: PathRef<'a>,
-    pub index: Index,
-}
-
-impl<'a> PointRef<'a> {
-    pub fn cloned(self) -> Point {
-        Point {
-            path: self.path.cloned(),
-            index: self.index,
-        }
-    }
-}
-
-pub struct PointMutRef<'a> {
-    pub path: &'a mut Path,
-    pub index: &'a mut Index,
-}
-
 impl Point {
     pub fn to_ref<'a>(&'a self) -> PointRef<'a> {
         PointRef {
@@ -1159,6 +1138,36 @@ impl Point {
             None
         }
     }
+
+    pub fn add_offset(self, offset: Offset) -> Self {
+        let mut point = self;
+        if !point.path.0.is_empty() {
+            point.path = point.path.add_offset(offset);
+        } else {
+            point.index = point.index.add_offset(offset);
+        }
+        point
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PointRef<'a> {
+    pub path: PathRef<'a>,
+    pub index: Index,
+}
+
+impl<'a> PointRef<'a> {
+    pub fn cloned(self) -> Point {
+        Point {
+            path: self.path.cloned(),
+            index: self.index,
+        }
+    }
+}
+
+pub struct PointMutRef<'a> {
+    pub path: &'a mut Path,
+    pub index: &'a mut Index,
 }
 
 /// A path from the top [Expr] to an [Expr].
@@ -1180,6 +1189,18 @@ impl Path {
 
     pub fn starts_with(&self, path: &Path) -> bool {
         self.0.starts_with(&path.0)
+    }
+
+    pub fn concat(self, other: Self) -> Self {
+        Path([self.0, other.0].concat())
+    }
+
+    pub fn add_offset(self, offset: Offset) -> Self {
+        let mut path = self;
+        if let Some(step) = path.0.first_mut() {
+            *step = step.add_offset(offset);
+        }
+        path
     }
 }
 
@@ -1284,6 +1305,10 @@ impl Step {
         self.right_step()
             .is_right_of_step(index.right_index().left_step())
     }
+
+    fn add_offset(self, offset: Offset) -> Self {
+        Step(self.0 + offset.0)
+    }
 }
 
 /// An index between kids, or left the first kid, or right of the last kid of an
@@ -1346,6 +1371,10 @@ impl Index {
 
     pub fn sub_offset(&self, offset: Offset) -> Index {
         Index(self.0 - offset.0)
+    }
+
+    fn to_offset(&self) -> Offset {
+        Offset(self.0)
     }
 }
 
@@ -1420,6 +1449,14 @@ impl SpanHandle {
                 ),
             })
             .unwrap_or(false)
+    }
+
+    fn left_offset(&self) -> Offset {
+        self.left.to_offset()
+    }
+
+    fn right_offset(&self) -> Offset {
+        self.right.to_offset()
     }
 }
 
@@ -1864,37 +1901,31 @@ impl<L: Debug + Clone> Expr<L> {
         zipper: Zipper<L>,
     ) -> SpanHandleAndFocus {
         let focus_parent = self.get_expr_at_path_mut(handle.span_handle.path.to_ref());
-        // focus_parent
-        //     .kids
-        //     .get_span_at_index_range(handle.span_handle.left, handle.span_handle.right);
-        let zipper_outer_left_offset = zipper.outer_left_offset();
-
-        // insert zipper.inner
         let focus_span = focus_parent.kids.splice_span_at_index_range(
             handle.span_handle.left,
             handle.span_handle.right,
-            zipper.outer_left.concat(zipper.outer_right),
+            Span(vec![]),
         );
-        // This is the index at which I need to insert the expression that results from unwrapping zipper.inner around focus_span
-        let focus_parent_middle_index =
-            handle.span_handle.left.add_offset(zipper_outer_left_offset);
+        let focus_span_offset = focus_span.offset();
+        let (zipper_point, unwrapped_zipper) = zipper.unwrap(focus_span);
+        focus_parent.kids.splice_span_at_index_range(
+            handle.span_handle.left,
+            handle.span_handle.left,
+            unwrapped_zipper,
+        );
 
-        let new_focus_span = zipper.inner.unwrap(focus_span);
-
-        // OLD
-
-        // let mut zipper = zipper;
-        // // let (inner_index, inner_span) = zipper.unwrap_mut();
-        // let span = self.get_span_at_path_mut(handle.span_handle.path.to_ref());
-        // let new_inner_span = Span(span.0.drain(0..0).collect::<Vec<_>>()); // TODO: does this clone the kids??
-        // inner_span.insert_span_at_index(inner_index, new_inner_span);
-        // span.insert_span_at_index_range(
-        //     handle.span_handle.left,
-        //     handle.span_handle.right,
-        //     inner_span.clone(), // TODO: this clone feel unecessary
-        // );
-
-        todo!()
+        let handle_left_offset = handle.span_handle.left_offset();
+        SpanHandleAndFocus {
+            span_handle: SpanHandle {
+                path: handle
+                    .span_handle
+                    .path
+                    .concat(zipper_point.path.add_offset(handle_left_offset)),
+                left: zipper_point.index,
+                right: zipper_point.index.add_offset(focus_span_offset),
+            },
+            focus: handle.focus,
+        }
     }
 
     pub fn insert_zipper_at_zipper_handle(
