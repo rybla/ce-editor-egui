@@ -1784,10 +1784,6 @@ impl<L: Debug + Clone> Expr<L> {
         expr
     }
 
-    pub fn get_span_at_path_mut<'a>(&'a mut self, path: PathRef<'_>) -> &'a mut Span<L> {
-        &mut self.get_expr_at_path_mut(path).kids
-    }
-
     pub fn insert_span_at_point(&mut self, point: Point, span: Span<L>) -> SpanHandleAndFocus {
         self.insert_span_at_span_handle(
             SpanHandleAndFocus {
