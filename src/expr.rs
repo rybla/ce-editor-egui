@@ -2012,8 +2012,7 @@ impl<L: Debug + Clone> Expr<L> {
         handle: ZipperHandleAndFocus,
         span: Span<L>,
     ) -> SpanHandleAndFocus {
-        self.insert_span_at_span_handle(handle.outer_span_handle_and_focus().cloned(), span);
-        todo!()
+        self.insert_span_at_span_handle(handle.outer_span_handle_and_focus().cloned(), span)
     }
 
     pub fn insert_span_at_zipper_handle_old(
