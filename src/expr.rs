@@ -752,6 +752,13 @@ impl ZipperHandleAndFocus {
             focus: self.focus.to_span_focus(),
         }
     }
+
+    pub fn outer_span_handle_and_focus_owned(self) -> SpanHandleAndFocus {
+        SpanHandleAndFocus {
+            span_handle: self.zipper_handle.outer_span_handle_owned(),
+            focus: self.focus.to_span_focus(),
+        }
+    }
 }
 
 pub struct ZipperHandleAndFocusRef<'a> {
@@ -1573,6 +1580,14 @@ impl ZipperHandle {
         }
     }
 
+    fn outer_span_handle_owned(self) -> SpanHandle {
+        SpanHandle {
+            path: self.outer_path,
+            left: self.outer_left,
+            right: self.outer_right,
+        }
+    }
+
     pub fn outer_span_handle_old(&self) -> SpanHandle {
         SpanHandle {
             path: self.outer_path.clone(),
@@ -2012,7 +2027,7 @@ impl<L: Debug + Clone> Expr<L> {
         handle: ZipperHandleAndFocus,
         span: Span<L>,
     ) -> SpanHandleAndFocus {
-        self.insert_span_at_span_handle(handle.outer_span_handle_and_focus().cloned(), span)
+        self.insert_span_at_span_handle(handle.outer_span_handle_and_focus_owned(), span)
     }
 
     pub fn insert_span_at_zipper_handle_old(
