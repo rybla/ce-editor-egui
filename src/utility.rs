@@ -18,3 +18,13 @@
 pub fn modulus_i8_to_usize(x: i8, n: usize) -> usize {
     (x as isize).rem_euclid(n as isize) as usize
 }
+
+pub fn split_vec_at_index<A>(xs: Vec<A>, i: usize) -> (Vec<A>, Vec<A>) {
+    let mut left = xs;
+    let right = left.split_off(i);
+    (left, right)
+}
+
+pub fn get_owned_element_at_index<A>(xs: Vec<A>, i: usize) -> Option<A> {
+    xs.into_iter().nth(i)
+}

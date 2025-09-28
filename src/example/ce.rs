@@ -37,7 +37,11 @@ impl EditorSpec for Ce {
                 insert_node,
             ),
             EditMenuOption::new(EditMenuPattern::Static(format!("copy")), |_query, state| {
-                let frag = state.expr.get_fragment_at_handle(&state.handle)?;
+                // TODO: Eventually I can implement a different type of getter
+                // that uses a reference to the expert and then just clones the
+                // part that needs to be gotten. But for now, I'm content just
+                // to clone the entire top-level expr first.
+                let frag = state.expr.clone().get_fragment_at_handle(&state.handle)?;
                 Some(CoreEditorState {
                     expr: state.expr.clone(),
                     handle: state.handle.clone(),

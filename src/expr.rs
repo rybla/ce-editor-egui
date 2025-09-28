@@ -2,6 +2,8 @@
 
 use std::fmt::Debug;
 
+use crate::utility::split_vec_at_index;
+
 // -----------------------------------------------------------------------------
 // Handle: Point, SpanHandle, ZipperHandle
 // -----------------------------------------------------------------------------
@@ -155,7 +157,7 @@ impl SpanHandleAndFocus {
             let self_prefix_first_step = self_prefix
                 .first()
                 .unwrap_or_else(|| panic!("impossible since then would have matched previous self.span_handle.path.0.strip_prefix pattern"));
-            if target.index.is_left_of_step(self_prefix_first_step) {
+            if target.index.is_left_of_step(*self_prefix_first_step) {
                 println!("zone: C_left");
                 match self.focus {
                     SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
@@ -575,7 +577,7 @@ impl ZipperHandleAndFocus {
                         }
                     } else if target
                         .index
-                        .is_left_of_step(self.zipper_handle.middle_path.0.first().unwrap())
+                        .is_left_of_step(*self.zipper_handle.middle_path.0.first().unwrap())
                     {
                         println!("zone: D_inner_left");
                         match self.focus {
@@ -689,7 +691,7 @@ impl ZipperHandleAndFocus {
         {
             println!("zone: E");
             let self_outer_suffix_first_step = self_outer_suffix.first().unwrap_or_else(|| panic!("impossible since then would have matched previous self.zipper_handle.outer_path.0.strip_prefix pattern"));
-            if target.index.is_left_of_step(self_outer_suffix_first_step) {
+            if target.index.is_left_of_step(*self_outer_suffix_first_step) {
                 println!("zone: E_left");
                 match self.focus {
                     ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
@@ -1044,7 +1046,7 @@ impl Point {
                 MoveDir::Prev => self.index.left_step(),
                 MoveDir::Next => self.index.right_step(),
             };
-            let kid = subexpr.kids.at_step(&step);
+            let kid = subexpr.kids.at_step(step);
             let kid_boundary = {
                 let (kid_leftmost, kid_rightmost) = kid.kids.extreme_indexes();
                 match dir {
@@ -1229,7 +1231,7 @@ impl<'a> PathRef<'a> {
 
 /// An offset among the kids of an [Expr], which can by applied to either
 /// [Index]s or [Step]s.
-#[derive(Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Offset(pub usize);
 
 impl Debug for Offset {
@@ -1265,22 +1267,22 @@ impl Step {
         Index(self.0 + 1)
     }
 
-    pub fn is_left_of_step(&self, step: &Step) -> bool {
+    pub fn is_left_of_step(&self, step: Step) -> bool {
         self.0 < step.0
     }
 
-    pub fn is_right_of_step(&self, step: &Step) -> bool {
+    pub fn is_right_of_step(&self, step: Step) -> bool {
         self.0 > step.0
     }
 
     pub fn is_left_of_index(&self, index: Index) -> bool {
-        self.is_left_of_step(&index.right_step())
+        self.is_left_of_step(index.right_step())
     }
 
     pub fn is_right_of_index(&self, index: Index) -> bool {
         // compare right step and right index so don't accidentally go negative
         self.right_step()
-            .is_right_of_step(&index.right_index().left_step())
+            .is_right_of_step(index.right_index().left_step())
     }
 }
 
@@ -1320,13 +1322,13 @@ impl Index {
         index.0 < self.0
     }
 
-    pub fn is_right_of_step(&self, step: &Step) -> bool {
+    pub fn is_right_of_step(&self, step: Step) -> bool {
         // compare right index and right step to avoid going negative
         self.right_index()
             .is_right_of_index(step.right_step().left_index())
     }
 
-    pub fn is_left_of_step(&self, step: &Step) -> bool {
+    pub fn is_left_of_step(&self, step: Step) -> bool {
         self.is_left_of_index(step.right_index())
     }
 
@@ -1669,14 +1671,14 @@ impl<L: Debug + Clone> Expr<L> {
         let mut expr = self.clone();
         let mut ctx = ExprContext(Vec::default());
         for step in path.0.iter() {
-            let (tooth, sub_expr) = expr.at_tooth(step);
+            let (tooth, sub_expr) = expr.at_tooth(*step);
             expr = sub_expr;
             ctx.0.push(tooth);
         }
         (ctx, expr.clone())
     }
 
-    pub fn at_tooth(&self, step: &Step) -> (Tooth<L>, Expr<L>) {
+    pub fn at_tooth(self, step: Step) -> (Tooth<L>, Expr<L>) {
         let (left, middle, right) = self.kids.split_at_step(step);
         (
             Tooth {
@@ -1688,8 +1690,8 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn at_span_tooth(&self, left: Index, right: Index) -> (SpanTooth<L>, Span<L>) {
-        let (left, middle, right) = self.kids.between_old(left, right);
+    pub fn at_span_tooth(self, left: Index, right: Index) -> (SpanTooth<L>, Span<L>) {
+        let (left, middle, right) = self.kids.split_at_index_range(left, right);
         (
             SpanTooth {
                 label: self.label.clone(),
@@ -1712,9 +1714,9 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn at_zipper(&self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
+    pub fn at_zipper(self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
         let (outer_ctx, span) = self.at_span(&handle.outer_span_handle_old());
-        let (left, expr, right) = span.split_at_step(handle.middle_path.0.first().unwrap());
+        let (left, expr, right) = span.split_at_step(*handle.middle_path.0.first().unwrap());
         let (span_ctx, inner_span) = expr.at_span(&handle.middle_span_handle());
         (
             outer_ctx,
@@ -1727,7 +1729,7 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn get_fragment_at_handle(&self, handle: &Handle) -> Option<Fragment<L>> {
+    pub fn get_fragment_at_handle(self, handle: &Handle) -> Option<Fragment<L>> {
         match handle {
             Handle::Point(_point) => None,
             Handle::Span(handle) => Some(Fragment::Span(self.at_span(&handle.span_handle).1)),
@@ -1805,7 +1807,7 @@ impl<L: Debug + Clone> Expr<L> {
     ) -> SpanHandleAndFocus {
         let span_offset = span.offset();
         let focus_parent = self.get_expr_at_path_mut(handle.span_handle.path.to_ref());
-        focus_parent.kids.insert_span_at_index_range(
+        focus_parent.kids.splice_span_at_index_range(
             handle.span_handle.left,
             handle.span_handle.right,
             span,
@@ -1861,21 +1863,25 @@ impl<L: Debug + Clone> Expr<L> {
         handle: SpanHandleAndFocus,
         zipper: Zipper<L>,
     ) -> SpanHandleAndFocus {
-        // let zipper_offset = zipper.outer_left_offset();
         let focus_parent = self.get_expr_at_path_mut(handle.span_handle.path.to_ref());
-        focus_parent
-            .kids
-            .get_span_at_index_range(handle.span_handle.left, handle.span_handle.right);
-
-        // insert zipper.outer_left and zipper.outer_right
-        focus_parent
-            .kids
-            .insert_span_at_index(handle.span_handle.right, zipper.outer_right);
-        focus_parent
-            .kids
-            .insert_span_at_index(handle.span_handle.left, zipper.outer_left);
+        // focus_parent
+        //     .kids
+        //     .get_span_at_index_range(handle.span_handle.left, handle.span_handle.right);
+        let zipper_outer_left_offset = zipper.outer_left_offset();
 
         // insert zipper.inner
+        let focus_span = focus_parent.kids.splice_span_at_index_range(
+            handle.span_handle.left,
+            handle.span_handle.right,
+            zipper.outer_left.concat(zipper.outer_right),
+        );
+        // This is the index at which I need to insert the expression that results from unwrapping zipper.inner around focus_span
+        let focus_parent_middle_index =
+            handle.span_handle.left.add_offset(zipper_outer_left_offset);
+
+        let new_focus_span = zipper.inner.unwrap(focus_span);
+
+        // OLD
 
         // let mut zipper = zipper;
         // // let (inner_index, inner_span) = zipper.unwrap_mut();
@@ -1944,10 +1950,10 @@ impl<L: Debug + Clone> Expr<L> {
         handle: SpanHandleAndFocus,
     ) -> (SpanHandleAndFocus, Expr<L>) {
         let (span_ctx, expr) = self.at_span(&handle.span_handle);
-        let (_zipper_point, unwrapped_zipper) = zipper.unwrap(expr);
         let middle_path: Path = zipper.path();
         let inner_left_offset: Offset = zipper.inner_left_offset();
         let inner_right_offset: Offset = zipper.inner_right_offset();
+        let (_zipper_point, unwrapped_zipper) = zipper.unwrap(expr);
         let left = Index(0).add_offset(inner_left_offset);
         let right = left.add_offset(inner_right_offset);
         let unwrapped_span_ctx = span_ctx.unwrap(unwrapped_zipper);
@@ -2008,9 +2014,14 @@ impl<L: Debug + Clone> Expr<L> {
     ) -> (ZipperHandleAndFocus, Expr<L>) {
         // replaces selected zipper with new zipper
         let (outer_ctx, span) = self.at_span(&handle.zipper_handle.outer_span_handle_old());
+        let span_offset = span.offset();
         let (outer_left, outer_expr, outer_right) =
-            span.split_at_step(handle.zipper_handle.middle_path.0.first().unwrap());
+            span.split_at_step(*handle.zipper_handle.middle_path.0.first().unwrap());
         let (_, inner_span) = outer_expr.at_span(&handle.zipper_handle.middle_span_handle());
+        let zipper_outer_left_offset = zipper.outer_left_offset();
+        let zipper_outer_right_offset = zipper.outer_right_offset();
+        let middle_path = zipper.path();
+        let zipper_inner_left_offset = zipper.inner_left_offset();
         let (_zipper_point, unwrapped_zipper) = zipper.unwrap(inner_span);
         (
             ZipperHandleAndFocus {
@@ -2019,14 +2030,14 @@ impl<L: Debug + Clone> Expr<L> {
                     outer_left: Index(0).add_offset(outer_ctx.left_offset()),
                     outer_right: Index(0)
                         .add_offset(outer_ctx.left_offset())
-                        .add_offset(zipper.outer_left_offset())
+                        .add_offset(zipper_outer_left_offset)
                         .add_offset(Offset(1))
-                        .add_offset(zipper.outer_right_offset()),
-                    middle_path: zipper.path(),
-                    inner_left: Index(0).add_offset(zipper.inner_left_offset()),
+                        .add_offset(zipper_outer_right_offset),
+                    middle_path,
+                    inner_left: Index(0).add_offset(zipper_inner_left_offset),
                     inner_right: Index(0)
-                        .add_offset(zipper.inner_left_offset())
-                        .add_offset(span.offset()),
+                        .add_offset(zipper_inner_left_offset)
+                        .add_offset(span_offset),
                 },
                 focus: handle.focus,
             },
@@ -2141,7 +2152,11 @@ impl<L: Debug + Clone> Expr<L> {
 pub struct Span<L>(pub Vec<Expr<L>>);
 
 impl<L: Debug + Clone> Span<L> {
-    pub fn at_step<'a>(&'a self, step: &Step) -> &'a Expr<L> {
+    pub fn concat(self, other: Self) -> Self {
+        Span([self.0, other.0].concat())
+    }
+
+    pub fn at_step<'a>(&'a self, step: Step) -> &'a Expr<L> {
         self.0
             .get(step.0)
             .unwrap_or_else(|| panic!("step out of bounds: span = {self:?}; step = {step:?}"))
@@ -2151,28 +2166,19 @@ impl<L: Debug + Clone> Span<L> {
         (Index(0), Index(self.0.len()))
     }
 
-    pub fn between_old(&self, left: Index, right: Index) -> (Span<L>, Span<L>, Span<L>) {
-        (
-            Span(self.0[..left.0].to_vec()),
-            Span(self.0[left.0..right.0].to_vec()),
-            Span(self.0[right.0..].to_vec()),
-        )
+    pub fn split_at_index_range(self, left: Index, right: Index) -> (Self, Self, Self) {
+        assert!(left.0 < right.0);
+        assert!(self.is_index_in_range(left));
+        assert!(self.is_index_in_range(right));
+        let (es_l, es_mr) = split_vec_at_index(self.0, left.0);
+        let (es_m, es_r) = split_vec_at_index(es_mr, right.0 - left.0);
+        (Span(es_l), Span(es_m), Span(es_r))
     }
 
-    pub fn splice_span_between_indices(
-        &mut self,
-        left: Index,
-        right: Index,
-        span: Span<L>,
-    ) -> Span<L> {
-        // Note that this collect DOESN'T clone
-        Span(self.0.splice(left.0..right.0, span.0).collect::<Vec<_>>())
-    }
-
-    pub fn split_at_step(&self, step: &Step) -> (Span<L>, Expr<L>, Span<L>) {
-        let (left, middle_and_right) = self.0.split_at(step.0);
-        let (middle, right) = middle_and_right.split_first().unwrap();
-        (Span(left.to_vec()), middle.clone(), Span(right.to_vec()))
+    pub fn split_at_step(self, step: Step) -> (Span<L>, Expr<L>, Span<L>) {
+        let (left, middle, right) =
+            self.split_at_index_range(step.left_index(), step.right_index());
+        (left, middle.0.into_iter().nth(0).unwrap(), right)
     }
 
     pub fn offset(&self) -> Offset {
@@ -2188,26 +2194,26 @@ impl<L: Debug + Clone> Span<L> {
         self.0.splice(index.0..index.0, span.0);
     }
 
-    pub fn insert_span_at_index_range(
+    pub fn splice_span_at_index_range(
         &mut self,
         start_index: Index,
         end_index: Index,
         span: Span<L>,
-    ) {
+    ) -> Span<L> {
         assert!(self.is_index_in_range(start_index));
         assert!(self.is_index_in_range(end_index));
         assert!(start_index.0 <= end_index.0);
-        self.0.splice(start_index.0..end_index.0, span.0);
+        Span(
+            self.0
+                .splice(start_index.0..end_index.0, span.0)
+                .collect::<Vec<_>>(),
+        )
     }
 
     fn get_expr_at_step_mut<'a>(&'a mut self, step: Step) -> &'a mut Expr<L> {
         self.0
             .get_mut(step.0)
             .unwrap_or_else(|| panic!("Step is out of bounds in Span"))
-    }
-
-    fn get_span_at_index_range(&self, left: Index, right: Index) -> Span<L> {
-        self.between_old(left, right).1
     }
 }
 
@@ -2269,7 +2275,7 @@ impl<L: Debug + Clone> SpanTooth<L> {
 pub struct ExprContext<L>(pub Vec<Tooth<L>>);
 
 impl<L: Debug + Clone> ExprContext<L> {
-    pub fn unwrap(&self, sub_expr: Expr<L>) -> Expr<L> {
+    pub fn unwrap(self, sub_expr: Expr<L>) -> Expr<L> {
         self.0
             .iter()
             .rfold(sub_expr, |sub_expr, tooth| tooth.unwrap(sub_expr))
@@ -2288,7 +2294,7 @@ pub struct SpanContext<L> {
 }
 
 impl<L: Debug + Clone> SpanContext<L> {
-    pub fn unwrap(&self, span: Span<L>) -> Expr<L> {
+    pub fn unwrap(self, span: Span<L>) -> Expr<L> {
         self.outer.unwrap(self.inner.unwrap(span))
     }
 
@@ -2314,7 +2320,7 @@ pub struct Zipper<L> {
 }
 
 impl<L: Debug + Clone> Zipper<L> {
-    pub fn unwrap(&self, span: Span<L>) -> (Point, Span<L>) {
+    pub fn unwrap(self, span: Span<L>) -> (Point, Span<L>) {
         (
             Point {
                 path: self.inner.path(),

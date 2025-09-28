@@ -181,7 +181,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
             println!("[copy] attempting to copy");
-            if let Some(frag) = self.core.expr.get_fragment_at_handle(&self.core.handle) {
+            if let Some(frag) = self.core.expr.clone().get_fragment_at_handle(&self.core.handle) {
                 println!("[copy] copied fragment");
                 self.core.clipboard = Some(frag)
             }
