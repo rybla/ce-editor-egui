@@ -960,7 +960,7 @@ impl Handle {
 
     pub fn select_to<L: Debug + Clone>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         match self {
-            Handle::Point(point) => point.select_to_old(target, expr),
+            Handle::Point(point) => point.select_to(target, expr),
             Handle::Span(handle) => handle.select_to(target, expr),
             Handle::Zipper(handle) => handle.select_to(target, expr),
         }
@@ -972,7 +972,7 @@ impl Handle {
                 let mut target = handle.clone();
                 let move_status = target.move_dir_old(dir, expr);
                 if move_status.is_ok() {
-                    match handle.select_to_old(&target, expr) {
+                    match handle.select_to(&target, expr) {
                         Some(handle) => {
                             *self = handle;
                             true
@@ -1168,11 +1168,7 @@ impl Point {
 
     /// Calculates the selection from self to target.
     // TODO: Could make self mut here so that can update in place.
-    pub fn select_to_old<L: Debug + Clone>(
-        &self,
-        target: &Point,
-        expr: &Expr<L>,
-    ) -> Option<Handle> {
+    pub fn select_to<L: Debug + Clone>(&self, target: &Point, expr: &Expr<L>) -> Option<Handle> {
         println!("[select]");
         println!("self = {self:#?}");
         println!("target = {target:#?}");
@@ -1185,27 +1181,6 @@ impl Point {
         } else {
             // NOTE: Perhaps want to calculate the smallest span that contains both self and target
             None
-        }
-    }
-
-    pub fn select_to<L: Debug + Clone>(
-        self,
-        target: PointRef<'_>,
-        expr: &Expr<L>,
-    ) -> Option<Handle> {
-        println!("[select]");
-        println!("self = {self:#?}");
-        println!("target = {target:#?}");
-
-        if let Some(self_suffix) = self.path.to_ref().strip_prefix(target.path.clone()) {
-            println!("[select] self is inside or beside target");
-            todo!()
-        } else if let Some(target_suffix) = target.path.strip_prefix(self.path.to_ref()) {
-            println!("[select] target is inside or beside self");
-            todo!()
-        } else {
-            // NOTE: Perhaps want to calculate the smallest span that contains both self and target
-            todo!()
         }
     }
 
