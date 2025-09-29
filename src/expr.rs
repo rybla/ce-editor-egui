@@ -1529,7 +1529,7 @@ impl SpanFocus {
     }
 }
 
-/// A hanle for a [Zipper].
+/// A handle for a [Zipper].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ZipperHandle {
     pub outer_path: Path,
