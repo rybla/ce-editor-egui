@@ -181,7 +181,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
             println!("[copy] attempting to copy");
-            if let Some(frag) = self.core.expr.clone().get_fragment_at_handle(&self.core.handle) {
+            if let Some(frag) = self
+                .core
+                .expr
+                .clone()
+                .get_fragment_at_handle(&self.core.handle)
+            {
                 println!("[copy] copied fragment");
                 self.core.clipboard = Some(frag)
             }
@@ -190,13 +195,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
             println!("[paste]");
             if let Some(frag) = &self.core.clipboard {
-                let (expr, handle) = self
+                let handle = self
                     .core
                     .expr
-                    .clone()
-                    .insert_fragment_at_handle_old(frag.clone(), self.core.handle.clone());
+                    .insert_fragment_at_handle(self.core.handle.clone(), frag.clone());
                 self.core.handle = handle;
-                self.core.expr = expr;
             }
         }
         // rotate focus
