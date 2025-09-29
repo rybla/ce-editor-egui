@@ -53,7 +53,7 @@ impl SpanHandleAndFocus {
                         && target_suffix_first_step.is_left_of_index(self.span_handle.right)
                     {
                         println!("zone: A");
-                        let subexpr = expr.at_expr(&target.path).1;
+                        let subexpr = expr.at_expr(target.path.to_ref()).1;
                         match self.focus {
                             SpanFocus::Left => Some(Handle::Zipper(ZipperHandleAndFocus {
                                 zipper_handle: ZipperHandle {
@@ -172,7 +172,7 @@ impl SpanHandleAndFocus {
                         focus: ZipperFocus::OuterLeft,
                     })),
                     SpanFocus::Right => {
-                        let subexpr = expr.at_expr(&self.span_handle.path).1;
+                        let subexpr = expr.at_expr(self.span_handle.path.to_ref()).1;
                         Some(Handle::Zipper(ZipperHandleAndFocus {
                             zipper_handle: ZipperHandle {
                                 outer_path: target.path.clone(),
@@ -201,7 +201,7 @@ impl SpanHandleAndFocus {
                         focus: ZipperFocus::OuterRight,
                     })),
                     SpanFocus::Right => {
-                        let subexpr = expr.at_expr(&self.span_handle.path).1;
+                        let subexpr = expr.at_expr(self.span_handle.path.to_ref()).1;
                         Some(Handle::Zipper(ZipperHandleAndFocus {
                             zipper_handle: ZipperHandle {
                                 outer_path: target.path.clone(),
@@ -260,7 +260,7 @@ impl ZipperHandleAndFocus {
             match target_suffix.is_empty() {
                 false => {
                     println!("zone: A");
-                    let subexpr = expr.at_expr(&target.path).1;
+                    let subexpr = expr.at_expr(target.path.to_ref()).1;
 
                     match self.focus {
                         ZipperFocus::InnerLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
@@ -465,7 +465,7 @@ impl ZipperHandleAndFocus {
                         .strip_prefix(target.path.0.as_slice())
                     {
                         println!("zone: C");
-                        let subexpr = expr.at_expr(&target.path).1;
+                        let subexpr = expr.at_expr(target.path.to_ref()).1;
                         match self.focus {
                             ZipperFocus::OuterLeft => Some(Handle::Zipper(ZipperHandleAndFocus {
                                 zipper_handle: ZipperHandle {
@@ -805,7 +805,7 @@ impl Handle {
                 }
             }
             Handle::Span(handle) => {
-                let kid = expr.at_expr(&handle.span_handle.path).1;
+                let kid = expr.at_expr(handle.span_handle.path.to_ref()).1;
                 let (leftmost, rightmost) = kid.kids.extreme_indexes();
                 if handle.span_handle.left.is_left_of_index(leftmost)
                     || handle.span_handle.right.is_right_of_index(rightmost)
@@ -1014,7 +1014,7 @@ impl Point {
     }
 
     pub fn move_dir<L: Debug + Clone>(&mut self, dir: MoveDir, expr: &Expr<L>) -> MoveStatus {
-        let subexpr = expr.at_expr(&self.path).1;
+        let subexpr = expr.at_expr(self.path.to_ref()).1;
         let (leftmost, rightmost) = subexpr.kids.extreme_indexes();
         let is_at_local_boundary = match dir {
             MoveDir::Prev => self.index == leftmost,
@@ -1057,7 +1057,7 @@ impl Point {
     ) -> Option<Handle> {
         if let Some(step) = inner_suffix.first() {
             println!("[select] inner is beside-down outer");
-            let inner_expr = expr.at_expr(&inner.path).1;
+            let inner_expr = expr.at_expr(inner.path.to_ref()).1;
             if step.is_left_of_index(outer.index) {
                 println!("[select] inner is to the left of outer");
                 Some(Handle::Zipper(ZipperHandleAndFocus {
@@ -1625,22 +1625,6 @@ impl ZipperHandle {
         }
     }
 
-    // pub fn outer_span_handle_old(&self) -> SpanHandle {
-    //     SpanHandle {
-    //         path: self.outer_path.clone(),
-    //         left: self.outer_left.clone(),
-    //         right: self.outer_right.clone(),
-    //     }
-    // }
-
-    // pub fn inner_span_handle_old(&self) -> SpanHandle {
-    //     SpanHandle {
-    //         path: self.inner_path().cloned(),
-    //         left: self.inner_left.clone(),
-    //         right: self.inner_right.clone(),
-    //     }
-    // }
-
     pub fn contains_path(&self, path: &Path) -> bool {
         self.outer_span_handle().contains_path(path.to_ref())
             && !self.inner_span_handle().contains_path(path.to_ref())
@@ -1651,11 +1635,11 @@ impl ZipperHandle {
             && !self.inner_span_handle().contains_point(point.to_ref())
     }
 
-    fn middle_span_handle(&self) -> SpanHandle {
-        SpanHandle {
-            path: self.middle_path.clone(),
-            left: self.inner_left.clone(),
-            right: self.inner_right.clone(),
+    fn middle_span_handle<'a>(&'a self) -> SpanHandleRef<'a> {
+        SpanHandleRef {
+            path: self.middle_path.to_ref(),
+            left: self.inner_left,
+            right: self.inner_right,
         }
     }
 
@@ -1777,11 +1761,11 @@ impl<L: Debug + Clone> Expr<L> {
             .fold(0, |h, e| std::cmp::max(h, 1 + e.height()))
     }
 
-    pub fn at_expr(&self, path: &Path) -> (ExprContext<L>, Expr<L>) {
+    pub fn at_expr(&self, path: PathRef<'_>) -> (ExprContext<L>, Expr<L>) {
         let mut expr = self.clone();
         let mut ctx = ExprContext(Vec::default());
-        for step in path.0.iter() {
-            let (tooth, sub_expr) = expr.at_tooth(*step);
+        for step in path.to_vec() {
+            let (tooth, sub_expr) = expr.at_tooth(step);
             expr = sub_expr;
             ctx.0.push(tooth);
         }
@@ -1812,8 +1796,8 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn at_span(&self, handle: &SpanHandle) -> (SpanContext<L>, Span<L>) {
-        let (sub_expr_ctx, sub_expr) = self.at_expr(&handle.path);
+    pub fn at_span(&self, handle: SpanHandleRef<'_>) -> (SpanContext<L>, Span<L>) {
+        let (sub_expr_ctx, sub_expr) = self.at_expr(handle.path);
         let (tooth, inner) = sub_expr.at_span_tooth(handle.left, handle.right);
         (
             SpanContext {
@@ -1827,7 +1811,7 @@ impl<L: Debug + Clone> Expr<L> {
     pub fn at_zipper(self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
         let (outer_ctx, span) = self.at_span(handle.outer_span_handle());
         let (left, expr, right) = span.split_at_step(*handle.middle_path.0.first().unwrap());
-        let (span_ctx, inner_span) = expr.at_span(&handle.middle_span_handle());
+        let (span_ctx, inner_span) = expr.at_span(handle.middle_span_handle());
         (
             outer_ctx,
             Zipper {
@@ -1842,7 +1826,9 @@ impl<L: Debug + Clone> Expr<L> {
     pub fn get_fragment_at_handle(self, handle: &Handle) -> Option<Fragment<L>> {
         match handle {
             Handle::Point(_point) => None,
-            Handle::Span(handle) => Some(Fragment::Span(self.at_span(&handle.span_handle).1)),
+            Handle::Span(handle) => {
+                Some(Fragment::Span(self.at_span(handle.span_handle.to_ref()).1))
+            }
             Handle::Zipper(handle) => {
                 Some(Fragment::Zipper(self.at_zipper(&handle.zipper_handle).1))
             }
