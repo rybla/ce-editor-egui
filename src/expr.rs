@@ -220,6 +220,52 @@ impl SpanHandleAndFocus {
             None
         }
     }
+
+    pub fn select_dir<L: Debug + Clone>(self, expr: &Expr<L>, dir: MoveDir) -> Handle {
+        // let sub_expr = expr.at_path(self.span_handle.path.to_ref());
+        // let (leftmost, rightmost) = sub_expr.kids.extreme_indexes();
+        // match (self.focus, dir) {
+        //     (SpanFocus::Left, MoveDir::Prev)
+        //         if self.span_handle.left.is_right_of_index(leftmost) =>
+        //     {
+        //         todo!()
+        //     }
+        //     (SpanFocus::Left, MoveDir::Next) => todo!(),
+        //     (SpanFocus::Right, MoveDir::Prev) => todo!(),
+        //     (SpanFocus::Right, MoveDir::Next) => todo!(),
+        // }
+
+        // let sub_expr = expr.at_path(self.path.to_ref());
+        // let (leftmost, rightmost) = sub_expr.kids.extreme_indexes();
+        // let point = match dir {
+        //     MoveDir::Prev if self.index.is_right_of_index(leftmost) => Ok(Point {
+        //         path: self.path,
+        //         index: self.index.sub_offset(Offset(1)),
+        //     }),
+        //     MoveDir::Prev => {
+        //         let mut point = self;
+        //         let step = point.path.pop().ok_or(MoveError::Boundary)?;
+        //         Ok(Point {
+        //             path: point.path,
+        //             index: step.left_index(),
+        //         })
+        //     }
+        //     MoveDir::Next if self.index.is_left_of_index(rightmost) => Ok(Point {
+        //         path: self.path,
+        //         index: self.index.add_offset(Offset(1)),
+        //     }),
+        //     MoveDir::Next => {
+        //         let mut point = self;
+        //         let step = point.path.pop().ok_or(MoveError::Boundary)?;
+        //         Ok(Point {
+        //             path: point.path,
+        //             index: step.right_index(),
+        //         })
+        //     }
+        // };
+
+        todo!()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1184,6 +1230,49 @@ impl Point {
         }
     }
 
+    // TODO: There has to be a better way of doing this. It is Just so difficult
+    // to implement correctly. There are so many things to keep track of.
+    pub fn select_dir<L: Debug + Clone>(
+        self,
+        expr: &Expr<L>,
+        dir: MoveDir,
+    ) -> Result<Handle, MoveError> {
+        let sub_expr = expr.at_path(self.path.to_ref());
+        match dir {
+            MoveDir::Prev if self.index.is_right_of_index(sub_expr.leftmost_index()) => {
+                let sub_path = Path(vec![self.index.left_step()]);
+                let sub_sub_expr = expr.at_path(self.path.to_ref().chain(sub_path.to_ref()));
+                Ok(Handle::Zipper(ZipperHandleAndFocus {
+                    zipper_handle: ZipperHandle {
+                        outer_path: self.path,
+                        outer_left: self.index.left_index(),
+                        outer_right: self.index,
+                        middle_path: sub_path,
+                        inner_left: sub_sub_expr.rightmost_index().sub_offset(Offset(1)),
+                        inner_right: sub_sub_expr.rightmost_index(),
+                    },
+                    focus: ZipperFocus::InnerRight,
+                }))
+            }
+            MoveDir::Prev => {
+                let mut path = self.path;
+                let step = path.pop().ok_or(MoveError::Boundary)?;
+                Ok(Handle::Zipper(ZipperHandleAndFocus {
+                    zipper_handle: ZipperHandle {
+                        outer_path: path,
+                        outer_left: step.left_index(),
+                        outer_right: step.right_index(),
+                        middle_path: Path(vec![step]),
+                        inner_left: sub_expr.leftmost_index(),
+                        inner_right: sub_expr.rightmost_index(),
+                    },
+                    focus: ZipperFocus::OuterLeft,
+                }))
+            }
+            MoveDir::Next => todo!(),
+        }
+    }
+
     pub fn add_offset(self, offset: Offset) -> Self {
         let mut point = self;
         if !point.path.0.is_empty() {
@@ -1560,11 +1649,11 @@ impl SpanHandle {
         self.to_ref().contains_point(point.to_ref())
     }
 
-    fn left_offset(&self) -> Offset {
+    pub fn left_offset(&self) -> Offset {
         self.left.to_offset()
     }
 
-    fn right_offset(&self) -> Offset {
+    pub fn right_offset(&self) -> Offset {
         self.right.to_offset()
     }
 }
