@@ -215,7 +215,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         {
             let mut target: Point = self.core.handle.focus_point().cloned();
             loop {
-                let move_status = target.move_dir(dir, &self.core.expr);
+                let move_status = target.move_dir_old(dir, &self.core.expr);
                 if !move_status.is_ok() {
                     println!("[select] bailed since a move failed");
                     break;
@@ -233,7 +233,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if let Some(dir) = match_input_move_dir(ctx) {
             let mut handle = self.core.handle.clone();
             loop {
-                let move_status = handle.move_dir(dir, &self.core.expr);
+                let move_status = handle.move_dir_old(dir, &self.core.expr);
                 if !move_status.is_ok() {
                     println!("[move] bailed since a move failed");
                     break;

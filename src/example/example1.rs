@@ -88,9 +88,9 @@ impl EditorSpec for Example1 {
 
     fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel<Self>>) -> bool {
         match handle {
-            Handle::Point(handle) => expr.at_expr(handle.path.to_ref()).1.kids.0.len() > 0,
+            Handle::Point(handle) => expr.at_path_owned(handle.path.to_ref()).1.kids.0.len() > 0,
             Handle::Span(handle) => {
-                expr.at_expr(handle.span_handle.path.to_ref())
+                expr.at_path_owned(handle.span_handle.path.to_ref())
                     .1
                     .kids
                     .0
@@ -100,7 +100,7 @@ impl EditorSpec for Example1 {
             Handle::Zipper(handle) => {
                 !handle.zipper_handle.middle_path.0.is_empty()
                     && !expr
-                        .at_expr(handle.zipper_handle.inner_path())
+                        .at_path_owned(handle.zipper_handle.inner_path())
                         .1
                         .kids
                         .0
