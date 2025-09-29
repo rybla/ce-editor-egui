@@ -64,10 +64,11 @@ impl EditorSpec for Ce {
     }
 }
 
-fn insert_node(query: &String, state: &CoreEditorState<Ce>) -> Option<CoreEditorState<Ce>> {
-    let state = state.clone();
+fn insert_node(query: &String, state: CoreEditorState<Ce>) -> Option<CoreEditorState<Ce>> {
+    let mut state = state;
 
-    let (new_expr, new_handle) = state.expr.clone().insert_fragment_at_handle_old(
+    let handle = state.expr.insert_fragment_at_handle(
+        state.handle,
         Fragment::Zipper(Zipper {
             outer_left: Span(vec![]),
             outer_right: Span(vec![]),
@@ -80,11 +81,9 @@ fn insert_node(query: &String, state: &CoreEditorState<Ce>) -> Option<CoreEditor
                 },
             },
         }),
-        state.handle,
     );
-    Some(CoreEditorState {
-        expr: new_expr,
-        handle: new_handle,
-        clipboard: state.clipboard,
-    })
+
+    state.handle = handle;
+
+    Some(state)
 }

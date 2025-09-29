@@ -1440,31 +1440,11 @@ impl SpanHandle {
     }
 
     pub fn contains_path(&self, path: &Path) -> bool {
-        path.0
-            .strip_prefix(self.path.0.as_slice())
-            .and_then(|steps| {
-                steps.first().and_then(|step| {
-                    Some(step.is_right_of_index(self.left) && step.is_left_of_index(self.right))
-                })
-            })
-            .unwrap_or(false)
+        self.to_ref().contains_path(path.to_ref())
     }
 
     pub fn contains_point(&self, point: &Point) -> bool {
-        point
-            .path
-            .0
-            .strip_prefix(self.path.0.as_slice())
-            .and_then(|steps| match steps.first() {
-                Some(step) => {
-                    Some(step.is_right_of_index(self.left) && step.is_left_of_index(self.right))
-                }
-                None => Some(
-                    point.index.is_right_of_index(self.left)
-                        && point.index.is_left_of_index(self.right),
-                ),
-            })
-            .unwrap_or(false)
+        self.to_ref().contains_point(point.to_ref())
     }
 
     fn left_offset(&self) -> Offset {
@@ -1490,6 +1470,34 @@ impl<'a> SpanHandleRef<'a> {
             left: self.left.clone(),
             right: self.right.clone(),
         }
+    }
+
+    fn contains_path(&self, path: PathRef<'_>) -> bool {
+        path.to_vec()
+            .strip_prefix(self.path.to_vec().as_slice())
+            .and_then(|steps| {
+                steps.first().and_then(|step| {
+                    Some(step.is_right_of_index(self.left) && step.is_left_of_index(self.right))
+                })
+            })
+            .unwrap_or(false)
+    }
+
+    fn contains_point(&self, point: PointRef<'_>) -> bool {
+        point
+            .path
+            .to_vec()
+            .strip_prefix(self.path.to_vec().as_slice())
+            .and_then(|steps| match steps.first() {
+                Some(step) => {
+                    Some(step.is_right_of_index(self.left) && step.is_left_of_index(self.right))
+                }
+                None => Some(
+                    point.index.is_right_of_index(self.left)
+                        && point.index.is_left_of_index(self.right),
+                ),
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -1617,30 +1625,30 @@ impl ZipperHandle {
         }
     }
 
-    pub fn outer_span_handle_old(&self) -> SpanHandle {
-        SpanHandle {
-            path: self.outer_path.clone(),
-            left: self.outer_left.clone(),
-            right: self.outer_right.clone(),
-        }
-    }
+    // pub fn outer_span_handle_old(&self) -> SpanHandle {
+    //     SpanHandle {
+    //         path: self.outer_path.clone(),
+    //         left: self.outer_left.clone(),
+    //         right: self.outer_right.clone(),
+    //     }
+    // }
 
-    pub fn inner_span_handle_old(&self) -> SpanHandle {
-        SpanHandle {
-            path: self.inner_path().cloned(),
-            left: self.inner_left.clone(),
-            right: self.inner_right.clone(),
-        }
-    }
+    // pub fn inner_span_handle_old(&self) -> SpanHandle {
+    //     SpanHandle {
+    //         path: self.inner_path().cloned(),
+    //         left: self.inner_left.clone(),
+    //         right: self.inner_right.clone(),
+    //     }
+    // }
 
     pub fn contains_path(&self, path: &Path) -> bool {
-        self.outer_span_handle_old().contains_path(path)
-            && !self.inner_span_handle_old().contains_path(path)
+        self.outer_span_handle().contains_path(path.to_ref())
+            && !self.inner_span_handle().contains_path(path.to_ref())
     }
 
     pub fn contains_point(&self, point: &Point) -> bool {
-        self.outer_span_handle_old().contains_point(point)
-            && !self.inner_span_handle_old().contains_point(point)
+        self.outer_span_handle().contains_point(point.to_ref())
+            && !self.inner_span_handle().contains_point(point.to_ref())
     }
 
     fn middle_span_handle(&self) -> SpanHandle {
@@ -1648,6 +1656,14 @@ impl ZipperHandle {
             path: self.middle_path.clone(),
             left: self.inner_left.clone(),
             right: self.inner_right.clone(),
+        }
+    }
+
+    fn inner_span_handle<'a>(&'a self) -> SpanHandleRef<'a> {
+        SpanHandleRef {
+            path: self.inner_path(),
+            left: self.inner_left,
+            right: self.inner_right,
         }
     }
 }
@@ -1809,7 +1825,7 @@ impl<L: Debug + Clone> Expr<L> {
     }
 
     pub fn at_zipper(self, handle: &ZipperHandle) -> (SpanContext<L>, Zipper<L>, Span<L>) {
-        let (outer_ctx, span) = self.at_span(&handle.outer_span_handle_old());
+        let (outer_ctx, span) = self.at_span(handle.outer_span_handle());
         let (left, expr, right) = span.split_at_step(*handle.middle_path.0.first().unwrap());
         let (span_ctx, inner_span) = expr.at_span(&handle.middle_span_handle());
         (
@@ -2060,208 +2076,6 @@ impl<L: Debug + Clone> Expr<L> {
         outer_expr.splice_span(handle.outer_span_handle(), outer_span);
 
         result
-    }
-
-    // OLD
-
-    pub fn insert_span_at_point_old(
-        self,
-        span: Span<L>,
-        point: Point,
-    ) -> (SpanHandleAndFocus, Expr<L>) {
-        self.insert_span_at_span_handle_old(
-            span,
-            SpanHandleAndFocus {
-                span_handle: SpanHandle {
-                    path: point.path.clone(),
-                    left: point.index,
-                    right: point.index,
-                },
-                focus: SpanFocus::Left,
-            },
-        )
-    }
-
-    pub fn insert_zipper_at_point_old(
-        self,
-        zipper: Zipper<L>,
-        point: Point,
-    ) -> (SpanHandleAndFocus, Expr<L>) {
-        self.insert_zipper_at_span_handle_old(
-            zipper,
-            SpanHandleAndFocus {
-                span_handle: SpanHandle {
-                    path: point.path,
-                    left: point.index,
-                    right: point.index,
-                },
-                focus: SpanFocus::Left,
-            },
-        )
-    }
-
-    pub fn insert_span_at_span_handle_old(
-        self,
-        span: Span<L>,
-        handle: SpanHandleAndFocus,
-    ) -> (SpanHandleAndFocus, Expr<L>) {
-        // replace the selected span with the new span
-        let (span_ctx, _) = self.at_span(&handle.span_handle);
-        (
-            SpanHandleAndFocus {
-                span_handle: SpanHandle {
-                    path: handle.span_handle.path,
-                    // out of order in order to avoid clone
-                    right: handle.span_handle.left.add_offset(span.offset()),
-                    left: handle.span_handle.left,
-                },
-                focus: handle.focus,
-            },
-            span_ctx.unwrap(span),
-        )
-    }
-
-    pub fn insert_zipper_at_span_handle_old(
-        self,
-        zipper: Zipper<L>,
-        handle: SpanHandleAndFocus,
-    ) -> (SpanHandleAndFocus, Expr<L>) {
-        let (span_ctx, expr) = self.at_span(&handle.span_handle);
-        let middle_path: Path = zipper.path();
-        let inner_left_offset: Offset = zipper.inner_left_offset();
-        let inner_right_offset: Offset = zipper.inner_right_offset();
-        let (_zipper_point, unwrapped_zipper) = zipper.unwrap(expr);
-        let left = Index(0).add_offset(inner_left_offset);
-        let right = left.add_offset(inner_right_offset);
-        let unwrapped_span_ctx = span_ctx.unwrap(unwrapped_zipper);
-        (
-            SpanHandleAndFocus {
-                span_handle: SpanHandle {
-                    path: Path(
-                        [
-                            handle.span_handle.path.0.as_slice(),
-                            middle_path.0.as_slice(),
-                        ]
-                        .concat(),
-                    ),
-                    left: left,
-                    right: right,
-                },
-                focus: handle.focus,
-            },
-            unwrapped_span_ctx,
-        )
-    }
-
-    /// Replaces the outer span of the ZipperHandle with new Span.
-    pub fn insert_span_at_zipper_handle_old(
-        self,
-        span: Span<L>,
-        handle: ZipperHandleAndFocus,
-    ) -> (SpanHandleAndFocus, Expr<L>) {
-        self.insert_span_at_span_handle_old(
-            span,
-            SpanHandleAndFocus {
-                span_handle: SpanHandle {
-                    path: handle.zipper_handle.outer_path,
-                    left: handle.zipper_handle.outer_left,
-                    right: handle.zipper_handle.outer_right,
-                },
-                focus: match handle.focus {
-                    ZipperFocus::OuterLeft | ZipperFocus::InnerLeft => SpanFocus::Left,
-                    ZipperFocus::OuterRight | ZipperFocus::InnerRight => SpanFocus::Right,
-                },
-            },
-        )
-    }
-
-    pub fn insert_zipper_at_zipper_handle_old(
-        self,
-        zipper: Zipper<L>,
-        handle: ZipperHandleAndFocus,
-    ) -> (ZipperHandleAndFocus, Expr<L>) {
-        // replaces selected zipper with new zipper
-        let (outer_ctx, span) = self.at_span(&handle.zipper_handle.outer_span_handle_old());
-        let span_offset = span.offset();
-        let (outer_left, outer_expr, outer_right) =
-            span.split_at_step(*handle.zipper_handle.middle_path.0.first().unwrap());
-        let (_, inner_span) = outer_expr.at_span(&handle.zipper_handle.middle_span_handle());
-        let zipper_outer_left_offset = zipper.outer_left_offset();
-        let zipper_outer_right_offset = zipper.outer_right_offset();
-        let middle_path = zipper.path();
-        let zipper_inner_left_offset = zipper.inner_left_offset();
-        let (_zipper_point, unwrapped_zipper) = zipper.unwrap(inner_span);
-        (
-            ZipperHandleAndFocus {
-                zipper_handle: ZipperHandle {
-                    outer_path: outer_ctx.path(),
-                    outer_left: Index(0).add_offset(outer_ctx.left_offset()),
-                    outer_right: Index(0)
-                        .add_offset(outer_ctx.left_offset())
-                        .add_offset(zipper_outer_left_offset)
-                        .add_offset(Offset(1))
-                        .add_offset(zipper_outer_right_offset),
-                    middle_path,
-                    inner_left: Index(0).add_offset(zipper_inner_left_offset),
-                    inner_right: Index(0)
-                        .add_offset(zipper_inner_left_offset)
-                        .add_offset(span_offset),
-                },
-                focus: handle.focus,
-            },
-            outer_ctx.unwrap(Span(
-                [outer_left.0, unwrapped_zipper.0, outer_right.0].concat(),
-            )),
-        )
-    }
-
-    pub fn insert_span_at_handle_old(self, span: Span<L>, handle: Handle) -> (Expr<L>, Handle) {
-        match handle {
-            Handle::Point(point) => {
-                let (handle, expr) = self.insert_span_at_point_old(span, point);
-                (expr, Handle::Span(handle))
-            }
-            Handle::Span(handle) => {
-                let (handle, expr) = self.insert_span_at_span_handle_old(span, handle);
-                (expr, Handle::Span(handle))
-            }
-            Handle::Zipper(handle) => {
-                let (handle, expr) = self.insert_span_at_zipper_handle_old(span, handle);
-                (expr, Handle::Span(handle))
-            }
-        }
-    }
-
-    pub fn insert_zipper_at_handle_old(
-        self,
-        zipper: Zipper<L>,
-        handle: Handle,
-    ) -> (Expr<L>, Handle) {
-        match handle {
-            Handle::Point(point) => {
-                let (handle, expr) = self.insert_zipper_at_point_old(zipper, point);
-                (expr, Handle::Span(handle))
-            }
-            Handle::Span(handle) => {
-                let (handle, expr) = self.insert_zipper_at_span_handle_old(zipper, handle);
-                (expr, Handle::Span(handle))
-            }
-            Handle::Zipper(handle) => {
-                let (handle, expr) = self.insert_zipper_at_zipper_handle_old(zipper, handle);
-                (expr, Handle::Zipper(handle))
-            }
-        }
-    }
-
-    pub fn insert_fragment_at_handle_old(
-        self,
-        frag: Fragment<L>,
-        handle: Handle,
-    ) -> (Expr<L>, Handle) {
-        match frag {
-            Fragment::Span(span) => self.insert_span_at_handle_old(span, handle),
-            Fragment::Zipper(zipper) => self.insert_zipper_at_handle_old(zipper, handle),
-        }
     }
 }
 

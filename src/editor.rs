@@ -155,7 +155,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .input(|i| i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::Enter))
             {
                 if let Some(option) = menu.focus_option() {
-                    if let Some(core) = (option.edit)(&menu.query, &self.core) {
+                    // TODO: this still seems problematic that we are cloning the entire core state for every single update
+                    if let Some(core) = (option.edit)(&menu.query, self.core.clone()) {
                         self.set_core(core);
                     } else {
                         println!("Edit failed");
@@ -691,7 +692,7 @@ impl EditMenuPattern {
     }
 }
 
-pub type Edit<ES> = fn(&String, &CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
+pub type Edit<ES> = fn(&String, CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
 
 pub trait EditorSpec: 'static {
     type Constructor: Debug + Clone + Sized + PartialEq;
