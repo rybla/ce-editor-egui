@@ -1157,6 +1157,19 @@ impl Point {
         }
         point
     }
+
+    pub fn move_up(self) -> Result<SpanHandleAndFocus, MoveError> {
+        let mut point = self;
+        let step = point.path.pop().ok_or(MoveError::Boundary)?;
+        Ok(SpanHandleAndFocus {
+            span_handle: SpanHandle {
+                path: point.path,
+                left: step.left_index(),
+                right: step.right_index(),
+            },
+            focus: SpanFocus::Left,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1194,10 +1207,6 @@ impl Path {
 
     pub fn push(&mut self, step: Step) {
         self.0.push(step);
-    }
-
-    pub fn starts_with(&self, path: &Path) -> bool {
-        self.0.starts_with(&path.0)
     }
 
     pub fn concat(self, other: Self) -> Self {
@@ -1256,6 +1265,10 @@ impl<'a> PathRef<'a> {
 
     pub fn chain(self, other: PathRef<'a>) -> PathRef<'a> {
         PathRef::Concat(Box::new(self), Box::new(other))
+    }
+
+    pub fn starts_with(&self, path: PathRef<'_>) -> bool {
+        self.to_vec().starts_with(&path.to_vec())
     }
 }
 
