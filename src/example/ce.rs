@@ -34,9 +34,35 @@ impl EditorSpec for Ce {
                 EditMenuPattern::Dynamic(format!("<name> (constructor)"), |query| {
                     Some(format!("{} (constructor)", query))
                 }),
-                insert_node,
+                |query, state| {
+                    println!("insert_node: {query}");
+
+                    let mut state = state;
+
+                    let handle = state.expr.insert_fragment_at_handle(
+                        state.handle,
+                        Fragment::Zipper(Zipper {
+                            outer_left: Span(vec![]),
+                            outer_right: Span(vec![]),
+                            inner: SpanContext {
+                                outer: ExprContext(vec![]),
+                                inner: SpanTooth {
+                                    label: ExprLabel::new(query.clone(), vec![]),
+                                    left: Span(vec![]),
+                                    right: Span(vec![]),
+                                },
+                            },
+                        }),
+                    );
+
+                    state.handle = handle;
+
+                    Some(state)
+                },
             ),
             EditMenuOption::new(EditMenuPattern::Static(format!("copy")), |_query, state| {
+                println!("copy");
+
                 // TODO: Eventually I can implement a different type of getter
                 // that uses a reference to the expert and then just clones the
                 // part that needs to be gotten. But for now, I'm content just
@@ -62,28 +88,4 @@ impl EditorSpec for Ce {
     fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response {
         ui.label(egui::RichText::new(label.constructor.clone()))
     }
-}
-
-fn insert_node(query: &String, state: CoreEditorState<Ce>) -> Option<CoreEditorState<Ce>> {
-    let mut state = state;
-
-    let handle = state.expr.insert_fragment_at_handle(
-        state.handle,
-        Fragment::Zipper(Zipper {
-            outer_left: Span(vec![]),
-            outer_right: Span(vec![]),
-            inner: SpanContext {
-                outer: ExprContext(vec![]),
-                inner: SpanTooth {
-                    label: ExprLabel::new(query.clone(), vec![]),
-                    left: Span(vec![]),
-                    right: Span(vec![]),
-                },
-            },
-        }),
-    );
-
-    state.handle = handle;
-
-    Some(state)
 }

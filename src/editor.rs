@@ -179,6 +179,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let menu = ES::get_edits(self);
             self.menu = Some(EditMenu::new(menu));
         }
+        // cut
+        else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
+            println!("[cut] attempting to cut");
+            // if let Some(frag) = self.core.expr.splice_zipper_mut(handle, new_zipper)
+            todo!("cut")
+        }
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
             println!("[copy] attempting to copy");
@@ -380,6 +386,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                             }
                         }
                     } else {
+                        // TODO: refactor this to use menu.matched_items
+
                         let matched_dynamic_items = menu
                             .all_options
                             .iter()
@@ -622,19 +630,40 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
         }
     }
 
+    pub fn matched_items(&self) -> Vec<(Option<String>, &EditMenuOption<ES>)> {
+        let matched_dynamic_items: Vec<(Option<String>, &EditMenuOption<ES>)> = self
+            .all_options
+            .iter()
+            .filter_map(|item| match item.pattern {
+                EditMenuPattern::Static(_) => None,
+                EditMenuPattern::Dynamic(_, f) => Some((Some(f(&self.query)?), item)),
+            })
+            .collect::<Vec<_>>();
+
+        let matched_static_items: Vec<(Option<String>, &EditMenuOption<ES>)> = self
+            .nucleo
+            .snapshot()
+            .matched_items(..)
+            .map(|x| (None, x.data))
+            .collect::<Vec<_>>();
+
+        [matched_dynamic_items, matched_static_items].concat()
+    }
+
     pub fn focus_option(&self) -> Option<&EditMenuOption<ES>> {
-        let snapshot = self.nucleo.snapshot();
-        let item_count = snapshot.item_count() as i8;
-        if item_count == 0 {
+        let matched_items = self.matched_items();
+
+        if matched_items.is_empty() {
             return None;
         }
-        let index = self.index.rem_euclid(item_count) as u32;
-        let item = snapshot.get_item(index)?;
-        Some(item.data)
+
+        let index = self.index.rem_euclid(matched_items.len() as i8);
+        let item = matched_items.get(index as usize)?;
+        Some(item.1)
     }
 
     pub fn update(&mut self) {
-        println!("[EditMenu.update] {}", self.query);
+        // println!("[EditMenu.update] {}", self.query);
         self.nucleo.pattern.reparse(
             0,
             &self.query,

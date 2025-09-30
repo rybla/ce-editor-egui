@@ -2054,6 +2054,40 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
+    pub fn splice_span_at_handle(
+        &mut self,
+        handle: SpanHandleAndFocus,
+        span: Span<L>,
+    ) -> (Point, Span<L>) {
+        let old_span = self.splice_span(handle.span_handle.to_ref(), span);
+        // ((), old_span)
+        todo!()
+    }
+
+    pub fn splice_zipper_mut_at_handle(
+        &mut self,
+        handle: ZipperHandleAndFocus,
+        zipper: Option<Zipper<L>>,
+    ) -> (SpanHandleAndFocus, Zipper<L>) {
+        let old_zipper = self.splice_zipper_mut(handle.zipper_handle.to_ref(), zipper);
+        // ((), old_zipper)
+        todo!()
+    }
+
+    pub fn splice_fragment_at_handle(&mut self, handle: Handle) -> Option<(Handle, Fragment<L>)> {
+        match handle {
+            Handle::Point(_point) => None,
+            Handle::Span(handle) => {
+                let (point, span) = self.splice_span_at_handle(handle, Span::empty());
+                Some((Handle::Point(point), Fragment::Span(span)))
+            }
+            Handle::Zipper(handle) => {
+                let (handle, zipper) = self.splice_zipper_mut_at_handle(handle, None);
+                Some((Handle::Span(handle), Fragment::Zipper(zipper)))
+            }
+        }
+    }
+
     pub fn kids_and_steps<'a>(
         &'a self,
     ) -> std::iter::Map<
@@ -2120,6 +2154,7 @@ impl<L: Debug + Clone> Expr<L> {
         handle: SpanHandleAndFocus,
         span: Span<L>,
     ) -> SpanHandleAndFocus {
+        println!("[insert] insert_span_at_span_handle");
         let span_offset = span.offset();
         let _ = self.splice_span(handle.span_handle.to_ref(), span);
         SpanHandleAndFocus {
@@ -2137,6 +2172,7 @@ impl<L: Debug + Clone> Expr<L> {
         point: Point,
         zipper: Zipper<L>,
     ) -> SpanHandleAndFocus {
+        println!("[insert] insert_zipper_at_point");
         self.insert_zipper_at_span_handle(
             SpanHandleAndFocus {
                 span_handle: SpanHandle {
@@ -2155,6 +2191,7 @@ impl<L: Debug + Clone> Expr<L> {
         handle: SpanHandleAndFocus,
         zipper: Zipper<L>,
     ) -> SpanHandleAndFocus {
+        println!("[insert] insert_zipper_at_span_handle");
         let span = self.splice_span(handle.span_handle.to_ref(), Span::empty());
         let span_offset = span.offset();
         let (zipper_point, span) = zipper.unwrap(span);
@@ -2186,6 +2223,7 @@ impl<L: Debug + Clone> Expr<L> {
         handle: ZipperHandleAndFocus,
         zipper: Zipper<L>,
     ) -> SpanHandleAndFocus {
+        println!("[insert] insert_zipper_at_zipper_handle");
         let zipper_outer_offset = zipper.outer_offset();
         let path = handle.zipper_handle.outer_path.clone();
         let left = handle.zipper_handle.outer_left;
@@ -2193,7 +2231,7 @@ impl<L: Debug + Clone> Expr<L> {
             .zipper_handle
             .outer_left
             .add_offset(zipper_outer_offset);
-        let _ = self.splice_zipper(handle.zipper_handle.to_ref(), zipper);
+        let _ = self.splice_zipper_mut(handle.zipper_handle.to_ref(), Some(zipper));
         SpanHandleAndFocus {
             span_handle: SpanHandle { path, left, right },
             focus: handle.focus.to_span_focus(),
@@ -2205,10 +2243,12 @@ impl<L: Debug + Clone> Expr<L> {
         handle: ZipperHandleAndFocus,
         span: Span<L>,
     ) -> SpanHandleAndFocus {
+        println!("[insert] insert_span_at_zipper_handle");
         self.insert_span_at_span_handle(handle.outer_span_handle_and_focus_owned(), span)
     }
 
     pub fn insert_span_at_handle(&mut self, handle: Handle, span: Span<L>) -> Handle {
+        println!("[insert] insert_span_at_handle");
         match handle {
             Handle::Point(point) => Handle::Span(self.insert_span_at_point(point, span)),
             Handle::Span(span_handle) => {
@@ -2221,6 +2261,7 @@ impl<L: Debug + Clone> Expr<L> {
     }
 
     pub fn insert_zipper_at_handle(&mut self, handle: Handle, zipper: Zipper<L>) -> Handle {
+        println!("[insert] insert_zipper_at_handle");
         match handle {
             Handle::Point(point) => Handle::Span(self.insert_zipper_at_point(point, zipper)),
             Handle::Span(handle) => Handle::Span(self.insert_zipper_at_span_handle(handle, zipper)),
@@ -2231,6 +2272,7 @@ impl<L: Debug + Clone> Expr<L> {
     }
 
     pub fn insert_fragment_at_handle(&mut self, handle: Handle, frag: Fragment<L>) -> Handle {
+        println!("[insert] insert_fragment_at_handle");
         match frag {
             Fragment::Span(span) => self.insert_span_at_handle(handle, span),
             Fragment::Zipper(zipper) => self.insert_zipper_at_handle(handle, zipper),
@@ -2263,24 +2305,50 @@ impl<L: Debug + Clone> Expr<L> {
             .splice_span_at_index_range(handle.left, handle.right, new_span)
     }
 
+    // pub fn at_zipper_handle_owned(self, handle:ZipperHandleRef<'_>) -> ()
+
     pub fn splice_zipper(
+        self,
+        handle: ZipperHandleAndFocusRef<'_>,
+        new_zipper: Option<Zipper<L>>,
+    ) -> (ZipperHandleAndFocusRef<'_>, Self, Zipper<L>) {
+        let (outer_ctx, outer_expr) = self.at_path_owned(handle.zipper_handle.outer_path);
+        let (inner_ctx, inner_expr) = outer_expr.at_path_owned(handle.zipper_handle.middle_path);
+        todo!()
+    }
+
+    pub fn splice_zipper_mut(
         &mut self,
         handle: ZipperHandleRef<'_>,
-        new_zipper: Zipper<L>,
+        new_zipper: Option<Zipper<L>>,
     ) -> Zipper<L> {
-        let result = new_zipper.clone();
+        // TODO: need to refactor this to not be mutable
 
-        let inner_expr = self.get_expr_at_path_mut(handle.clone().inner_path());
-        let inner_span = inner_expr.kids.splice_span_at_index_range(
-            handle.inner_left,
-            handle.inner_right,
-            Span::empty(),
-        );
-        let (_, outer_span) = new_zipper.unwrap(inner_span);
-        let outer_expr = self.get_expr_at_path_mut(handle.outer_path.clone());
-        outer_expr.splice_span(handle.outer_span_handle(), outer_span);
+        // gather teeth of zipper
+        // let mut tooths: Vec<Tooth<L>> = vec![];
+        // let outer_expr = self.get_expr_at_path_mut(handle.outer_path);
+        // let middle_path_steps = handle.middle_path.to_vec();
+        // let (middle_path_first_step, middle_path_rest_steps) = middle_path_steps.split_first().unwrap();
+        // for step in middle_path_rest_steps {
+        //     outer_expr.tooth
+        //     // outer_expr.kids.split_at_step(step)
+        // }
 
-        result
+        // let inner_expr = self.get_expr_at_path_mut(handle.clone().inner_path());
+        // let inner_span = inner_expr.kids.splice_span_at_index_range(
+        //     handle.inner_left,
+        //     handle.inner_right,
+        //     Span::empty(),
+        // );
+        // let outer_span = match new_zipper {
+        //     Some(new_zipper) => new_zipper.unwrap(inner_span).1,
+        //     None => inner_span,
+        // };
+        // let outer_expr = self.get_expr_at_path_mut(handle.outer_path.clone());
+        // let old_span = outer_expr.splice_span(handle.outer_span_handle(), outer_span);
+
+        // TODO: get zipper
+        todo!()
     }
 }
 
@@ -2323,7 +2391,11 @@ impl<L: Debug + Clone> Span<L> {
     }
 
     pub fn is_index_in_range(&self, index: Index) -> bool {
-        index.0 < self.0.len()
+        index.0 <= self.0.len()
+    }
+
+    pub fn is_step_in_range(&self, step: Step) -> bool {
+        step.0 < self.0.len()
     }
 
     pub fn insert_span_at_index(&mut self, index: Index, span: Span<L>) {
@@ -2424,6 +2496,10 @@ impl<L: Debug + Clone> ExprContext<L> {
 
     pub fn path(&self) -> Path {
         Path(self.0.iter().map(|tooth| tooth.step()).collect())
+    }
+
+    fn empty() -> ExprContext<L> {
+        ExprContext(vec![])
     }
 }
 
