@@ -25,6 +25,18 @@ pub fn split_vec_at_index<A>(xs: Vec<A>, i: usize) -> (Vec<A>, Vec<A>) {
     (left, right)
 }
 
+/// Splits a vector into three parts: The elements before the index, the element
+/// at the index, and the elements after the index.
+pub fn extract_from_vec_at_index<A>(xs: Vec<A>, i: usize) -> Option<(Vec<A>, A, Vec<A>)> {
+    let mut left = xs;
+    let mut right = left.split_off(i);
+    if right.is_empty() {
+        return None;
+    }
+    let middle = right.remove(0);
+    Some((left, middle, right))
+}
+
 pub fn get_owned_element_at_index<A>(xs: Vec<A>, i: usize) -> Option<A> {
     xs.into_iter().nth(i)
 }

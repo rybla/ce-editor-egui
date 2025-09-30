@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use crate::utility::extract_from_vec_at_index;
+
 // -----------------------------------------------------------------------------
 // Index
 // -----------------------------------------------------------------------------
@@ -86,6 +88,43 @@ pub struct Expr<L> {
     pub kids: Span<L>,
 }
 
+impl<L: Debug + Clone> Expr<L> {
+    pub fn at_path(&self, path: &Path) -> &Self {
+        let mut e = self;
+        for s in path.0.iter() {
+            e = e.at_step(s);
+        }
+        e
+    }
+
+    pub fn at_path_owned(self, path: &Path) -> (Context<L>, Self) {
+        let mut ctx: Context<L> = Context::empty();
+        let mut e = self;
+        for s in path.0.iter() {
+            let (th, e_kid) = e.at_step_owned(s);
+            ctx.0.push(th);
+            e = e_kid;
+        }
+        (ctx, e)
+    }
+
+    fn at_step(&self, step: &Step) -> &Self {
+        self.kids.at_step(step)
+    }
+
+    fn at_step_owned(self, s: &Step) -> (Tooth<L>, Expr<L>) {
+        let (left, middle, right) = self.kids.at_step_owned(s);
+        (
+            Tooth {
+                label: self.label,
+                left: left,
+                right: right,
+            },
+            middle,
+        )
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Fragment
 // -----------------------------------------------------------------------------
@@ -104,6 +143,25 @@ pub enum Fragment<L> {
 /// A span of [Expr]s.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Span<L>(pub Vec<Expr<L>>);
+
+impl<L: Debug + Clone> Span<L> {
+    pub fn assert_step_in_bounds(&self, s: Step) {
+        assert!(s.0 < self.0.len())
+    }
+
+    pub fn assert_index_in_bounds(&self, i: &Index) {
+        assert!(i.0 <= self.0.len())
+    }
+
+    pub fn at_step(&self, step: &Step) -> &Expr<L> {
+        self.0.get(step.0).unwrap()
+    }
+
+    pub fn at_step_owned(self, s: &Step) -> (Self, Expr<L>, Self) {
+        let (left, middle, right) = extract_from_vec_at_index(self.0, s.0).unwrap();
+        (Span(left), middle, Span(right))
+    }
+}
 
 // -----------------------------------------------------------------------------
 // Zipper
@@ -126,6 +184,12 @@ pub struct Zipper<L> {
 /// A context around an [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Context<L>(pub Vec<Tooth<L>>);
+
+impl<L: Debug + Clone> Context<L> {
+    fn empty() -> Self {
+        Self(vec![])
+    }
+}
 
 /// A tooth of an [Expr] around a [Step].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
