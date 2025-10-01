@@ -1,4 +1,4 @@
-use crate::expr_v1::*;
+use crate::expr::*;
 use egui::Frame;
 use lazy_static::lazy_static;
 use nucleo;
@@ -109,10 +109,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.menu = None;
             self.requested_menu_focus = false;
         } else {
-            self.core
-                .handle
-                .escape()
-                .unwrap_or_else(|err| println!("Failed to move: {err:?}"));
+            match self.core.handle.escape() {
+                Ok(h) => self.core.handle = h,
+                Err(err) => println!("Failed to move: {err:?}"),
+            }
         }
     }
 
@@ -187,25 +187,18 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-            println!("[copy] attempting to copy");
-            if let Some(frag) = self
-                .core
-                .expr
-                .clone()
-                .get_fragment_at_handle(&self.core.handle)
-            {
-                println!("[copy] copied fragment");
-                self.core.clipboard = Some(frag)
-            }
+            println!("[copy] copying fragment at handle");
+            let frag = self.core.expr.at_handle_cloned(&self.core.handle);
+            self.core.clipboard = Some(frag)
         }
         // paste
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
             println!("[paste]");
-            if let Some(frag) = &self.core.clipboard {
+            if let Some(frag) = self.core.clipboard.take() {
                 let handle = self
                     .core
                     .expr
-                    .insert_fragment_at_handle(self.core.handle.clone(), frag.clone());
+                    .insert_fragment_at_handle(self.core.handle, frag);
                 self.core.handle = handle;
             }
         }
@@ -213,21 +206,21 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx.input(|i| i.modifiers.command_only())
             && let Some(dir) = match_input_move_dir(ctx)
         {
-            self.core.handle.rotate_focus_dir(dir);
+            self.core.handle.rotate_focus_dir(&dir);
         }
         // select
         else if ctx.input(|i| i.modifiers.shift)
             && let Some(dir) = match_input_move_dir(ctx)
         {
-            let mut target: Point = self.core.handle.focus_point().from_ref();
+            let mut target: Point = self.core.handle.focus_point();
             loop {
-                let move_status = target.move_dir_old(dir, &self.core.expr);
+                let move_status = target.move_dir(&self.core.expr, &dir);
                 if !move_status.is_ok() {
                     println!("[select] bailed since a move failed");
                     break;
                 }
 
-                if let Some(handle) = self.core.handle.select_to(&target, &self.core.expr) {
+                if let Some(handle) = self.core.handle.drag(&self.core.expr, &target) {
                     if ES::is_valid_handle(&handle, &self.core.expr) {
                         self.set_handle_unsafe(handle);
                         break;
@@ -239,7 +232,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if let Some(dir) = match_input_move_dir(ctx) {
             let mut handle = self.core.handle.clone();
             loop {
-                let move_status = handle.move_dir_old(dir, &self.core.expr);
+                let move_status = handle.move_dir(&self.core.expr, &dir);
                 if !move_status.is_ok() {
                     println!("[move] bailed since a move failed");
                     break;
@@ -253,10 +246,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // move up
         else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            self.core
-                .handle
-                .move_up(&self.core.expr)
-                .unwrap_or_else(|err| println!("Failed to move up: {err:?}"));
+            // self.core
+            //     .handle
+            //     .move_up(&self.core.expr)
+            //     .unwrap_or_else(|err| println!("Failed to move up: {err:?}"));
+            todo!("move up")
         }
     }
 
@@ -276,17 +270,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         let is_at_handle = match &self.core.handle {
             Handle::Point(handle) => point == handle,
-            Handle::Span(handle) => {
-                let point_ref = point.to_ref();
-                point_ref == handle.span_handle.left_point()
-                    || point_ref == handle.span_handle.right_point()
-            }
+            Handle::Span(handle) => point == &handle.p_l() || point == &handle.p_r(),
             Handle::Zipper(handle) => {
-                let point_ref = point.to_ref();
-                point_ref == handle.zipper_handle.outer_left_point()
-                    || point_ref == handle.zipper_handle.outer_right_point()
-                    || point_ref == handle.zipper_handle.inner_left_point()
-                    || point_ref == handle.zipper_handle.inner_right_point()
+                point == &handle.p_ol()
+                    || point == &handle.p_or()
+                    || point == &handle.p_il()
+                    || point == &handle.p_ir()
             }
         };
 

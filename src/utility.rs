@@ -1,3 +1,5 @@
+use std::mem;
+
 /// The function's purpose is to calculate `x mod n` where `x` is a signed 8-bit
 /// integer and `n` is a `usize`. A critical part of the logic is to ensure the
 /// result is always non-negative, which aligns with the mathematical definition
@@ -39,4 +41,16 @@ pub fn extract_from_vec_at_index<A>(xs: Vec<A>, i: usize) -> Option<(Vec<A>, A, 
 
 pub fn get_owned_element_at_index<A>(xs: Vec<A>, i: usize) -> Option<A> {
     xs.into_iter().nth(i)
+}
+
+/// Takes ownership of the current value in `o` if it is a `Some` and applies
+/// `f` to it.
+pub fn with_some_mut<A, B>(f: impl FnOnce(A) -> B, o: &mut Option<A>) -> Option<B> {
+    o.take().map(f)
+}
+
+/// Takes ownership of the current value of `x` and replaces the value in the
+/// mutable reference with the default value for A.
+pub fn swap_default<A: Default>(x: &mut A) -> A {
+    mem::take(x)
 }
