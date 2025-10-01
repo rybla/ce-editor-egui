@@ -484,7 +484,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     ui,
                     &Point {
                         path: path.clone(),
-                        index: step.left_index(),
+                        i: step.left_index(),
                     },
                 );
 
@@ -499,7 +499,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 ui,
                 &Point {
                     path: path.clone(),
-                    index: expr.kids.rightmost_index(),
+                    i: expr.kids.rightmost_index(),
                 },
             );
         });
