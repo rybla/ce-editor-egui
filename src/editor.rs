@@ -109,22 +109,22 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.menu = None;
             self.requested_menu_focus = false;
         } else {
-            match self.core.handle.escape() {
-                Ok(h) => self.core.handle = h,
-                Err(err) => println!("Failed to move: {err:?}"),
-            }
+            self.core
+                .handle
+                .escape()
+                .unwrap_or_else(|err| println!("Failed to move: {err:?}"))
         }
     }
 
     /// Sets handle and does associated updates after checking if the handle is
     /// valid (via [EditorSpec::is_valid_handle]). Returns the handle back if
     /// the handle is invalid.
-    pub fn set_handle(&mut self, handle: Handle) -> Option<Handle> {
+    pub fn set_handle_safe(&mut self, handle: Handle) -> Result<(), Handle> {
         if !ES::is_valid_handle(&handle, &self.core.expr) {
-            return Some(handle);
+            return Err(handle);
         }
         self.set_handle_unsafe(handle);
-        None
+        Ok(())
     }
 
     /// Sets handle and does associated updates without checking if the handle
@@ -198,7 +198,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 let handle = self
                     .core
                     .expr
-                    .insert_fragment_at_handle(self.core.handle, frag);
+                    .insert_fragment_at_handle(self.core.handle.clone(), frag);
                 self.core.handle = handle;
             }
         }
@@ -220,7 +220,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     break;
                 }
 
-                if let Some(handle) = self.core.handle.drag(&self.core.expr, &target) {
+                if let Some(handle) = self.core.handle.clone().drag(&self.core.expr, &target) {
                     if ES::is_valid_handle(&handle, &self.core.expr) {
                         self.set_handle_unsafe(handle);
                         break;
@@ -230,27 +230,27 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // move
         else if let Some(dir) = match_input_move_dir(ctx) {
-            let mut handle = self.core.handle.clone();
+            let origin = self.core.handle.clone();
             loop {
-                let move_status = handle.move_dir(&self.core.expr, &dir);
+                let move_status = self.core.handle.move_dir(&self.core.expr, &dir);
                 if !move_status.is_ok() {
                     println!("[move] bailed since a move failed");
                     break;
                 }
 
-                if ES::is_valid_handle(&handle, &self.core.expr) {
-                    self.set_handle_unsafe(handle);
+                if ES::is_valid_handle(&self.core.handle, &self.core.expr) {
                     break;
+                } else {
+                    self.set_handle_unsafe(origin.clone());
                 }
             }
         }
         // move up
         else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            // self.core
-            //     .handle
-            //     .move_up(&self.core.expr)
-            //     .unwrap_or_else(|err| println!("Failed to move up: {err:?}"));
-            todo!("move up")
+            self.core
+                .handle
+                .move_up()
+                .unwrap_or_else(|err| println!("Failed to move up: {err:?}"))
         }
     }
 
@@ -262,11 +262,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render(&mut self, ui: &mut egui::Ui) {
-        self.render_expr(ui, &self.core.expr.clone(), &Path::default());
+        self.render_expr(ui, &self.core.expr.clone(), &Path::empty());
     }
 
     pub fn render_point(&mut self, ui: &mut egui::Ui, point: &Point) {
-        let is_handle = point.to_ref() == self.core.handle.focus_point();
+        let is_handle = point == &self.core.handle.focus_point();
 
         let is_at_handle = match &self.core.handle {
             Handle::Point(handle) => point == handle,
@@ -309,8 +309,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }));
             if label.clicked() {
                 let handle = Handle::Point(point.clone());
-                let invalid_handle = self.set_handle(handle);
-                if let Some(invalid_handle) = invalid_handle {
+                let invalid_handle = self.set_handle_safe(handle);
+                if let Err(invalid_handle) = invalid_handle {
                     println!("Invalid handle: {:?}", invalid_handle);
                 }
             }
@@ -464,22 +464,20 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let label = ES::render_label(ui, &expr.label);
             if label.clicked() {
                 let mut path = path.clone();
-                if let Some(step_parent) = path.pop() {
-                    let invalid_handle = self.set_handle(Handle::Span(SpanHandleAndFocus {
-                        span_handle: SpanHandle {
-                            path: path,
-                            left: step_parent.left_index(),
-                            right: step_parent.right_index(),
-                        },
+                if let Some(s) = path.0.pop() {
+                    let is_invalid_handle = self.set_handle_safe(Handle::Span(SpanHandle {
+                        path: path,
+                        left: s.left_index(),
+                        right: s.right_index(),
                         focus: SpanFocus::Left,
                     }));
-                    if let Some(invalid_handle) = invalid_handle {
+                    if let Err(invalid_handle) = is_invalid_handle {
                         println!("Invalid handle: {:?}", invalid_handle);
                     }
                 }
             }
 
-            for (step, kid) in expr.kids_and_steps() {
+            for (step, kid) in expr.kids.steps_and_exprs() {
                 // render left point
                 self.render_point(
                     ui,
@@ -491,7 +489,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                 // render kid
                 let mut kid_path = path.clone();
-                kid_path.push(step);
+                kid_path.0.push(step);
                 self.render_expr(ui, kid, &kid_path);
             }
 
@@ -500,7 +498,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 ui,
                 &Point {
                     path: path.clone(),
-                    index: expr.kids.extreme_indexes().1,
+                    index: expr.kids.rightmost_index(),
                 },
             );
         });
@@ -510,8 +508,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
     pub fn set_expr_and_handle(&mut self, expr: Expr<ExprLabel<ES>>, handle: Handle) {
         self.core.expr = expr;
-        let invalid_handle = self.set_handle(handle);
-        if let Some(invalid_handle) = invalid_handle {
+        let invalid_handle = self.set_handle_safe(handle);
+        if let Err(invalid_handle) = invalid_handle {
             panic!(
                 "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
                 self.core.expr, invalid_handle
@@ -521,8 +519,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
     pub fn set_core(&mut self, core: CoreEditorState<ES>) {
         self.core.expr = core.expr;
-        let invalid_handle = self.set_handle(core.handle);
-        if let Some(invalid_handle) = invalid_handle {
+        let invalid_handle = self.set_handle_safe(core.handle);
+        if let Err(invalid_handle) = invalid_handle {
             panic!(
                 "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
                 self.core.expr, invalid_handle

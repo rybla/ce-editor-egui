@@ -1,4 +1,4 @@
-use crate::{editor::*, expr_v1::*};
+use crate::{editor::*, expr::*};
 
 type C = String;
 type D = Vec<String>;
@@ -22,7 +22,7 @@ impl EditorSpec for Ce {
                     constructor: format!("root"),
                     diagnostic: Default::default(),
                 },
-                Default::default(),
+                Span::empty(),
             ),
             Default::default(),
         )
@@ -42,16 +42,13 @@ impl EditorSpec for Ce {
                     let handle = state.expr.insert_fragment_at_handle(
                         state.handle,
                         Fragment::Zipper(Zipper {
-                            outer_left: Span(vec![]),
-                            outer_right: Span(vec![]),
-                            inner: SpanContext {
-                                outer: ExprContext(vec![]),
-                                inner: SpanTooth {
-                                    label: ExprLabel::new(query.clone(), vec![]),
-                                    left: Span(vec![]),
-                                    right: Span(vec![]),
-                                },
-                            },
+                            outer_left: Span::empty(),
+                            outer_right: Span::empty(),
+                            middle: Context(vec![Tooth {
+                                label: ExprLabel::new(query.clone(), vec![]),
+                                left: Span::empty(),
+                                right: Span::empty(),
+                            }]),
                         }),
                     );
 
@@ -62,12 +59,7 @@ impl EditorSpec for Ce {
             ),
             EditMenuOption::new(EditMenuPattern::Static(format!("copy")), |_query, state| {
                 println!("copy");
-
-                // TODO: Eventually I can implement a different type of getter
-                // that uses a reference to the expert and then just clones the
-                // part that needs to be gotten. But for now, I'm content just
-                // to clone the entire top-level expr first.
-                let frag = state.expr.clone().get_fragment_at_handle(&state.handle)?;
+                let frag = state.expr.at_handle(&state.handle);
                 Some(CoreEditorState {
                     expr: state.expr.clone(),
                     handle: state.handle.clone(),

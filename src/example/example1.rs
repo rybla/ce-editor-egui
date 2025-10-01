@@ -1,4 +1,4 @@
-use crate::{editor::*, expr_v1::*};
+use crate::{editor::*, expr::*};
 
 type Constructor = String;
 type Diagnostic = String;
@@ -58,7 +58,7 @@ impl EditorSpec for Example1 {
                 pattern: EditMenuPattern::Static(format!("copy")),
                 edit: |_query, state| {
                     println!("[edit] copy");
-                    let frag = state.expr.clone().get_fragment_at_handle(&state.handle)?;
+                    let frag = state.expr.at_handle(&state.handle);
                     let core = Some(CoreEditorState {
                         expr: state.expr.clone(),
                         handle: state.handle.clone(),
@@ -88,23 +88,10 @@ impl EditorSpec for Example1 {
 
     fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel<Self>>) -> bool {
         match handle {
-            Handle::Point(handle) => expr.at_path_owned(handle.path.to_ref()).1.kids.0.len() > 0,
-            Handle::Span(handle) => {
-                expr.at_path_owned(handle.span_handle.path.to_ref())
-                    .1
-                    .kids
-                    .0
-                    .len()
-                    > 0
-            }
+            Handle::Point(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
+            Handle::Span(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
             Handle::Zipper(handle) => {
-                !handle.zipper_handle.middle_path.0.is_empty()
-                    && !expr
-                        .at_path_owned(handle.zipper_handle.inner_path())
-                        .1
-                        .kids
-                        .0
-                        .is_empty()
+                !handle.path_m.0.is_empty() && !expr.at_path(&handle.path_i()).kids.0.is_empty()
             }
         }
     }
