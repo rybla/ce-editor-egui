@@ -58,14 +58,15 @@ impl EditorSpec for Example1 {
                 pattern: EditMenuPattern::Static(format!("copy")),
                 edit: |_query, state| {
                     println!("[edit] copy");
-                    let frag = state.expr.at_handle(&state.handle);
-                    let core = Some(CoreEditorState {
-                        expr: state.expr.clone(),
-                        handle: state.handle.clone(),
-                        clipboard: Some(frag),
-                    });
-                    println!("core = {core:#?}");
-                    core
+                    state.expr.at_handle(&state.handle).map(|frag| {
+                        let core = CoreEditorState {
+                            expr: state.expr.clone(),
+                            handle: state.handle.clone(),
+                            clipboard: Some(frag),
+                        };
+                        println!("core = {core:#?}");
+                        core
+                    })
                 },
             },
             // TODO: paste

@@ -468,8 +468,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 if let Some(s) = path.0.pop() {
                     let is_invalid_handle = self.set_handle_safe(Handle::Span(SpanHandle {
                         path: path,
-                        left: s.left_index(),
-                        right: s.right_index(),
+                        i_l: s.left_index(),
+                        i_r: s.right_index(),
                         focus: SpanFocus::Left,
                     }));
                     if let Err(invalid_handle) = is_invalid_handle {

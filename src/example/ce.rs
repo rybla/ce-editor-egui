@@ -42,12 +42,12 @@ impl EditorSpec for Ce {
                     let handle = state.expr.insert_fragment_at_handle(
                         state.handle,
                         Fragment::Zipper(Zipper {
-                            outer_left: Span::empty(),
-                            outer_right: Span::empty(),
+                            span_ol: Span::empty(),
+                            span_or: Span::empty(),
                             middle: Context(vec![Tooth {
                                 label: ExprLabel::new(query.clone(), vec![]),
-                                left: Span::empty(),
-                                right: Span::empty(),
+                                span_l: Span::empty(),
+                                span_r: Span::empty(),
                             }]),
                         }),
                     );
@@ -59,12 +59,14 @@ impl EditorSpec for Ce {
             ),
             EditMenuOption::new(EditMenuPattern::Static(format!("copy")), |_query, state| {
                 println!("copy");
-                let frag = state.expr.at_handle(&state.handle);
-                Some(CoreEditorState {
-                    expr: state.expr.clone(),
-                    handle: state.handle.clone(),
-                    clipboard: Some(frag),
-                })
+                state
+                    .expr
+                    .at_handle(&state.handle)
+                    .map(|frag| CoreEditorState {
+                        expr: state.expr.clone(),
+                        handle: state.handle.clone(),
+                        clipboard: Some(frag),
+                    })
             }),
         ]
     }
