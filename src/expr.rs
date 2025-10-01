@@ -82,11 +82,31 @@ impl Path {
         Path(path0)
     }
 
-    /// If `self` is an ancestor of `other`, then return the path `suffix` such
-    /// that `path.append(suffix) == other`
-    pub fn diff(&self, other: &Self) -> Option<Path> {
-        let suffix = self.0.as_slice().strip_suffix(other.0.as_slice())?;
+    /// If `self` is a prefix of `other`, then return the path `suffix` such
+    /// that `self.append(suffix) == other`
+    pub fn diff(&self, other: &Self) -> Option<Self> {
+        let suffix = other.0.as_slice().strip_suffix(self.0.as_slice())?;
         Some(Path(suffix.to_vec()))
+    }
+
+    pub fn is_prefix_of(&self, other: &Self) -> bool {
+        other.0.as_slice().strip_suffix(self.0.as_slice()).is_some()
+    }
+
+    pub fn p_ol(&self) -> Point {
+        todo!()
+    }
+
+    pub fn p_or(&self) -> Point {
+        todo!()
+    }
+
+    pub fn p_il(&self) -> Point {
+        todo!()
+    }
+
+    pub fn p_ir(&self) -> Point {
+        todo!()
     }
 }
 
@@ -101,7 +121,11 @@ pub struct Point {
     pub index: Index,
 }
 
-impl Point {}
+impl Point {
+    fn is_left_adjacent_to_point(&self, other: &Point) -> bool {
+        self.path == other.path && self.index.is_left_of_index(other.index)
+    }
+}
 
 // -----------------------------------------------------------------------------
 // Handle
@@ -233,12 +257,101 @@ impl Handle {
                             focus,
                         }))
                     } else {
-                        todo!()
+                        None
                     }
                 }
             }
-            Handle::Span(handle) => todo!(),
-            Handle::Zipper(handle) => todo!(),
+            Handle::Span(handle) => Handle::Point(handle.focus_point()).drag(target, e),
+            Handle::Zipper(source) => {
+                let path_i: Path = source.path_i();
+
+                // adjust i_ol
+                if target.path.is_prefix_of(&path_i) {
+                    Handle::Point(source.p_il())
+                        .drag(target, e)
+                        .and_then(|h| match h {
+                            Handle::Zipper(h) => {
+                                let mut h = h;
+                                h.i_or = if target.is_left_adjacent_to_point(&Point {
+                                    path: source.path_o,
+                                    index: source.path_m.0.first().unwrap().left_index(),
+                                }) {
+                                    source.i_or
+                                } else {
+                                    h.i_or
+                                };
+                                h.i_il = source.i_il;
+                                h.i_ir = source.i_ir;
+                                Some(Handle::Zipper(h))
+                            }
+                            _ => Some(h),
+                        })
+                } else
+                // adjust i_or
+                if target.path.is_prefix_of(&path_i) {
+                    Handle::Point(source.p_ir())
+                        .drag(target, e)
+                        .and_then(|h| match h {
+                            Handle::Zipper(h) => {
+                                let mut h = h;
+                                h.i_ol = if (Point {
+                                    path: source.path_o,
+                                    index: source.path_m.0.first().unwrap().right_index(),
+                                })
+                                .is_left_adjacent_to_point(target)
+                                {
+                                    source.i_ol
+                                } else {
+                                    h.i_ol
+                                };
+                                h.i_il = source.i_il;
+                                h.i_ir = source.i_ir;
+                                Some(Handle::Zipper(h))
+                            }
+                            _ => Some(h),
+                        })
+                } else
+                // adjust i_il
+                if source.path_o.is_prefix_of(&target.path) {
+                    Handle::Point(source.p_ol())
+                        .drag(target, e)
+                        .and_then(|h| match h {
+                            Handle::Zipper(h) => {
+                                let mut h = h;
+                                h.i_ol = source.i_ol;
+                                h.i_or = source.i_or;
+                                h.i_ir = if target.is_left_adjacent_to_point(&source.p_ir()) {
+                                    source.i_ir
+                                } else {
+                                    h.i_ir
+                                };
+                                Some(Handle::Zipper(h))
+                            }
+                            _ => Some(h),
+                        })
+                } else
+                // adjust i_ir
+                if false {
+                    Handle::Point(source.p_or())
+                        .drag(target, e)
+                        .and_then(|h| match h {
+                            Handle::Zipper(h) => {
+                                let mut h = h;
+                                h.i_ol = source.i_ol;
+                                h.i_or = source.i_or;
+                                h.i_il = if source.p_il().is_left_adjacent_to_point(target) {
+                                    source.i_il
+                                } else {
+                                    h.i_il
+                                };
+                                Some(Handle::Zipper(h))
+                            }
+                            _ => Some(h),
+                        })
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -254,6 +367,11 @@ pub struct SpanHandle {
     pub left: Index,
     pub right: Index,
     pub focus: SpanFocus,
+}
+impl SpanHandle {
+    fn focus_point(&self) -> Point {
+        todo!()
+    }
 }
 
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
@@ -276,6 +394,28 @@ pub struct ZipperHandle {
     pub i_il: Index,
     pub i_ir: Index,
     pub focus: ZipperFocus,
+}
+
+impl ZipperHandle {
+    fn path_i(&self) -> Path {
+        todo!()
+    }
+
+    fn p_il(&self) -> Point {
+        todo!()
+    }
+
+    fn p_ir(&self) -> Point {
+        todo!()
+    }
+
+    fn p_ol(&self) -> Point {
+        todo!()
+    }
+
+    fn p_or(&self) -> Point {
+        todo!()
+    }
 }
 
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
