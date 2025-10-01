@@ -12,20 +12,24 @@ use crate::utility::extract_from_vec_at_index;
 pub struct Index(pub usize);
 
 impl Index {
-    pub fn is_left_of_index(&self, index: Index) -> bool {
-        todo!()
+    pub fn is_left_of_index(&self, other: &Index) -> bool {
+        self.0 < other.0
     }
 
     pub fn is_left_of_step(&self, s: &Step) -> bool {
-        todo!()
+        self.0 <= s.0
     }
 
-    pub fn sub_offset(&self, offset: Offset) -> Index {
-        todo!()
+    pub fn sub_offset(&self, offset: &Offset) -> Index {
+        Index(self.0 - offset.0)
     }
 
-    pub fn add_offset(&self, offset: Offset) -> Index {
-        todo!()
+    pub fn add_offset(&self, offset: &Offset) -> Index {
+        Index(self.0 + offset.0)
+    }
+
+    fn is_right_of_step(&self, s: &Step) -> bool {
+        self.0 > s.0
     }
 }
 
@@ -36,25 +40,34 @@ impl Index {
 /// A step from an [Expr] to one of its kids.
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Step(pub usize);
+
 impl Step {
     pub fn left_step(&self) -> Step {
-        todo!()
+        self.sub_offset(&Offset(1))
     }
 
     pub fn right_step(&self) -> Step {
-        todo!()
+        self.add_offset(&Offset(1))
     }
 
     pub fn left_index(&self) -> Index {
-        todo!()
+        Index(self.0)
     }
 
     pub fn right_index(&self) -> Index {
-        todo!()
+        Index(self.0 + 1)
     }
 
-    pub fn is_left_of_index(&self, index: Index) -> bool {
-        todo!()
+    pub fn is_left_of_index(&self, i: &Index) -> bool {
+        i.is_right_of_step(self)
+    }
+
+    pub fn sub_offset(&self, offset: &Offset) -> Step {
+        Step(self.0 - offset.0)
+    }
+
+    pub fn add_offset(&self, offset: &Offset) -> Step {
+        Step(self.0 + offset.0)
     }
 }
 
@@ -104,22 +117,6 @@ impl Path {
     pub fn is_prefix_of(&self, other: &Self) -> bool {
         other.0.as_slice().strip_suffix(self.0.as_slice()).is_some()
     }
-
-    pub fn p_ol(&self) -> Point {
-        todo!()
-    }
-
-    pub fn p_or(&self) -> Point {
-        todo!()
-    }
-
-    pub fn p_il(&self) -> Point {
-        todo!()
-    }
-
-    pub fn p_ir(&self) -> Point {
-        todo!()
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -144,7 +141,7 @@ impl Default for Point {
 
 impl Point {
     pub fn is_left_adjacent_to_point(&self, other: &Point) -> bool {
-        self.path == other.path && self.index.is_left_of_index(other.index)
+        self.path == other.path && self.index.is_left_of_index(&other.index)
     }
 
     pub fn move_dir<L: Debug + Clone>(
@@ -156,8 +153,8 @@ impl Point {
         let leftmost = sub_expr.kids.leftmost_index();
         let rightmost = sub_expr.kids.rightmost_index();
         match dir {
-            MoveDir::Prev if leftmost.is_left_of_index(self.index) => {
-                self.index = self.index.sub_offset(Offset(1));
+            MoveDir::Prev if leftmost.is_left_of_index(&self.index) => {
+                self.index = self.index.sub_offset(&Offset(1));
                 Ok(())
             }
             MoveDir::Prev => {
@@ -165,8 +162,8 @@ impl Point {
                 self.index = step.left_index();
                 Ok(())
             }
-            MoveDir::Next if self.index.is_left_of_index(rightmost) => {
-                self.index = self.index.add_offset(Offset(1));
+            MoveDir::Next if self.index.is_left_of_index(&rightmost) => {
+                self.index = self.index.add_offset(&Offset(1));
                 Ok(())
             }
             MoveDir::Next => {
@@ -174,6 +171,27 @@ impl Point {
                 self.index = step.right_index();
                 Ok(())
             }
+        }
+    }
+
+    fn to_empty_span_handle(&self) -> SpanHandle {
+        SpanHandle {
+            path: self.path.clone(),
+            left: self.index,
+            right: self.index,
+            focus: SpanFocus::Left,
+        }
+    }
+
+    fn to_empty_zipper_handle(&self) -> ZipperHandle {
+        ZipperHandle {
+            path_o: self.path.clone(),
+            i_ol: self.index,
+            i_or: self.index,
+            path_m: Path::empty(),
+            i_il: self.index,
+            i_ir: self.index,
+            focus: ZipperFocus::InnerLeft,
         }
     }
 }
@@ -259,14 +277,24 @@ impl Handle {
     }
 
     pub fn escape(&mut self) -> Result<(), MoveError> {
-        todo!()
+        match self {
+            Handle::Point(_) => Err(MoveError::Undefined),
+            Handle::Span(h) => {
+                *self = Handle::Point(h.focus_point());
+                Ok(())
+            }
+            Handle::Zipper(h) => {
+                *self = Handle::Point(h.focus_point());
+                Ok(())
+            }
+        }
     }
 
     pub fn drag<L: Debug + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Handle> {
         match self {
             Handle::Point(source) => {
                 if target.path == source.path {
-                    if target.index.is_left_of_index(source.index) {
+                    if target.index.is_left_of_index(&source.index) {
                         Some(Handle::Span(SpanHandle {
                             path: source.path,
                             left: target.index,
@@ -275,7 +303,7 @@ impl Handle {
                         }))
                     } else if target.index == source.index {
                         Some(Handle::Point(source))
-                    } else if source.index.is_left_of_index(target.index) {
+                    } else if source.index.is_left_of_index(&target.index) {
                         Some(Handle::Span(SpanHandle {
                             path: source.path,
                             left: source.index,
@@ -315,7 +343,7 @@ impl Handle {
                         && let p_or = &target
                         && let Some(path_m) = p_or.path.diff(&p_ir.path)
                         && let Some(s) = path_m.0.first()
-                        && s.is_left_of_index(p_or.index)
+                        && s.is_left_of_index(&p_or.index)
                     {
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
@@ -361,7 +389,7 @@ impl Handle {
                         && let p_ir = &target
                         && let Some(path_m) = p_or.path.diff(&p_ir.path)
                         && let Some(s) = path_m.0.first()
-                        && s.is_left_of_index(p_or.index)
+                        && s.is_left_of_index(&p_or.index)
                     {
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
@@ -477,12 +505,20 @@ impl Handle {
         }
     }
 
-    pub fn contains_point(&self, point: &Point) -> bool {
-        todo!()
+    pub fn contains_point(&self, p: &Point) -> bool {
+        match self {
+            Handle::Point(_) => false,
+            Handle::Span(h) => h.contains_point(p),
+            Handle::Zipper(h) => h.contains_point(p),
+        }
     }
 
     pub fn contains_path(&self, path: &Path) -> bool {
-        todo!()
+        match self {
+            Handle::Point(_) => false,
+            Handle::Span(h) => h.contains_path(path),
+            Handle::Zipper(h) => h.contains_path(path),
+        }
     }
 }
 
@@ -508,12 +544,28 @@ impl SpanHandle {
 
     /// Left point of [Span].
     pub fn p_l(&self) -> Point {
-        todo!()
+        Point {
+            path: self.path.clone(),
+            index: self.left,
+        }
     }
 
     /// Right point of [Span].
     pub fn p_r(&self) -> Point {
-        todo!()
+        Point {
+            path: self.path.clone(),
+            index: self.right,
+        }
+    }
+
+    fn contains_point(&self, p: &Point) -> bool {
+        self.path == p.path
+            && self.left.is_left_of_index(&p.index)
+            && p.index.is_left_of_index(&self.right)
+    }
+
+    fn contains_path(&self, path: &Path) -> bool {
+        &self.path == path
     }
 }
 
@@ -555,23 +607,35 @@ pub struct ZipperHandle {
 
 impl ZipperHandle {
     pub fn path_i(&self) -> Path {
-        todo!()
+        self.path_o.clone().append(self.path_m.clone())
     }
 
     pub fn p_il(&self) -> Point {
-        todo!()
+        Point {
+            path: self.path_i(),
+            index: self.i_il,
+        }
     }
 
     pub fn p_ir(&self) -> Point {
-        todo!()
+        Point {
+            path: self.path_i(),
+            index: self.i_ir,
+        }
     }
 
     pub fn p_ol(&self) -> Point {
-        todo!()
+        Point {
+            path: self.path_o.clone(),
+            index: self.i_ol,
+        }
     }
 
-    pub fn p_or(&self) -> Point {
-        todo!()
+    pub fn p_or<'a>(&'a self) -> Point {
+        Point {
+            path: self.path_o.clone(),
+            index: self.i_or,
+        }
     }
 
     pub fn focus_point(&self) -> Point {
@@ -580,6 +644,34 @@ impl ZipperHandle {
             ZipperFocus::InnerLeft => self.p_il(),
             ZipperFocus::InnerRight => self.p_ir(),
             ZipperFocus::OuterRight => self.p_or(),
+        }
+    }
+
+    fn contains_point(&self, p: &Point) -> bool {
+        self.h_o().contains_point(p) && !self.h_i().contains_point(p)
+    }
+
+    fn contains_path(&self, path: &Path) -> bool {
+        self.h_o().contains_path(path) && !self.h_i().contains_path(path)
+    }
+
+    /// Outer [SpanHandle].
+    fn h_o(&self) -> SpanHandle {
+        SpanHandle {
+            path: self.path_o.clone(),
+            left: self.i_ol,
+            right: self.i_or,
+            focus: self.focus.to_zipper_focus(),
+        }
+    }
+
+    /// Inner [SpanHandle].
+    fn h_i(&self) -> SpanHandle {
+        SpanHandle {
+            path: self.path_i(),
+            left: self.i_il,
+            right: self.i_ir,
+            focus: self.focus.to_zipper_focus(),
         }
     }
 }
@@ -612,6 +704,15 @@ impl ZipperFocus {
             },
         }
     }
+
+    fn to_zipper_focus(&self) -> SpanFocus {
+        match self {
+            ZipperFocus::OuterLeft => SpanFocus::Left,
+            ZipperFocus::InnerLeft => SpanFocus::Left,
+            ZipperFocus::InnerRight => SpanFocus::Right,
+            ZipperFocus::OuterRight => SpanFocus::Right,
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -637,12 +738,29 @@ impl<L: Debug + Clone> Expr<L> {
             .fold(0, |h, e| std::cmp::max(h, 1 + e.height()))
     }
 
-    pub fn at_handle_cloned(&self, handle: &Handle) -> Fragment<L> {
-        todo!()
+    pub fn at_handle_cloned(&self, h: &Handle) -> Option<Fragment<L>> {
+        match h {
+            Handle::Point(p) => None,
+            Handle::Span(h) => Some(Fragment::Span(self.at_span_handle_cloned(h))),
+            Handle::Zipper(h) => Some(Fragment::Zipper(self.at_zipper_handle_cloned(h))),
+        }
     }
 
-    pub fn insert_fragment_at_handle(&mut self, handle: Handle, frag: Fragment<L>) -> Handle {
-        todo!()
+    pub fn insert_fragment_at_handle(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
+        match h {
+            Handle::Point(p) => match frag {
+                Fragment::Span(span) => {
+                    let (_, h) = self.splice_at_span(&p.to_empty_span_handle(), span);
+                    Handle::Span(h)
+                }
+                Fragment::Zipper(zipper) => {
+                    let (_, h) = self.splice_at_zipper(&p.to_empty_zipper_handle(), zipper);
+                    Handle::Zipper(h)
+                }
+            },
+            Handle::Span(h) => todo!(),
+            Handle::Zipper(h) => todo!(),
+        }
     }
 
     pub fn at_handle(&self, handle: &Handle) -> Fragment<L> {
@@ -651,13 +769,17 @@ impl<L: Debug + Clone> Expr<L> {
 
     /// Replaces the span at the handle with the new span and returns the old
     /// span.
-    pub fn splice_at_span(&mut self, handle: &SpanHandle, new_span: Span<L>) -> Span<L> {
+    pub fn splice_at_span(&mut self, h: &SpanHandle, new_span: Span<L>) -> (Span<L>, SpanHandle) {
         todo!()
     }
 
     /// Replaces the zipper at the handle with the new zipper and returns the
     /// old zipper.
-    pub fn splice_at_zipper(&mut self, handle: &ZipperHandle, new_zipper: Zipper<L>) -> Zipper<L> {
+    pub fn splice_at_zipper(
+        &mut self,
+        h: &ZipperHandle,
+        new_zipper: Zipper<L>,
+    ) -> (Zipper<L>, ZipperHandle) {
         todo!()
     }
 
@@ -696,7 +818,24 @@ impl<L: Debug + Clone> Expr<L> {
         )
     }
 
-    pub fn example(mk_label: impl FnMut() -> L, width: i32, height: i32) -> Self {
+    pub fn example<F: FnMut() -> L>(mk_label: &mut F, width: i32, depth: i32) -> Self {
+        Expr {
+            label: mk_label(),
+            kids: Span(if depth == 0 {
+                vec![]
+            } else {
+                (0..width)
+                    .map(|_| Self::example(mk_label, width, depth - 1))
+                    .collect()
+            }),
+        }
+    }
+
+    fn at_span_handle_cloned(&self, h: &SpanHandle) -> Span<L> {
+        todo!()
+    }
+
+    fn at_zipper_handle_cloned(&self, h: &ZipperHandle) -> Zipper<L> {
         todo!()
     }
 }
