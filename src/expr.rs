@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::utility::extract_from_vec_at_index;
+use crate::utility::{extract_from_vec_at_index, split_vec_at_index};
 
 // -----------------------------------------------------------------------------
 // Index
@@ -863,21 +863,7 @@ impl<L: Debug + Clone> Expr<L> {
         new_zipper: Zipper<L>,
     ) -> (Zipper<L>, ZipperHandle) {
         // take the inner span
-        // let (span_i, new_handle_m) = {
-        //     let mut e_m = self.at_path_mut(&h.path_o);
-        //     e_m.replace_span(
-        //         &SpanHandle {
-        //             path: h.path_m.clone(),
-        //             i_l: h.i_il,
-        //             i_r: h.i_ir,
-        //             focus: h.focus.to_span_focus(),
-        //         },
-        //         Span::empty(),
-        //     )
-        // };
-
-        // take the inner span
-        let mut e_m = self.at_path_mut(&h.path_o);
+        let e_m = self.at_path_mut(&h.path_o);
         let (span_i, new_handle_m) = e_m.replace_span(
             &SpanHandle {
                 path: h.path_m.clone(),
@@ -889,7 +875,7 @@ impl<L: Debug + Clone> Expr<L> {
         );
 
         // wrap the inner span with the zipper
-        let new_span_m: Span<L> = Span::empty(); // TODO
+        let new_span_m: Span<L> = new_zipper.surround(span_i);
         let new_span_m_offset = &new_span_m.offset();
 
         // replace outer span handle of zipper with result
@@ -907,9 +893,9 @@ impl<L: Debug + Clone> Expr<L> {
                 path_o: h.path_o.clone(),
                 i_ol: h.i_ol,
                 i_or: h.i_ol.add_offset(new_span_m_offset),
-                path_m: todo!(),
-                i_il: todo!(),
-                i_ir: todo!(),
+                path_m: new_handle_m.path,
+                i_il: new_handle_m.i_l,
+                i_ir: new_handle_m.i_r,
                 focus: h.focus,
             },
         )
@@ -1012,6 +998,17 @@ impl<L: Debug + Clone> Expr<L> {
             ),
         }
     }
+
+    fn into_context(&self, path: &Path) -> Context<L> {
+        let mut ctx = Context::empty();
+        let mut e = self;
+        for s in path.0.iter() {
+            let th = e.at_tooth(s);
+            ctx.0.push(th);
+            e = e.at_step(s);
+        }
+        ctx
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1034,12 +1031,38 @@ pub enum Fragment<L> {
 pub struct Span<L>(pub Vec<Expr<L>>);
 
 impl<L: Debug + Clone> Span<L> {
-    pub fn replace_sub_span(&mut self, i_l: &Index, i_r:&Index, new_span: Span<L>) -> Self {
-        Span(self.0.splice(i_l.0..i_r.0, new_span).collect())
+    pub fn replace_sub_span(&mut self, i_l: &Index, i_r: &Index, new_span: Span<L>) -> Self {
+        Span(self.0.splice(i_l.0..i_r.0, new_span.0).collect())
     }
 
     pub fn into_zipper(self, p: &Point) -> Zipper<L> {
-        todo!()
+        if let Some(s) = p.path.0.first() {
+            self.assert_step_in_bounds(s);
+            let (span_ol, e, span_or) = self.extract_at_step(s);
+            let middle = e.into_context(&Path(p.path.0[1..].to_vec()));
+            Zipper {
+                span_ol: span_ol,
+                span_or: span_or,
+                middle,
+            }
+        } else {
+            let (span_ol, span_or) = self.split_at_index(&p.i);
+            Zipper {
+                span_ol,
+                span_or,
+                middle: Context::empty(),
+            }
+        }
+    }
+
+    pub fn extract_at_step(self, s: &Step) -> (Span<L>, Expr<L>, Span<L>) {
+        let (es_l, e, es_r) = extract_from_vec_at_index(self.0, s.0).unwrap();
+        (Span(es_l), e, Span(es_r))
+    }
+
+    pub fn split_at_index(self, i: &Index) -> (Span<L>, Span<L>) {
+        let (es_l, es_r) = split_vec_at_index(self.0, i.0);
+        (Span(es_l), Span(es_r))
     }
 
     pub fn empty() -> Self {
@@ -1091,6 +1114,10 @@ impl<L: Debug + Clone> Span<L> {
     pub fn at_sub_span(&self, i_l: &Index, i_r: &Index) -> Span<L> {
         Span(self.at_index_range(i_l, i_r).to_vec())
     }
+
+    fn concat(self, other: Self) -> Self {
+        Span([self.0, other.0].concat())
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1105,6 +1132,15 @@ pub struct Zipper<L> {
     pub middle: Context<L>,
 }
 
+impl<L: Debug + Clone> Zipper<L> {
+    fn surround(self, span: Span<L>) -> Span<L> {
+        match self.middle.surround_span(span) {
+            Ok(e) => self.span_ol.concat(Span(vec![e])).concat(self.span_or),
+            Err(span) => self.span_ol.concat(span).concat(self.span_or),
+        }
+    }
+}
+
 // -----------------------------------------------------------------------------
 // ExprContext
 // -----------------------------------------------------------------------------
@@ -1117,6 +1153,25 @@ impl<L: Debug + Clone> Context<L> {
     pub fn empty() -> Self {
         Self(vec![])
     }
+
+    /// Two possibilities:
+    /// - If the context is NOT flat (non-empty vector of teeth), then [Ok],
+    ///   forms an [Expr].
+    /// - If the context is flat (empty vector of teeth), then [Err], forms a
+    ///   span by just sandwhiching the input [Span] between the two [Context]s'
+    ///   [Span]s
+    pub fn surround_span(self, span: Span<L>) -> Result<Expr<L>, Span<L>> {
+        let mut ths = self.0;
+        if let Some(th0) = ths.pop() {
+            let mut e = th0.surround(span);
+            while let Some(th) = ths.pop() {
+                e = th.surround_expr(e);
+            }
+            Ok(e)
+        } else {
+            return Err(span);
+        }
+    }
 }
 
 /// A tooth of an [Expr] around a [Step].
@@ -1125,6 +1180,22 @@ pub struct Tooth<L> {
     pub label: L,
     pub span_l: Span<L>,
     pub span_r: Span<L>,
+}
+
+impl<L: Debug + Clone> Tooth<L> {
+    fn surround(self, span: Span<L>) -> Expr<L> {
+        Expr {
+            label: self.label,
+            kids: self.span_l.concat(span).concat(self.span_r),
+        }
+    }
+
+    pub fn surround_expr(self, e: Expr<L>) -> Expr<L> {
+        Expr {
+            label: self.label,
+            kids: self.span_l.concat(Span(vec![e])).concat(self.span_r),
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
