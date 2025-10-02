@@ -879,7 +879,6 @@ impl<L: Debug + Clone> Expr<L> {
         let new_span_m_offset = &new_span_m.offset();
 
         // replace outer span handle of zipper with result
-        // let (old_span_m, new_handle_o) = self.replace_span(&h.handle_o(), new_span_m);
         let old_span_m = e_m.kids.replace_sub_span(&h.i_il, &h.i_ir, new_span_m);
 
         let old_zipper: Zipper<L> = old_span_m.into_zipper(&Point {
