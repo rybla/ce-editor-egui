@@ -453,6 +453,7 @@ impl Handle {
                             }
                             _ => Some(h),
                         })
+                        .map(|h| h.norm())
                 } else
                 // adjust i_or
                 if target.path.is_prefix_of(&path_i) {
@@ -477,6 +478,7 @@ impl Handle {
                             }
                             _ => Some(h),
                         })
+                        .map(|h| h.norm())
                 } else
                 // adjust i_il
                 if source.path_o.is_prefix_of(&target.path) {
@@ -496,6 +498,7 @@ impl Handle {
                             }
                             _ => Some(h),
                         })
+                        .map(|h| h.norm())
                 } else
                 // adjust i_ir
                 if false {
@@ -515,6 +518,7 @@ impl Handle {
                             }
                             _ => Some(h),
                         })
+                        .map(|h| h.norm())
                 } else {
                     None
                 }
@@ -798,34 +802,20 @@ impl<L: Debug + Clone> Expr<L> {
     pub fn insert_fragment_at_handle(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
         match h {
             Handle::Point(p) => match frag {
-                Fragment::Span(span) => {
-                    let (_, h) = self.replace_span(&p.to_empty_span_handle(), span);
-                    Handle::Span(h)
-                }
+                Fragment::Span(span) => self.replace_span(&p.to_empty_span_handle(), span).1,
                 Fragment::Zipper(zipper) => {
-                    let (_, h) = self.replace_zipper(&p.to_empty_zipper_handle(), zipper);
-                    Handle::Zipper(h)
+                    self.replace_zipper(&p.to_empty_zipper_handle(), zipper).1
                 }
             },
             Handle::Span(h) => match frag {
-                Fragment::Span(span) => {
-                    let (_, h) = self.replace_span(&h, span);
-                    Handle::Span(h)
-                }
+                Fragment::Span(span) => self.replace_span(&h, span).1,
                 Fragment::Zipper(zipper) => {
-                    let (_, h) = self.replace_zipper(&h.to_empty_zipper_handle(), zipper);
-                    Handle::Zipper(h)
+                    self.replace_zipper(&h.to_empty_zipper_handle(), zipper).1
                 }
             },
             Handle::Zipper(h) => match frag {
-                Fragment::Span(span) => {
-                    let (_, h) = self.replace_span(&h.handle_o(), span);
-                    Handle::Span(h)
-                }
-                Fragment::Zipper(zipper) => {
-                    let (_, h) = self.replace_zipper(&h, zipper);
-                    Handle::Zipper(h)
-                }
+                Fragment::Span(span) => self.replace_span(&h.handle_o(), span).1,
+                Fragment::Zipper(zipper) => self.replace_zipper(&h, zipper).1,
             },
         }
     }
@@ -840,18 +830,19 @@ impl<L: Debug + Clone> Expr<L> {
 
     /// Replaces the span at the handle with the new span and returns the old
     /// span.
-    pub fn replace_span(&mut self, h: &SpanHandle, new_span: Span<L>) -> (Span<L>, SpanHandle) {
+    pub fn replace_span(&mut self, h: &SpanHandle, new_span: Span<L>) -> (Span<L>, Handle) {
         let parent = self.at_path_mut(&h.path);
         let new_span_offset = &new_span.offset();
         let old_span = Span(parent.kids.0.splice(h.i_l.0..h.i_r.0, new_span.0).collect());
         (
             old_span,
-            SpanHandle {
+            Handle::Span(SpanHandle {
                 path: h.path.clone(),
                 i_l: h.i_l,
                 i_r: h.i_l.add_offset(new_span_offset),
                 focus: h.focus,
-            },
+            })
+            .norm(),
         )
     }
 
@@ -861,7 +852,7 @@ impl<L: Debug + Clone> Expr<L> {
         &mut self,
         h: &ZipperHandle,
         new_zipper: Zipper<L>,
-    ) -> (Zipper<L>, ZipperHandle) {
+    ) -> (Zipper<L>, Handle) {
         // take the inner span
         let e_m = self.at_path_mut(&h.path_o);
         let (span_i, new_handle_m) = e_m.replace_span(
@@ -886,18 +877,23 @@ impl<L: Debug + Clone> Expr<L> {
             i: h.i_ol,
         });
 
-        (
-            old_zipper,
-            ZipperHandle {
-                path_o: h.path_o.clone(),
-                i_ol: h.i_ol,
-                i_or: h.i_ol.add_offset(new_span_m_offset),
-                path_m: new_handle_m.path,
-                i_il: new_handle_m.i_l,
-                i_ir: new_handle_m.i_r,
-                focus: h.focus,
-            },
-        )
+        match new_handle_m {
+            Handle::Point(new_handle_m) => todo!(),
+            Handle::Span(new_handle_m) => todo!(),
+            Handle::Zipper(new_handle_m) => (
+                old_zipper,
+                Handle::Zipper(ZipperHandle {
+                    path_o: h.path_o.clone(),
+                    i_ol: h.i_ol,
+                    i_or: h.i_ol.add_offset(new_span_m_offset),
+                    path_m: new_handle_m.path,
+                    i_il: new_handle_m.i_l,
+                    i_ir: new_handle_m.i_r,
+                    focus: h.focus,
+                })
+                .norm(),
+            ),
+        }
     }
 
     pub fn at_path(&self, path: &Path) -> &Self {
