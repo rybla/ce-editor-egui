@@ -31,6 +31,10 @@ impl Index {
     fn is_right_of_step(&self, s: &Step) -> bool {
         self.0 > s.0
     }
+
+    fn to_offset(&self) -> Offset {
+        Offset(self.0)
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -80,6 +84,26 @@ impl Step {
 pub struct Path(pub Vec<Step>);
 
 impl Path {
+    pub fn add_offset_to_first_step(self, offset: &Offset) -> Option<Self> {
+        let mut path = self.0;
+        if path.is_empty() {
+            return None;
+        }
+        let s0 = path.remove(0);
+        path.insert(0, s0.add_offset(offset));
+        Some(Path(path))
+    }
+
+    pub fn sub_offset_to_first_step(self, offset: &Offset) -> Option<Self> {
+        let mut path = self.0;
+        if path.is_empty() {
+            return None;
+        }
+        let s0 = path.remove(0);
+        path.insert(0, s0.sub_offset(offset));
+        Some(Path(path))
+    }
+
     pub fn empty() -> Self {
         Path(vec![])
     }
@@ -863,8 +887,8 @@ impl<L: Debug + Clone> Expr<L> {
         new_zipper: Zipper<L>,
     ) -> (Zipper<L>, ZipperHandle) {
         // take the inner span
-        let e_m = self.at_path_mut(&h.path_o);
-        let (span_i, new_handle_m) = e_m.replace_span(
+        let e_o = self.at_path_mut(&h.path_o);
+        let (span_i, new_handle_m) = e_o.replace_span(
             &SpanHandle {
                 path: h.path_m.clone(),
                 i_l: h.i_il,
@@ -880,11 +904,16 @@ impl<L: Debug + Clone> Expr<L> {
 
         // replace outer span handle of zipper with result
         // let (old_span_m, new_handle_o) = self.replace_span(&h.handle_o(), new_span_m);
-        let old_span_m = e_m.kids.replace_sub_span(&h.i_il, &h.i_ir, new_span_m);
+        let old_span_m = e_o.kids.replace_sub_span(&h.i_il, &h.i_ir, new_span_m);
 
         let old_zipper: Zipper<L> = old_span_m.into_zipper(&Point {
-            path: Path::empty(),
-            i: h.i_ol,
+            // TODO: handle None case
+            path: h
+                .path_m
+                .clone()
+                .sub_offset_to_first_step(h.i_il.to_offset())
+                .unwrap(),
+            i: h.i_ol, // TODO: Make sure this is the right index
         });
 
         (
@@ -1036,6 +1065,7 @@ impl<L: Debug + Clone> Span<L> {
     }
 
     pub fn into_zipper(self, p: &Point) -> Zipper<L> {
+        println!("[into_zipper]\n  - self = {:?}\n  - p = {:?}", &self, p);
         if let Some(s) = p.path.0.first() {
             self.assert_step_in_bounds(s);
             let (span_ol, e, span_or) = self.extract_at_step(s);
