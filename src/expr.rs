@@ -220,7 +220,7 @@ impl Point {
         self.path == other.path && self.i.is_left_of_index(&other.i)
     }
 
-    pub fn move_dir<L: Debug + Clone>(
+    pub fn move_dir<L: Debug + Display + Clone>(
         &mut self,
         expr: &Expr<L>,
         dir: &MoveDir,
@@ -338,7 +338,7 @@ impl Handle {
         }
     }
 
-    pub fn move_dir<L: Debug + Clone>(
+    pub fn move_dir<L: Debug + Display + Clone>(
         &mut self,
         expr: &Expr<L>,
         dir: &MoveDir,
@@ -395,7 +395,7 @@ impl Handle {
         }
     }
 
-    pub fn drag<L: Debug + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Handle> {
+    pub fn drag<L: Debug + Display + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Handle> {
         match self {
             Handle::Point(source) => {
                 if target.path == source.path {
@@ -936,7 +936,7 @@ impl<L: Display> Display for Expr<L> {
     }
 }
 
-impl<L: Debug + Clone> Expr<L> {
+impl<L: Debug + Display + Clone> Expr<L> {
     pub fn new(label: L, kids: Span<L>) -> Self {
         Self { label, kids }
     }
@@ -956,7 +956,7 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
-    pub fn insert_fragment_at_handle(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
+    pub fn insert(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
         match h {
             Handle::Point(p) => match frag {
                 Fragment::Span(span) => {
@@ -1065,6 +1065,20 @@ impl<L: Debug + Clone> Expr<L> {
                 focus: h.focus,
             },
         )
+    }
+
+    pub fn cut(&mut self, h: &Handle) -> Option<(Fragment<L>, Handle)> {
+        match h {
+            Handle::Point(_) => None,
+            Handle::Span(h) => {
+                let (span, h) = self.replace_span(h, Span::empty());
+                Some((Fragment::Span(span), Handle::Span(h)))
+            }
+            Handle::Zipper(h) => {
+                let (zipper, h) = self.replace_zipper(h, Zipper::empty());
+                Some((Fragment::Zipper(zipper).norm(), Handle::Zipper(h).norm()))
+            }
+        }
     }
 
     pub fn at_path(&self, path: &Path) -> &Self {
@@ -1188,6 +1202,21 @@ pub enum Fragment<L> {
     Zipper(Zipper<L>),
 }
 
+impl<L: Debug + Display + Clone> Fragment<L> {
+    fn norm(self) -> Fragment<L> {
+        match self {
+            Fragment::Zipper(zipper)
+                if zipper.span_ol.0.is_empty()
+                    && zipper.span_or.0.is_empty()
+                    && zipper.middle.0.is_empty() =>
+            {
+                Fragment::Span(Span::empty())
+            }
+            frag => frag,
+        }
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Span
 // -----------------------------------------------------------------------------
@@ -1202,7 +1231,7 @@ impl<L: Display> Display for Span<L> {
     }
 }
 
-impl<L: Debug + Clone> Span<L> {
+impl<L: Debug + Display + Clone> Span<L> {
     pub fn replace_sub_span(&mut self, i_l: &Index, i_r: &Index, new_span: Span<L>) -> Self {
         Span(self.0.splice(i_l.0..i_r.0, new_span.0).collect())
     }
@@ -1315,7 +1344,7 @@ impl<L: Display> Display for Zipper<L> {
     }
 }
 
-impl<L: Debug + Clone> Zipper<L> {
+impl<L: Debug + Display + Clone> Zipper<L> {
     pub fn surround(self, span: Span<L>) -> Span<L> {
         match self.middle.surround_span(span) {
             Ok(e) => self.span_ol.concat(Span(vec![e])).concat(self.span_or),
@@ -1331,6 +1360,14 @@ impl<L: Debug + Clone> Zipper<L> {
         Point {
             path,
             i: s.left_index(),
+        }
+    }
+
+    fn empty() -> Zipper<L> {
+        Zipper {
+            span_ol: Span::empty(),
+            span_or: Span::empty(),
+            middle: Context::empty(),
         }
     }
 }
@@ -1349,7 +1386,7 @@ impl<L: Display> Display for Context<L> {
     }
 }
 
-impl<L: Debug + Clone> Context<L> {
+impl<L: Debug + Display + Clone> Context<L> {
     pub fn empty() -> Self {
         Self(vec![])
     }
@@ -1392,7 +1429,7 @@ impl<L: Display> Display for Tooth<L> {
     }
 }
 
-impl<L: Debug + Clone> Tooth<L> {
+impl<L: Debug + Display + Clone> Tooth<L> {
     pub fn surround(self, span: Span<L>) -> Expr<L> {
         Expr {
             label: self.label,

@@ -2,7 +2,10 @@ use crate::expr::*;
 use egui::Frame;
 use lazy_static::lazy_static;
 use nucleo;
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::{Debug, Display},
+    sync::Arc,
+};
 
 pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
 
@@ -44,6 +47,12 @@ lazy_static! {
 pub struct ExprLabel<ES: EditorSpec + ?Sized> {
     pub constructor: ES::Constructor,
     pub diagnostic: ES::Diagnostic,
+}
+
+impl<ES: EditorSpec + ?Sized> Display for ExprLabel<ES> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.constructor)
+    }
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for ExprLabel<ES> {
@@ -182,10 +191,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.menu = Some(EditMenu::new(menu));
         }
         // cut
-        else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-            println!("[cut] attempting to cut");
-            // if let Some(frag) = self.core.expr.splice_zipper_mut(handle, new_zipper)
-            todo!("cut")
+        else if ctx.input(|i| i.key_pressed(egui::Key::X)) {
+            println!("[cut] cutting fragment at handle");
+            if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
+                self.core.clipboard = Some(frag);
+                self.core.handle = h;
+            }
         }
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
@@ -197,11 +208,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // paste
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
             println!("[paste]");
-            if let Some(frag) = self.core.clipboard.take() {
-                let handle = self
-                    .core
-                    .expr
-                    .insert_fragment_at_handle(self.core.handle.clone(), frag);
+            if let Some(frag) = self.core.clipboard.clone() {
+                let handle = self.core.expr.insert(self.core.handle.clone(), frag);
                 self.core.handle = handle;
             }
         }
@@ -714,8 +722,8 @@ impl EditMenuPattern {
 pub type Edit<ES> = fn(&String, CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
 
 pub trait EditorSpec: 'static {
-    type Constructor: Debug + Clone + Sized + PartialEq;
-    type Diagnostic: Debug + Clone + Sized + PartialEq;
+    type Constructor: Debug + Display + Clone + Sized + PartialEq;
+    type Diagnostic: Debug + Display + Clone + Sized + PartialEq;
 
     fn name() -> String;
 

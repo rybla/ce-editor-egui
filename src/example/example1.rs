@@ -11,7 +11,7 @@ macro_rules! make_edit_menu_option_that_inserts_frag {
             pattern: EditMenuPattern::Static($label),
             edit: |_query, state| {
                 let mut state = state;
-                state.handle = state.expr.insert_fragment_at_handle(state.handle, $frag);
+                state.handle = state.expr.insert(state.handle, $frag);
                 Some(state)
             },
         }

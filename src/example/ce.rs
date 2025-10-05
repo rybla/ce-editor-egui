@@ -1,7 +1,7 @@
 use crate::{editor::*, expr::*};
 
 type C = String;
-type D = Vec<String>;
+type D = String;
 
 pub struct Ce {}
 
@@ -39,13 +39,13 @@ impl EditorSpec for Ce {
 
                     let mut state = state;
 
-                    let handle = state.expr.insert_fragment_at_handle(
+                    let handle = state.expr.insert(
                         state.handle,
                         Fragment::Zipper(Zipper {
                             span_ol: Span::empty(),
                             span_or: Span::empty(),
                             middle: Context(vec![Tooth {
-                                label: ExprLabel::new(query.clone(), vec![]),
+                                label: ExprLabel::new(query.clone(), String::new()),
                                 span_l: Span::empty(),
                                 span_r: Span::empty(),
                             }]),
