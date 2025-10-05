@@ -164,6 +164,26 @@ impl Default for Point {
 }
 
 impl Point {
+    pub fn add_offset_at_top(self, offset: &Offset) -> Point {
+        let mut p = self;
+        if let Some(s0) = p.path.0.get_mut(0) {
+            *s0 = s0.add_offset(offset)
+        } else {
+            p.i = p.i.add_offset(offset)
+        }
+        p
+    }
+
+    pub fn sub_offset_at_top(self, offset: &Offset) -> Point {
+        let mut p = self;
+        if let Some(s0) = p.path.0.get_mut(0) {
+            *s0 = s0.sub_offset(offset)
+        } else {
+            p.i = p.i.sub_offset(offset)
+        }
+        p
+    }
+
     pub fn is_left_adjacent_to_point(&self, other: &Point) -> bool {
         self.path == other.path && self.i.is_left_of_index(&other.i)
     }
@@ -889,7 +909,7 @@ impl<L: Debug + Clone> Expr<L> {
     ) -> (Zipper<L>, ZipperHandle) {
         // take the inner span
         let e_o = self.at_path_mut(&h.path_o);
-        let (span_i, new_handle_m) = e_o.replace_span(
+        let (span_i, _) = e_o.replace_span(
             &SpanHandle {
                 path: h.path_m.clone(),
                 i_l: h.i_il,
@@ -898,24 +918,24 @@ impl<L: Debug + Clone> Expr<L> {
             },
             Span::empty(),
         );
+        let span_i_offset = span_i.offset();
 
         // wrap the inner span with the zipper
+        let new_zipper_inner_point = new_zipper.inner_point();
+        let point_m = new_zipper_inner_point.add_offset_at_top(&h.i_il.to_offset());
         let new_span_m: Span<L> = new_zipper.surround(span_i);
         let new_span_m_offset = &new_span_m.offset();
 
         // replace outer span handle of zipper with result
-        // let (old_span_m, new_handle_o) = self.replace_span(&h.handle_o(), new_span_m);
         let old_span_m = e_o.kids.replace_sub_span(&h.i_il, &h.i_ir, new_span_m);
 
-        let old_zipper: Zipper<L> = old_span_m.into_zipper(&Point {
-            // TODO: handle None case
-            path: h
-                .path_m
-                .clone()
-                .sub_offset_to_first_step(&h.i_il.to_offset())
-                .unwrap(),
-            i: h.i_ol, // TODO: Make sure this is the right index
-        });
+        let old_zipper: Zipper<L> = old_span_m.into_zipper(
+            &(Point {
+                path: h.path_m.clone(),
+                i: h.i_ol,
+            })
+            .sub_offset_at_top(&h.i_il.to_offset()),
+        );
 
         (
             old_zipper,
@@ -923,9 +943,9 @@ impl<L: Debug + Clone> Expr<L> {
                 path_o: h.path_o.clone(),
                 i_ol: h.i_ol,
                 i_or: h.i_ol.add_offset(new_span_m_offset),
-                path_m: new_handle_m.path,
-                i_il: new_handle_m.i_l,
-                i_ir: new_handle_m.i_r,
+                path_m: point_m.path,
+                i_il: point_m.i,
+                i_ir: point_m.i.add_offset(&span_i_offset),
                 focus: h.focus,
             },
         )
@@ -1170,6 +1190,17 @@ impl<L: Debug + Clone> Zipper<L> {
             Err(span) => self.span_ol.concat(span).concat(self.span_or),
         }
     }
+
+    pub fn inner_point(&self) -> Point {
+        let s0 = Step(0).add_offset(&self.span_ol.offset());
+        let mut path = self.middle.inner_path();
+        path.0.insert(0, s0);
+        let s = path.0.pop().unwrap();
+        Point {
+            path,
+            i: s.left_index(),
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1203,6 +1234,10 @@ impl<L: Debug + Clone> Context<L> {
             return Err(span);
         }
     }
+
+    fn inner_path(&self) -> Path {
+        Path(self.0.iter().map(|th| th.inner_step()).collect())
+    }
 }
 
 /// A tooth of an [Expr] around a [Step].
@@ -1226,6 +1261,10 @@ impl<L: Debug + Clone> Tooth<L> {
             label: self.label,
             kids: self.span_l.concat(Span(vec![e])).concat(self.span_r),
         }
+    }
+
+    fn inner_step(&self) -> Step {
+        Step(0).add_offset(&self.span_l.offset())
     }
 }
 
