@@ -35,6 +35,14 @@ impl Index {
     pub fn to_offset(&self) -> Offset {
         Offset(self.0)
     }
+
+    pub fn left_step(&self) -> Step {
+        Step(self.0 - 1)
+    }
+
+    pub fn right_step(&self) -> Step {
+        Step(self.0)
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -197,23 +205,35 @@ impl Point {
         let leftmost = sub_expr.kids.leftmost_index();
         let rightmost = sub_expr.kids.rightmost_index();
         match dir {
-            MoveDir::Prev if leftmost.is_left_of_index(&self.i) => {
-                self.i = self.i.sub_offset(&Offset(1));
-                Ok(())
-            }
             MoveDir::Prev => {
-                let step = self.path.0.pop().ok_or(MoveError::Boundary)?;
-                self.i = step.left_index();
-                Ok(())
-            }
-            MoveDir::Next if self.i.is_left_of_index(&rightmost) => {
-                self.i = self.i.add_offset(&Offset(1));
-                Ok(())
+                if leftmost.is_left_of_index(&self.i) {
+                    self.path.0.push(self.i.left_step());
+                    let e = expr.at_path(&self.path);
+                    self.i = e.kids.rightmost_index();
+                    Ok(())
+                } else {
+                    if let Some(s) = self.path.0.pop() {
+                        self.i = s.left_index();
+                        Ok(())
+                    } else {
+                        Err(MoveError::Boundary)
+                    }
+                }
             }
             MoveDir::Next => {
-                let step = self.path.0.pop().ok_or(MoveError::Boundary)?;
-                self.i = step.right_index();
-                Ok(())
+                if self.i.is_left_of_index(&rightmost) {
+                    self.path.0.push(self.i.right_step());
+                    let e = expr.at_path(&self.path);
+                    self.i = e.kids.leftmost_index();
+                    Ok(())
+                } else {
+                    if let Some(s) = self.path.0.pop() {
+                        self.i = s.right_index();
+                        Ok(())
+                    } else {
+                        Err(MoveError::Boundary)
+                    }
+                }
             }
         }
     }
