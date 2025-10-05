@@ -160,12 +160,12 @@ impl Path {
     /// If `self` is a prefix of `other`, then return the path `suffix` such
     /// that `self.append(suffix) == other`
     pub fn diff(&self, other: &Self) -> Option<Self> {
-        let suffix = other.0.as_slice().strip_suffix(self.0.as_slice())?;
+        let suffix = other.0.strip_prefix(self.0.as_slice())?;
         Some(Path(suffix.to_vec()))
     }
 
     pub fn is_prefix_of(&self, other: &Self) -> bool {
-        other.0.as_slice().strip_suffix(self.0.as_slice()).is_some()
+        other.diff(self).is_some()
     }
 }
 
@@ -687,26 +687,22 @@ impl SpanHandle {
     }
 
     pub fn contains_point(&self, p: &Point) -> bool {
-        let result = self
-            .path
+        self.path
             .diff(&p.path)
             .and_then(|suffix| match suffix.0.first() {
                 None => Some(self.i_l.is_left_of_index(&p.i) && p.i.is_left_of_index(&self.i_r)),
                 Some(s0) => Some(self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r)),
             })
-            .unwrap_or(false);
-
-        println!("[contains_point]   self = {self}");
-        println!("[contains_point]      p = {p}");
-        println!("[contains_point] result = {result}");
-
-        result
+            .unwrap_or(false)
     }
 
     pub fn contains_path(&self, path: &Path) -> bool {
         self.path
             .diff(&path)
-            .and_then(|suffix| suffix.0.first().cloned())
+            .and_then(|suffix| {
+                println!("[contains_path] suffix = {suffix}");
+                suffix.0.first().cloned()
+            })
             .and_then(|s0| Some(self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r)))
             .unwrap_or(false)
     }

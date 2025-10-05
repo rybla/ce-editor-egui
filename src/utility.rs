@@ -55,31 +55,18 @@ pub fn swap_default<A: Default>(x: &mut A) -> A {
     mem::take(x)
 }
 
-pub fn write_display_slice<T: Display>(
-    f: &mut std::fmt::Formatter<'_>,
-    xs: &[T],
-) -> std::fmt::Result {
-    write!(f, "[")?;
-    let init = &xs[..xs.len() - 1];
-    for x in init.iter() {
-        write!(f, "{x}, ")?;
-    }
-    if let Some(x) = xs.last() {
-        write!(f, "{x}")?;
-    }
-    write!(f, "]")
-}
-
 pub fn display_slice<T: Display>(xs: &[T]) -> String {
     // let xs = xs.iter().map(|x| format!("{x}"));
     let mut s = String::new();
     s.push_str("[");
-    let init = &xs[..xs.len() - 1];
-    for x in init.iter() {
-        s.push_str(&format!("{x}, "));
-    }
-    if let Some(x) = xs.last() {
-        s.push_str(&format!("{x}"));
+    if !xs.is_empty() {
+        let init = &xs[..xs.len() - 1];
+        for x in init.iter() {
+            s.push_str(&format!("{x}, "));
+        }
+        if let Some(x) = xs.last() {
+            s.push_str(&format!("{x}"));
+        }
     }
     s.push_str("]");
     s

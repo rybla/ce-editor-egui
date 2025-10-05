@@ -135,6 +135,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
+        println!("\n[update]");
+
         if let Some(menu) = &mut self.menu {
             menu.nucleo.tick(10);
         }
