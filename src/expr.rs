@@ -1,6 +1,6 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
-use crate::utility::{extract_from_vec_at_index, split_vec_at_index};
+use crate::utility::{display_slice, extract_from_vec_at_index, split_vec_at_index};
 
 // -----------------------------------------------------------------------------
 // Index
@@ -10,6 +10,12 @@ use crate::utility::{extract_from_vec_at_index, split_vec_at_index};
 /// [Expr].
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Index(pub usize);
+
+impl Display for Index {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}", self.0)
+    }
+}
 
 impl Index {
     pub fn is_left_of_index(&self, other: &Index) -> bool {
@@ -53,6 +59,12 @@ impl Index {
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Step(pub usize);
 
+impl Display for Step {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "^{}", self.0)
+    }
+}
+
 impl Step {
     pub fn left_step(&self) -> Step {
         self.sub_offset(&Offset(1))
@@ -90,6 +102,12 @@ impl Step {
 /// A path from the top [Expr] to an [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Path(pub Vec<Step>);
+
+impl Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Path({})", display_slice(&self.0))
+    }
+}
 
 impl Path {
     pub fn add_offset_to_first_step(self, offset: &Offset) -> Option<Self> {
@@ -160,6 +178,12 @@ impl Path {
 pub struct Point {
     pub path: Path,
     pub i: Index,
+}
+
+impl Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Point({}, {})", self.path, self.i)
+    }
 }
 
 impl Default for Point {
@@ -496,7 +520,7 @@ impl Handle {
                     }
                 }
             }
-            Handle::Span(handle) => Handle::Point(handle.focus_point()).drag(e, target),
+            Handle::Span(handle) => Handle::Point(handle.nonfocus_point()).drag(e, target),
             Handle::Zipper(source) => {
                 let path_i: Path = source.path_i();
 
@@ -621,11 +645,28 @@ pub struct SpanHandle {
     pub focus: SpanFocus,
 }
 
+impl Display for SpanHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "SpanHandle({}, {}, {}, {})",
+            self.path, self.i_l, self.i_r, self.focus
+        )
+    }
+}
+
 impl SpanHandle {
     pub fn focus_point(&self) -> Point {
         match self.focus {
             SpanFocus::Left => self.p_l(),
             SpanFocus::Right => self.p_r(),
+        }
+    }
+
+    pub fn nonfocus_point(&self) -> Point {
+        match self.focus {
+            SpanFocus::Left => self.p_r(),
+            SpanFocus::Right => self.p_l(),
         }
     }
 
@@ -646,13 +687,20 @@ impl SpanHandle {
     }
 
     pub fn contains_point(&self, p: &Point) -> bool {
-        self.path
+        let result = self
+            .path
             .diff(&p.path)
             .and_then(|suffix| match suffix.0.first() {
                 None => Some(self.i_l.is_left_of_index(&p.i) && p.i.is_left_of_index(&self.i_r)),
                 Some(s0) => Some(self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r)),
             })
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        println!("[contains_point]   self = {self}");
+        println!("[contains_point]      p = {p}");
+        println!("[contains_point] result = {result}");
+
+        result
     }
 
     pub fn contains_path(&self, path: &Path) -> bool {
@@ -680,6 +728,15 @@ impl SpanHandle {
 pub enum SpanFocus {
     Left,
     Right,
+}
+
+impl Display for SpanFocus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SpanFocus::Left => write!(f, "Left"),
+            SpanFocus::Right => write!(f, "Right"),
+        }
+    }
 }
 
 impl SpanFocus {
@@ -725,6 +782,16 @@ pub struct ZipperHandle {
     pub i_il: Index,
     pub i_ir: Index,
     pub focus: ZipperFocus,
+}
+
+impl Display for ZipperHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ZipperHandle({}, {}, {}, {}, {}, {}, {})",
+            self.path_o, self.i_ol, self.i_or, self.path_m, self.i_il, self.i_ir, self.focus,
+        )
+    }
 }
 
 impl ZipperHandle {
@@ -812,6 +879,18 @@ pub enum ZipperFocus {
     InnerRight,
     OuterRight,
 }
+
+impl Display for ZipperFocus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ZipperFocus::OuterLeft => write!(f, "OuterLeft"),
+            ZipperFocus::InnerLeft => write!(f, "InnerLeft"),
+            ZipperFocus::InnerRight => write!(f, "InnerRight"),
+            ZipperFocus::OuterRight => write!(f, "OuterRight"),
+        }
+    }
+}
+
 impl ZipperFocus {
     pub fn rotate_dir(&self, dir: &MoveDir) -> ZipperFocus {
         match self {
@@ -853,6 +932,12 @@ impl ZipperFocus {
 pub struct Expr<L> {
     pub label: L,
     pub kids: Span<L>,
+}
+
+impl<L: Display> Display for Expr<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Expr({}, {})", self.label, self.kids)
+    }
 }
 
 impl<L: Debug + Clone> Expr<L> {
@@ -1115,6 +1200,12 @@ pub enum Fragment<L> {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Span<L>(pub Vec<Expr<L>>);
 
+impl<L: Display> Display for Span<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", display_slice(&self.0))
+    }
+}
+
 impl<L: Debug + Clone> Span<L> {
     pub fn replace_sub_span(&mut self, i_l: &Index, i_r: &Index, new_span: Span<L>) -> Self {
         Span(self.0.splice(i_l.0..i_r.0, new_span.0).collect())
@@ -1218,6 +1309,16 @@ pub struct Zipper<L> {
     pub middle: Context<L>,
 }
 
+impl<L: Display> Display for Zipper<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Zipper({}, {}, {})",
+            self.span_ol, self.span_or, self.middle
+        )
+    }
+}
+
 impl<L: Debug + Clone> Zipper<L> {
     pub fn surround(self, span: Span<L>) -> Span<L> {
         match self.middle.surround_span(span) {
@@ -1245,6 +1346,12 @@ impl<L: Debug + Clone> Zipper<L> {
 /// A context around an [Expr].
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Context<L>(pub Vec<Tooth<L>>);
+
+impl<L: Display> Display for Context<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", display_slice(&self.0))
+    }
+}
 
 impl<L: Debug + Clone> Context<L> {
     pub fn empty() -> Self {
@@ -1283,6 +1390,12 @@ pub struct Tooth<L> {
     pub span_r: Span<L>,
 }
 
+impl<L: Display> Display for Tooth<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Tooth({}, {}, {})", self.label, self.span_l, self.span_r)
+    }
+}
+
 impl<L: Debug + Clone> Tooth<L> {
     pub fn surround(self, span: Span<L>) -> Expr<L> {
         Expr {
@@ -1309,6 +1422,12 @@ impl<L: Debug + Clone> Tooth<L> {
 
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Offset(usize);
+
+impl Display for Offset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "δ{}", self.0)
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum MoveError {

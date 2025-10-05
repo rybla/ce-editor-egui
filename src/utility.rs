@@ -1,4 +1,4 @@
-use std::mem;
+use std::{fmt::Display, mem};
 
 /// The function's purpose is to calculate `x mod n` where `x` is a signed 8-bit
 /// integer and `n` is a `usize`. A critical part of the logic is to ensure the
@@ -53,4 +53,34 @@ pub fn with_some_mut<A, B>(f: impl FnOnce(A) -> B, o: &mut Option<A>) -> Option<
 /// mutable reference with the default value for A.
 pub fn swap_default<A: Default>(x: &mut A) -> A {
     mem::take(x)
+}
+
+pub fn write_display_slice<T: Display>(
+    f: &mut std::fmt::Formatter<'_>,
+    xs: &[T],
+) -> std::fmt::Result {
+    write!(f, "[")?;
+    let init = &xs[..xs.len() - 1];
+    for x in init.iter() {
+        write!(f, "{x}, ")?;
+    }
+    if let Some(x) = xs.last() {
+        write!(f, "{x}")?;
+    }
+    write!(f, "]")
+}
+
+pub fn display_slice<T: Display>(xs: &[T]) -> String {
+    // let xs = xs.iter().map(|x| format!("{x}"));
+    let mut s = String::new();
+    s.push_str("[");
+    let init = &xs[..xs.len() - 1];
+    for x in init.iter() {
+        s.push_str(&format!("{x}, "));
+    }
+    if let Some(x) = xs.last() {
+        s.push_str(&format!("{x}"));
+    }
+    s.push_str("]");
+    s
 }
