@@ -71,7 +71,7 @@ impl Step {
     }
 
     pub fn is_left_of_index(&self, i: &Index) -> bool {
-        self.0 <= i.0
+        self.0 < i.0
     }
 
     pub fn sub_offset(&self, offset: &Offset) -> Step {
@@ -403,6 +403,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && p_ol.i.is_left_of_step(s)
                     {
+                        println!("drag from inner left to outer left");
                         let path_o = p_ol.path.clone();
                         let i_or = s.right_index();
                         let i_ol = p_ol.i;
@@ -426,6 +427,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && s.is_left_of_index(&p_or.i)
                     {
+                        println!("drag from inner right to outer right");
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
                         let i_or = p_or.i;
@@ -449,6 +451,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && p_ol.i.is_left_of_step(s)
                     {
+                        println!("drag from outer left to inner left");
                         let path_o = p_ol.path.clone();
                         let i_ol = p_ol.i;
                         let i_or = s.right_index();
@@ -472,6 +475,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && s.is_left_of_index(&p_or.i)
                     {
+                        println!("drag from outer right to inner right");
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
                         let i_or = p_or.i;
@@ -496,91 +500,92 @@ impl Handle {
             Handle::Zipper(source) => {
                 let path_i: Path = source.path_i();
 
-                // adjust i_ol
-                if target.path.is_prefix_of(&path_i) {
-                    Handle::Point(source.p_il())
-                        .drag(e, target)
-                        .and_then(|h| match h {
-                            Handle::Zipper(h) => {
-                                let mut h = h;
-                                h.i_or = if target.is_left_adjacent_to_point(&Point {
-                                    path: source.path_o,
-                                    i: source.path_m.0.first().unwrap().left_index(),
-                                }) {
-                                    source.i_or
-                                } else {
-                                    h.i_or
-                                };
-                                h.i_il = source.i_il;
-                                h.i_ir = source.i_ir;
-                                Some(Handle::Zipper(h))
-                            }
-                            _ => Some(h),
-                        })
-                } else
-                // adjust i_or
-                if target.path.is_prefix_of(&path_i) {
-                    Handle::Point(source.p_ir())
-                        .drag(e, target)
-                        .and_then(|h| match h {
-                            Handle::Zipper(h) => {
-                                let mut h = h;
-                                h.i_ol = if (Point {
-                                    path: source.path_o,
-                                    i: source.path_m.0.first().unwrap().right_index(),
-                                })
-                                .is_left_adjacent_to_point(target)
-                                {
-                                    source.i_ol
-                                } else {
-                                    h.i_ol
-                                };
-                                h.i_il = source.i_il;
-                                h.i_ir = source.i_ir;
-                                Some(Handle::Zipper(h))
-                            }
-                            _ => Some(h),
-                        })
-                } else
-                // adjust i_il
-                if source.path_o.is_prefix_of(&target.path) {
-                    Handle::Point(source.p_ol())
-                        .drag(e, target)
-                        .and_then(|h| match h {
-                            Handle::Zipper(h) => {
-                                let mut h = h;
-                                h.i_ol = source.i_ol;
-                                h.i_or = source.i_or;
-                                h.i_ir = if target.is_left_adjacent_to_point(&source.p_ir()) {
-                                    source.i_ir
-                                } else {
-                                    h.i_ir
-                                };
-                                Some(Handle::Zipper(h))
-                            }
-                            _ => Some(h),
-                        })
-                } else
-                // adjust i_ir
-                if false {
-                    Handle::Point(source.p_or())
-                        .drag(e, target)
-                        .and_then(|h| match h {
-                            Handle::Zipper(h) => {
-                                let mut h = h;
-                                h.i_ol = source.i_ol;
-                                h.i_or = source.i_or;
-                                h.i_il = if source.p_il().is_left_adjacent_to_point(target) {
-                                    source.i_il
-                                } else {
-                                    h.i_il
-                                };
-                                Some(Handle::Zipper(h))
-                            }
-                            _ => Some(h),
-                        })
-                } else {
-                    None
+                match source.focus {
+                    ZipperFocus::OuterLeft if target.path.is_prefix_of(&path_i) => {
+                        println!("adjust i_ol");
+                        Handle::Point(source.p_il())
+                            .drag(e, target)
+                            .and_then(|h| match h {
+                                Handle::Zipper(h) => {
+                                    let mut h = h;
+                                    h.i_or = if target.is_left_adjacent_to_point(&Point {
+                                        path: source.path_o.clone(),
+                                        i: source.path_m.0.first().unwrap().left_index(),
+                                    }) {
+                                        source.i_or
+                                    } else {
+                                        h.i_or
+                                    };
+                                    h.i_il = source.i_il;
+                                    h.i_ir = source.i_ir;
+                                    Some(Handle::Zipper(h))
+                                }
+                                _ => Some(h),
+                            })
+                    }
+                    ZipperFocus::OuterRight if target.path.is_prefix_of(&path_i) => {
+                        println!("adjust i_or");
+                        Handle::Point(source.p_ir())
+                            .drag(e, target)
+                            .and_then(|h| match h {
+                                Handle::Zipper(h) => {
+                                    let mut h = h;
+                                    h.i_ol = if (Point {
+                                        path: source.path_o.clone(),
+                                        i: source.path_m.0.first().unwrap().right_index(),
+                                    })
+                                    .is_left_adjacent_to_point(target)
+                                    {
+                                        source.i_ol
+                                    } else {
+                                        h.i_ol
+                                    };
+                                    h.i_il = source.i_il;
+                                    h.i_ir = source.i_ir;
+                                    Some(Handle::Zipper(h))
+                                }
+                                _ => Some(h),
+                            })
+                    }
+                    ZipperFocus::InnerLeft if source.path_o.is_prefix_of(&target.path) => {
+                        println!("adjust i_il");
+                        Handle::Point(source.p_ol())
+                            .drag(e, target)
+                            .and_then(|h| match h {
+                                Handle::Zipper(h) => {
+                                    let mut h = h;
+                                    h.i_ol = source.i_ol;
+                                    h.i_or = source.i_or;
+                                    h.i_ir = if target.is_left_adjacent_to_point(&source.p_ir()) {
+                                        source.i_ir
+                                    } else {
+                                        h.i_ir
+                                    };
+                                    Some(Handle::Zipper(h))
+                                }
+                                _ => Some(h),
+                            })
+                    }
+                    ZipperFocus::InnerRight if source.path_o.is_prefix_of(&target.path) => {
+                        println!("adjust i_ir");
+                        Handle::Point(source.p_or())
+                            .drag(e, target)
+                            .and_then(|h| match h {
+                                Handle::Zipper(h) => {
+                                    let mut h = h;
+                                    h.i_ol = source.i_ol;
+                                    h.i_or = source.i_or;
+                                    h.i_il = if source.p_il().is_left_adjacent_to_point(target) {
+                                        source.i_il
+                                    } else {
+                                        h.i_il
+                                    };
+                                    Some(Handle::Zipper(h))
+                                }
+                                _ => Some(h),
+                            })
+                    }
+                    _ => None,
                 }
             }
         }
@@ -641,11 +646,21 @@ impl SpanHandle {
     }
 
     pub fn contains_point(&self, p: &Point) -> bool {
-        self.path == p.path && self.i_l.is_left_of_index(&p.i) && p.i.is_left_of_index(&self.i_r)
+        self.path
+            .diff(&p.path)
+            .and_then(|suffix| match suffix.0.first() {
+                None => Some(self.i_l.is_left_of_index(&p.i) && p.i.is_left_of_index(&self.i_r)),
+                Some(s0) => Some(self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r)),
+            })
+            .unwrap_or(false)
     }
 
     pub fn contains_path(&self, path: &Path) -> bool {
-        &self.path == path
+        self.path
+            .diff(&path)
+            .and_then(|suffix| suffix.0.first().cloned())
+            .and_then(|s0| Some(self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r)))
+            .unwrap_or(false)
     }
 
     pub fn to_empty_zipper_handle(&self) -> ZipperHandle {
