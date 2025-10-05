@@ -28,11 +28,11 @@ impl Index {
         Index(self.0 + offset.0)
     }
 
-    fn is_right_of_step(&self, s: &Step) -> bool {
+    pub fn is_right_of_step(&self, s: &Step) -> bool {
         self.0 > s.0
     }
 
-    fn to_offset(&self) -> Offset {
+    pub fn to_offset(&self) -> Offset {
         Offset(self.0)
     }
 }
@@ -63,7 +63,7 @@ impl Step {
     }
 
     pub fn is_left_of_index(&self, i: &Index) -> bool {
-        i.is_right_of_step(self)
+        self.0 <= i.0
     }
 
     pub fn sub_offset(&self, offset: &Offset) -> Step {
@@ -198,7 +198,7 @@ impl Point {
         }
     }
 
-    fn to_empty_span_handle(&self) -> SpanHandle {
+    pub fn to_empty_span_handle(&self) -> SpanHandle {
         SpanHandle {
             path: self.path.clone(),
             i_l: self.i,
@@ -207,7 +207,7 @@ impl Point {
         }
     }
 
-    fn to_empty_zipper_handle(&self) -> ZipperHandle {
+    pub fn to_empty_zipper_handle(&self) -> ZipperHandle {
         ZipperHandle {
             path_o: self.path.clone(),
             i_ol: self.i,
@@ -575,6 +575,7 @@ pub struct SpanHandle {
     pub i_r: Index,
     pub focus: SpanFocus,
 }
+
 impl SpanHandle {
     pub fn focus_point(&self) -> Point {
         match self.focus {
@@ -599,15 +600,15 @@ impl SpanHandle {
         }
     }
 
-    fn contains_point(&self, p: &Point) -> bool {
+    pub fn contains_point(&self, p: &Point) -> bool {
         self.path == p.path && self.i_l.is_left_of_index(&p.i) && p.i.is_left_of_index(&self.i_r)
     }
 
-    fn contains_path(&self, path: &Path) -> bool {
+    pub fn contains_path(&self, path: &Path) -> bool {
         &self.path == path
     }
 
-    fn to_empty_zipper_handle(&self) -> ZipperHandle {
+    pub fn to_empty_zipper_handle(&self) -> ZipperHandle {
         ZipperHandle {
             path_o: self.path.clone(),
             i_ol: self.i_l,
@@ -713,16 +714,16 @@ impl ZipperHandle {
         }
     }
 
-    fn contains_point(&self, p: &Point) -> bool {
+    pub fn contains_point(&self, p: &Point) -> bool {
         self.handle_o().contains_point(p) && !self.handle_i().contains_point(p)
     }
 
-    fn contains_path(&self, path: &Path) -> bool {
+    pub fn contains_path(&self, path: &Path) -> bool {
         self.handle_o().contains_path(path) && !self.handle_i().contains_path(path)
     }
 
     /// Outer [SpanHandle].
-    fn handle_o(&self) -> SpanHandle {
+    pub fn handle_o(&self) -> SpanHandle {
         SpanHandle {
             path: self.path_o.clone(),
             i_l: self.i_ol,
@@ -732,7 +733,7 @@ impl ZipperHandle {
     }
 
     /// Inner [SpanHandle].
-    fn handle_i(&self) -> SpanHandle {
+    pub fn handle_i(&self) -> SpanHandle {
         SpanHandle {
             path: self.path_i(),
             i_l: self.i_il,
@@ -741,7 +742,7 @@ impl ZipperHandle {
         }
     }
 
-    fn first_middle_step<'a>(&'a self) -> &'a Step {
+    pub fn first_middle_step<'a>(&'a self) -> &'a Step {
         self.path_m
             .0
             .first()
@@ -778,7 +779,7 @@ impl ZipperFocus {
         }
     }
 
-    fn to_span_focus(&self) -> SpanFocus {
+    pub fn to_span_focus(&self) -> SpanFocus {
         match self {
             ZipperFocus::OuterLeft => SpanFocus::Left,
             ZipperFocus::InnerLeft => SpanFocus::Left,
@@ -911,7 +912,7 @@ impl<L: Debug + Clone> Expr<L> {
             path: h
                 .path_m
                 .clone()
-                .sub_offset_to_first_step(h.i_il.to_offset())
+                .sub_offset_to_first_step(&h.i_il.to_offset())
                 .unwrap(),
             i: h.i_ol, // TODO: Make sure this is the right index
         });
@@ -978,7 +979,7 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
-    fn at_path_mut(&mut self, path: &Path) -> &mut Expr<L> {
+    pub fn at_path_mut(&mut self, path: &Path) -> &mut Expr<L> {
         let mut expr = self;
         for step in path.0.iter() {
             expr = expr.at_step_mut(step)
@@ -986,16 +987,16 @@ impl<L: Debug + Clone> Expr<L> {
         expr
     }
 
-    fn at_step_mut(&mut self, step: &Step) -> &mut Expr<L> {
+    pub fn at_step_mut(&mut self, step: &Step) -> &mut Expr<L> {
         self.kids.at_step_mut(step)
     }
 
-    fn at_span_handle(&self, h: &SpanHandle) -> Span<L> {
+    pub fn at_span_handle(&self, h: &SpanHandle) -> Span<L> {
         let e = self.at_path(&h.path);
         Span(e.kids.at_index_range(&h.i_l, &h.i_r).to_vec())
     }
 
-    fn at_zipper_handle(&self, h: &ZipperHandle) -> Zipper<L> {
+    pub fn at_zipper_handle(&self, h: &ZipperHandle) -> Zipper<L> {
         let s0 = h.first_middle_step();
         let mut e = self.at_path(&h.path_o);
         let span_ol = Span(e.kids.at_index_range(&h.i_ol, &s0.left_index()).to_vec());
@@ -1012,7 +1013,7 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
-    fn at_tooth(&self, s: &Step) -> Tooth<L> {
+    pub fn at_tooth(&self, s: &Step) -> Tooth<L> {
         Tooth {
             label: self.label.clone(),
             span_l: Span(
@@ -1028,7 +1029,7 @@ impl<L: Debug + Clone> Expr<L> {
         }
     }
 
-    fn into_context(&self, path: &Path) -> Context<L> {
+    pub fn into_context(&self, path: &Path) -> Context<L> {
         let mut ctx = Context::empty();
         let mut e = self;
         for s in path.0.iter() {
@@ -1145,7 +1146,7 @@ impl<L: Debug + Clone> Span<L> {
         Span(self.at_index_range(i_l, i_r).to_vec())
     }
 
-    fn concat(self, other: Self) -> Self {
+    pub fn concat(self, other: Self) -> Self {
         Span([self.0, other.0].concat())
     }
 }
@@ -1163,7 +1164,7 @@ pub struct Zipper<L> {
 }
 
 impl<L: Debug + Clone> Zipper<L> {
-    fn surround(self, span: Span<L>) -> Span<L> {
+    pub fn surround(self, span: Span<L>) -> Span<L> {
         match self.middle.surround_span(span) {
             Ok(e) => self.span_ol.concat(Span(vec![e])).concat(self.span_or),
             Err(span) => self.span_ol.concat(span).concat(self.span_or),
@@ -1213,7 +1214,7 @@ pub struct Tooth<L> {
 }
 
 impl<L: Debug + Clone> Tooth<L> {
-    fn surround(self, span: Span<L>) -> Expr<L> {
+    pub fn surround(self, span: Span<L>) -> Expr<L> {
         Expr {
             label: self.label,
             kids: self.span_l.concat(span).concat(self.span_r),
