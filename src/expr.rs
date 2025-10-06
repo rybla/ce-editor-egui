@@ -1089,6 +1089,10 @@ impl<L: Debug + Display + Clone> Expr<L> {
     /// Replaces the span at the handle with the new span and returns the old
     /// span.
     pub fn replace_span(&mut self, h: &SpanHandle, new_span: Span<L>) -> (Span<L>, SpanHandle) {
+        println!("[replace_span] self     = {self}");
+        println!("[replace_span] h        = {h}");
+        println!("[replace_span] new_span = {new_span}");
+
         let parent = self.at_path_mut(&h.path);
         let new_span_offset = &new_span.offset();
         let old_span = Span(parent.kids.0.splice(h.i_l.0..h.i_r.0, new_span.0).collect());
@@ -1134,7 +1138,15 @@ impl<L: Debug + Display + Clone> Expr<L> {
         let new_span_m_offset = &new_span_m.offset();
 
         // replace outer span handle of zipper with result
-        let old_span_m = e_o.kids.replace_sub_span(&h.i_ol, &h.i_or, new_span_m);
+        let old_span_m = if h.path_m.0.is_empty() {
+            // If the middle path of the zipper handle is empty, then when we
+            // replaced the span above with an empty span, we actually did that
+            // in e_o's kids directly, Which means we need to just go to a point
+            // here.
+            e_o.kids.replace_sub_span(&h.i_ol, &h.i_ol, new_span_m)
+        } else {
+            e_o.kids.replace_sub_span(&h.i_ol, &h.i_or, new_span_m)
+        };
         println!("[replace_zipper] old_span_m = {old_span_m}");
 
         let old_zipper: Zipper<L> = old_span_m.into_zipper(
