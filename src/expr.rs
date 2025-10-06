@@ -1010,7 +1010,12 @@ macro_rules! ex {
 
 impl<L: Display> Display for Expr<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "expr![{}, {}]", self.label, self.kids)
+        write!(
+            f,
+            "ex![{}, {}]",
+            self.label,
+            display_slice(self.kids.0.as_slice())
+        )
     }
 }
 
@@ -1035,6 +1040,10 @@ impl<L: Debug + Display + Clone> Expr<L> {
     }
 
     pub fn insert(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
+        println!("[insert] self = {self}");
+        println!("[insert] h    = {h}");
+        println!("[insert] frag = {frag}");
+
         match h {
             Handle::Point(p) => match frag {
                 Fragment::Span(span) => {
@@ -1101,6 +1110,10 @@ impl<L: Debug + Display + Clone> Expr<L> {
         h: &ZipperHandle,
         new_zipper: Zipper<L>,
     ) -> (Zipper<L>, ZipperHandle) {
+        println!("[replace_zipper] self       = {self}");
+        println!("[replace_zipper] h          = {h}");
+        println!("[replace_zipper] new_zipper = {new_zipper}");
+
         // take the inner span
         let e_o = self.at_path_mut(&h.path_o);
         let (span_i, _) = e_o.replace_span(
@@ -1121,7 +1134,8 @@ impl<L: Debug + Display + Clone> Expr<L> {
         let new_span_m_offset = &new_span_m.offset();
 
         // replace outer span handle of zipper with result
-        let old_span_m = e_o.kids.replace_sub_span(&h.i_il, &h.i_ir, new_span_m);
+        let old_span_m = e_o.kids.replace_sub_span(&h.i_ol, &h.i_or, new_span_m);
+        println!("[replace_zipper] old_span_m = {old_span_m}");
 
         let old_zipper: Zipper<L> = old_span_m.into_zipper(
             &(Point {
@@ -1130,6 +1144,7 @@ impl<L: Debug + Display + Clone> Expr<L> {
             })
             .sub_offset_at_top(&h.i_il.to_offset()),
         );
+        println!("[replace_zipper] old_zipper = {old_zipper}");
 
         (
             old_zipper,
@@ -1146,6 +1161,8 @@ impl<L: Debug + Display + Clone> Expr<L> {
     }
 
     pub fn cut(&mut self, h: &Handle) -> Option<(Fragment<L>, Handle)> {
+        println!("[cut] self = {self}");
+        println!("[cut] h    = {h}");
         match h {
             Handle::Point(_) => None,
             Handle::Span(h) => {
@@ -1231,8 +1248,9 @@ impl<L: Debug + Display + Clone> Expr<L> {
         let span_or = Span(e.kids.at_index_range(&s0.right_index(), &h.i_or).to_vec());
         let mut ths: Vec<Tooth<L>> = vec![];
         for s in h.path_m.0.iter() {
-            ths.push(e.at_tooth(s));
-            e = e.at_step(s);
+            let (th, e_sub) = e.tooth_at_step(s);
+            ths.push(th);
+            e = e_sub
         }
         Zipper {
             span_ol,
@@ -1241,31 +1259,56 @@ impl<L: Debug + Display + Clone> Expr<L> {
         }
     }
 
-    pub fn at_tooth(&self, s: &Step) -> Tooth<L> {
+    pub fn tooth_at_step(&self, s: &Step) -> (Tooth<L>, &Expr<L>) {
+        (
+            Tooth {
+                label: self.label.clone(),
+                span_l: Span(
+                    self.kids
+                        .at_index_range(&self.kids.leftmost_index(), &s.left_index())
+                        .to_vec(),
+                ),
+                span_r: Span(
+                    self.kids
+                        .at_index_range(&s.right_index(), &self.kids.rightmost_index())
+                        .to_vec(),
+                ),
+            },
+            self.kids.at_step(s),
+        )
+    }
+
+    pub fn into_context_from_path(&self, path: &Path) -> (Context<L>, &Expr<L>) {
+        let mut ctx = Context::empty();
+        let mut e = self;
+        for s in path.0.iter() {
+            let (th, e_sub) = e.tooth_at_step(s);
+            ctx.0.push(th);
+            e = e_sub
+        }
+        (ctx, e)
+    }
+
+    fn into_context_from_point(&self, p: &Point) -> Context<L> {
+        let (mut ctx, e) = self.into_context_from_path(&p.path);
+        ctx.0.push(e.tooth_at_index(&p.i));
+        ctx
+    }
+
+    fn tooth_at_index(&self, i: &Index) -> Tooth<L> {
         Tooth {
             label: self.label.clone(),
             span_l: Span(
                 self.kids
-                    .at_index_range(&self.kids.leftmost_index(), &s.left_index())
+                    .at_index_range(&self.kids.leftmost_index(), i)
                     .to_vec(),
             ),
             span_r: Span(
                 self.kids
-                    .at_index_range(&s.right_index(), &self.kids.rightmost_index())
+                    .at_index_range(i, &self.kids.rightmost_index())
                     .to_vec(),
             ),
         }
-    }
-
-    pub fn into_context(&self, path: &Path) -> Context<L> {
-        let mut ctx = Context::empty();
-        let mut e = self;
-        for s in path.0.iter() {
-            let th = e.at_tooth(s);
-            ctx.0.push(th);
-            e = e.at_step(s);
-        }
-        ctx
     }
 }
 
@@ -1278,6 +1321,15 @@ impl<L: Debug + Display + Clone> Expr<L> {
 pub enum Fragment<L> {
     Span(Span<L>),
     Zipper(Zipper<L>),
+}
+
+impl<L: Display> Display for Fragment<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Fragment::Span(span) => span.fmt(f),
+            Fragment::Zipper(zipper) => zipper.fmt(f),
+        }
+    }
 }
 
 impl<L: Debug + Display + Clone> Fragment<L> {
@@ -1318,15 +1370,25 @@ impl<L: Display> Display for Span<L> {
 
 impl<L: Debug + Display + Clone> Span<L> {
     pub fn replace_sub_span(&mut self, i_l: &Index, i_r: &Index, new_span: Span<L>) -> Self {
+        println!("[replace_span_sub] self     = {self}");
+        println!("[replace_span_sub] i_l      = {i_l}");
+        println!("[replace_span_sub] i_r      = {i_r}");
+        println!("[replace_span_sub] new_span = {new_span}");
         Span(self.0.splice(i_l.0..i_r.0, new_span.0).collect())
     }
 
     pub fn into_zipper(self, p: &Point) -> Zipper<L> {
-        println!("[into_zipper]\n  - self = {:?}\n  - p = {:?}", &self, p);
+        println!("[into_zipper] self = {self}");
+        println!("[into_zipper] p    = {p}");
+
         if let Some(s) = p.path.0.first() {
             self.assert_step_in_bounds(s);
             let (span_ol, e, span_or) = self.extract_at_step(s);
-            let middle = e.into_context(&Path(p.path.0[1..].to_vec()));
+            println!("[into_zipper] span_ol = {span_ol}");
+            println!("[into_zipper] e       = {e}");
+            println!("[into_zipper] span_or = {span_or}");
+            let middle = e.into_context_from_point(&Point::new(Path(p.path.0[1..].to_vec()), p.i));
+            println!("[into_zipper] middle = {middle}");
             Zipper {
                 span_ol: span_ol,
                 span_or: span_or,
@@ -1419,12 +1481,25 @@ pub struct Zipper<L> {
     pub middle: Context<L>,
 }
 
+#[macro_export]
+macro_rules! zipper {
+    ([ $( $e_l:expr ),* ], [ $( $th:expr ),* ], [ $( $e_r:expr ),* ]) => {
+        Zipper {
+            span_ol: span![$( $e_l ),*],
+            span_or: span![$( $e_r ),*],
+            middle: context![$( $th ),*],
+        }
+    };
+}
+
 impl<L: Display> Display for Zipper<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Zipper({}, {}, {})",
-            self.span_ol, self.span_or, self.middle
+            "zipper![{}, {}, {}]",
+            display_slice(self.span_ol.0.as_slice()),
+            display_slice(self.middle.0.as_slice()),
+            display_slice(self.span_or.0.as_slice())
         )
     }
 }
@@ -1465,9 +1540,16 @@ impl<L: Debug + Display + Clone> Zipper<L> {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Context<L>(pub Vec<Tooth<L>>);
 
+#[macro_export]
+macro_rules! context {
+    ( $( $th:expr ),* ) => {
+        Context(vec![ $( $th ),* ])
+    };
+}
+
 impl<L: Display> Display for Context<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", display_slice(&self.0))
+        write!(f, "context!{}", display_slice(&self.0))
     }
 }
 
@@ -1508,9 +1590,26 @@ pub struct Tooth<L> {
     pub span_r: Span<L>,
 }
 
+#[macro_export]
+macro_rules! tooth {
+    ($label:expr, [ $( $e_l:expr ),* ], [ $( $e_r:expr ),* ]) => {
+        Tooth {
+            label: $label,
+            span_l: span![$( $e_l ),*],
+            span_r: span![$( $e_r ),*],
+        }
+    };
+}
+
 impl<L: Display> Display for Tooth<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Tooth({}, {}, {})", self.label, self.span_l, self.span_r)
+        write!(
+            f,
+            "tooth![{}, {}, {}]",
+            self.label,
+            display_slice(self.span_l.0.as_slice()),
+            display_slice(self.span_r.0.as_slice())
+        )
     }
 }
 
@@ -1566,6 +1665,10 @@ pub enum MoveDir {
     Next,
 }
 
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1594,6 +1697,29 @@ mod tests {
 
     #[test]
     pub fn insert_zipper_ex1() {
-        todo!()
+        let mut e = ex!["root", [ex!["a", []]]];
+        let h = Handle::Point(point![[0], 0]);
+        let frag = Fragment::Zipper(zipper![[], [tooth!["b", [], []]], []]);
+        let result = e.insert(h, frag);
+        println!("e = {e}");
+        println!("h = {result}");
+    }
+
+    #[test]
+    pub fn cut_zipper_ex1() {
+        let mut e = ex!["root", [ex!["a", []]]];
+        let h = Handle::Zipper(zipper_handle![[], 0, 1, [0], 0, 0, ZipperFocus::InnerLeft]);
+        let (frag, h) = e.cut(&h).unwrap();
+        println!("e    = {e}");
+        println!("h    = {h}");
+        println!("frag = {frag}");
+    }
+
+    #[test]
+    pub fn into_zipper_ex1() {
+        let e = span![ex!["a", []]];
+        let p = point![[0], 0];
+        let z = e.into_zipper(&p);
+        assert_eq!(z, zipper![[], [tooth!["a", [], []]], []]);
     }
 }
