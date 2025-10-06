@@ -13,7 +13,7 @@ pub struct Index(pub usize);
 
 impl Display for Index {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -61,7 +61,7 @@ pub struct Step(pub usize);
 
 impl Display for Step {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "^{}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -103,9 +103,16 @@ impl Step {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Path(pub Vec<Step>);
 
+#[macro_export]
+macro_rules! path {
+    ( $( $step:expr ),* ) => {
+        Path(vec![ $( Step($step) ),* ])
+    };
+}
+
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", display_slice(&self.0))
+        write!(f, "path!{}", display_slice(&self.0))
     }
 }
 
@@ -165,7 +172,7 @@ impl Path {
     }
 
     pub fn is_prefix_of(&self, other: &Self) -> bool {
-        other.diff(self).is_some()
+        other.0.strip_prefix(self.0.as_slice()).is_some()
     }
 }
 
@@ -180,9 +187,19 @@ pub struct Point {
     pub i: Index,
 }
 
+#[macro_export]
+macro_rules! point {
+    ( [ $( $s:expr ),* ], $i:expr ) => {
+        Point {
+            path: path![ $( $s ),* ],
+            i: Index($i),
+        }
+    };
+}
+
 impl Display for Point {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Point({}, {})", self.path, self.i)
+        write!(f, "point![{}, {}]", display_slice(&self.path.0), self.i)
     }
 }
 
@@ -410,8 +427,8 @@ impl Handle {
     }
 
     pub fn drag<L: Debug + Display + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Handle> {
-        println!("[drag]   self = {self}");
-        println!("[drag]      e = {e}");
+        println!("[drag] self   = {self}");
+        println!("[drag] e      = {e}");
         println!("[drag] target = {target}");
 
         match self {
@@ -663,12 +680,27 @@ pub struct SpanHandle {
     pub focus: SpanFocus,
 }
 
+#[macro_export]
+macro_rules! span_handle {
+    ([ $( $s:expr ),* ], $i_l:expr, $i_r:expr, $focus:expr) => {
+        SpanHandle {
+            path: path![ $( $s ),* ],
+            i_l: $i_l,
+            i_r: $i_r,
+            focus: $focus,
+        }
+    };
+}
+
 impl Display for SpanHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "SpanHandle({}, {}, {}, {})",
-            self.path, self.i_l, self.i_r, self.focus
+            "span_handle![{}, {}, {}, {}]",
+            display_slice(self.path.0.as_slice()),
+            self.i_l,
+            self.i_r,
+            self.focus
         )
     }
 }
@@ -795,12 +827,33 @@ pub struct ZipperHandle {
     pub focus: ZipperFocus,
 }
 
+#[macro_export]
+macro_rules! zipper_handle {
+    ( [ $( $s_o:expr ),* ] , $i_ol:expr, $i_or:expr, [ $( $s_m:expr ),* ], $i_il:expr, $i_ir:expr, $focus:expr) => {
+        ZipperHandle {
+            path_o: path![ $( $s_o ),* ],
+            i_ol: Index($i_ol),
+            i_or: Index($i_or),
+            path_m: path![ $( $s_m ),* ],
+            i_il: Index($i_il),
+            i_ir: Index($i_ir),
+            focus: $focus,
+        }
+    };
+}
+
 impl Display for ZipperHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ZipperHandle({}, {}, {}, {}, {}, {}, {})",
-            self.path_o, self.i_ol, self.i_or, self.path_m, self.i_il, self.i_ir, self.focus,
+            "zipper_handle![{}, {}, {}, {}, {}, {}, {}]",
+            display_slice(self.path_o.0.as_slice()),
+            self.i_ol,
+            self.i_or,
+            display_slice(self.path_m.0.as_slice()),
+            self.i_il,
+            self.i_ir,
+            self.focus,
         )
     }
 }
@@ -945,9 +998,19 @@ pub struct Expr<L> {
     pub kids: Span<L>,
 }
 
+#[macro_export]
+macro_rules! ex {
+    ( $label:expr, [ $( $e:expr ),* ] ) => {
+        Expr {
+            label: $label,
+            kids: Span(vec![ $( $e ),* ]),
+        }
+    };
+}
+
 impl<L: Display> Display for Expr<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Expr({}, {})", self.label, self.kids)
+        write!(f, "expr![{}, {}]", self.label, self.kids)
     }
 }
 
@@ -1240,9 +1303,16 @@ impl<L: Debug + Display + Clone> Fragment<L> {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Span<L>(pub Vec<Expr<L>>);
 
+#[macro_export]
+macro_rules! span {
+    ( $( $e:expr ),* ) => {
+        Span(vec![$( $e ),*])
+    };
+}
+
 impl<L: Display> Display for Span<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", display_slice(&self.0))
+        write!(f, "span!{}", display_slice(&self.0))
     }
 }
 
@@ -1502,46 +1572,23 @@ mod tests {
 
     #[test]
     pub fn ex1() {
-        // adjust i_il
-        // ZipperHandle(Path([]), '0, '1, Path([^0]), '0, '1, InnerLeft)
-        // [drag]   self = Point(Path([]), '0)
-        // [drag]      e = Expr(root, [Expr(a, [Expr(b, [])])])
-        // [drag] target = Point(Path([]), '1)
-        let source = Handle::Zipper(ZipperHandle {
-            path_o: Path(vec![]),
-            i_ol: Index(0),
-            i_or: Index(1),
-            path_m: Path(vec![Step(0)]),
-            i_il: Index(0),
-            i_ir: Index(1),
-            focus: ZipperFocus::InnerLeft,
-        });
-        let e = Expr::new(
-            "root",
-            Span(vec![Expr::new(
-                "a",
-                Span(vec![Expr::new("a", Span(vec![]))]),
-            )]),
-        );
-        let target = Point::new(Path(vec![Step(0), Step(0)]), Index(0));
+        let source = Handle::Zipper(zipper_handle![[], 0, 1, [0], 0, 0, ZipperFocus::InnerLeft]);
+        let e = ex!["root", [ex!["a", [ex!["b", []]]]]];
+        let target = point![[0, 0], 0];
 
         let result = source.drag(&e, &target);
-        match &result {
-            None => println!("result = None"),
-            Some(result) => println!("result = {result}"),
-        }
 
         assert_eq!(
             result,
             Some(Handle::Zipper(ZipperHandle {
-                path_o: Path(vec![]),
+                path_o: path![],
                 i_ol: Index(0),
                 i_or: Index(1),
-                path_m: Path(vec![Step(0), Step(1)]),
+                path_m: path![0, 0],
                 i_il: Index(0),
-                i_ir: Index(1),
+                i_ir: Index(0),
                 focus: ZipperFocus::InnerLeft
             }))
-        );
+        )
     }
 }
