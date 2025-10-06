@@ -1571,7 +1571,7 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn ex1() {
+    pub fn move_ex1() {
         let source = Handle::Zipper(zipper_handle![[], 0, 1, [0], 0, 0, ZipperFocus::InnerLeft]);
         let e = ex!["root", [ex!["a", [ex!["b", []]]]]];
         let target = point![[0, 0], 0];
@@ -1590,5 +1590,10 @@ mod tests {
                 focus: ZipperFocus::InnerLeft
             }))
         )
+    }
+
+    #[test]
+    pub fn insert_zipper_ex1() {
+        todo!()
     }
 }

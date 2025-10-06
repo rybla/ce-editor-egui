@@ -44,6 +44,7 @@ lazy_static! {
     };
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ExprLabel<ES: EditorSpec + ?Sized> {
     pub constructor: ES::Constructor,
     pub diagnostic: ES::Diagnostic,
@@ -544,8 +545,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             println!("[set_core] don't update clipboard");
         }
     }
+
+    pub fn handle_action(&mut self, _action: Action<ES>) {
+        todo!()
+    }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CoreEditorState<ES: EditorSpec + ?Sized> {
     pub expr: EditorExpr<ES>,
     pub handle: Handle,
@@ -722,8 +728,20 @@ impl EditMenuPattern {
 pub type Edit<ES> = fn(&String, CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
 
 pub trait EditorSpec: 'static {
-    type Constructor: Debug + Display + Clone + Sized + PartialEq;
-    type Diagnostic: Debug + Display + Clone + Sized + PartialEq;
+    type Constructor: Debug
+        + Display
+        + Clone
+        + Sized
+        + PartialEq
+        + serde::Serialize
+        + for<'a> serde::Deserialize<'a>;
+    type Diagnostic: Debug
+        + Display
+        + Clone
+        + Sized
+        + PartialEq
+        + serde::Serialize
+        + for<'a> serde::Deserialize<'a>;
 
     fn name() -> String;
 
@@ -756,4 +774,18 @@ pub fn match_input_cycle_dir(ctx: &egui::Context) -> Option<CycleDir> {
     } else {
         None
     }
+}
+
+// -----------------------------------------------------------------------------
+
+pub enum Action<ES: EditorSpec + ?Sized> {
+    Copy,
+    Paste,
+    Cut,
+    Insert(Fragment<ExprLabel<ES>>),
+}
+
+pub struct StateAction<ES: EditorSpec + ?Sized> {
+    pub state: CoreEditorState<ES>,
+    pub action: Action<ES>,
 }
