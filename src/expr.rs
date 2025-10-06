@@ -685,8 +685,8 @@ macro_rules! span_handle {
     ([ $( $s:expr ),* ], $i_l:expr, $i_r:expr, $focus:expr) => {
         SpanHandle {
             path: path![ $( $s ),* ],
-            i_l: $i_l,
-            i_r: $i_r,
+            i_l: Index($i_l),
+            i_r: Index($i_r),
             focus: $focus,
         }
     };
@@ -1721,5 +1721,15 @@ mod tests {
         let p = point![[0], 0];
         let z = e.into_zipper(&p);
         assert_eq!(z, zipper![[], [tooth!["a", [], []]], []]);
+    }
+
+    #[test]
+    pub fn insert_zipper_ex2() {
+        let mut e = ex!["root", [ex!["a", []]]];
+        let h = span_handle![[], 0, 1, SpanFocus::Right];
+        let frag = zipper![[], [tooth!["a", [], []]], []];
+        let h = e.insert(Handle::Span(h), Fragment::Zipper(frag));
+        println!("e = {e}");
+        println!("h = {h}");
     }
 }
