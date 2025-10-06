@@ -700,7 +700,6 @@ impl SpanHandle {
         self.path
             .diff(&path)
             .and_then(|suffix| {
-                println!("[contains_path] suffix = {suffix}");
                 suffix.0.first().cloned()
             })
             .and_then(|s0| Some(self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r)))
