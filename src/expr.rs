@@ -105,7 +105,7 @@ pub struct Path(pub Vec<Step>);
 
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Path({})", display_slice(&self.0))
+        write!(f, "{}", display_slice(&self.0))
     }
 }
 
@@ -282,6 +282,10 @@ impl Point {
             focus: ZipperFocus::InnerLeft,
         }
     }
+
+    pub fn new(path: Path, i: Index) -> Self {
+        Self { path, i }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -294,6 +298,16 @@ pub enum Handle {
     Point(Point),
     Span(SpanHandle),
     Zipper(ZipperHandle),
+}
+
+impl Display for Handle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Handle::Point(p) => std::fmt::Display::fmt(&p, f),
+            Handle::Span(h) => std::fmt::Display::fmt(&h, f),
+            Handle::Zipper(h) => std::fmt::Display::fmt(&h, f),
+        }
+    }
 }
 
 impl Default for Handle {
@@ -396,6 +410,10 @@ impl Handle {
     }
 
     pub fn drag<L: Debug + Display + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Handle> {
+        println!("[drag]   self = {self}");
+        println!("[drag]      e = {e}");
+        println!("[drag] target = {target}");
+
         match self {
             Handle::Point(source) => {
                 if target.path == source.path {
@@ -699,9 +717,7 @@ impl SpanHandle {
     pub fn contains_path(&self, path: &Path) -> bool {
         self.path
             .diff(&path)
-            .and_then(|suffix| {
-                suffix.0.first().cloned()
-            })
+            .and_then(|suffix| suffix.0.first().cloned())
             .and_then(|s0| Some(self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r)))
             .unwrap_or(false)
     }
@@ -1478,4 +1494,54 @@ pub enum CycleDir {
 pub enum MoveDir {
     Prev,
     Next,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn ex1() {
+        // adjust i_il
+        // ZipperHandle(Path([]), '0, '1, Path([^0]), '0, '1, InnerLeft)
+        // [drag]   self = Point(Path([]), '0)
+        // [drag]      e = Expr(root, [Expr(a, [Expr(b, [])])])
+        // [drag] target = Point(Path([]), '1)
+        let source = Handle::Zipper(ZipperHandle {
+            path_o: Path(vec![]),
+            i_ol: Index(0),
+            i_or: Index(1),
+            path_m: Path(vec![Step(0)]),
+            i_il: Index(0),
+            i_ir: Index(1),
+            focus: ZipperFocus::InnerLeft,
+        });
+        let e = Expr::new(
+            "root",
+            Span(vec![Expr::new(
+                "a",
+                Span(vec![Expr::new("a", Span(vec![]))]),
+            )]),
+        );
+        let target = Point::new(Path(vec![Step(0), Step(0)]), Index(0));
+
+        let result = source.drag(&e, &target);
+        match &result {
+            None => println!("result = None"),
+            Some(result) => println!("result = {result}"),
+        }
+
+        assert_eq!(
+            result,
+            Some(Handle::Zipper(ZipperHandle {
+                path_o: Path(vec![]),
+                i_ol: Index(0),
+                i_or: Index(1),
+                path_m: Path(vec![Step(0), Step(1)]),
+                i_il: Index(0),
+                i_ir: Index(1),
+                focus: ZipperFocus::InnerLeft
+            }))
+        );
+    }
 }
