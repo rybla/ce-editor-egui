@@ -89,6 +89,7 @@ pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub core: CoreEditorState<ES>,
     pub menu: Option<EditMenu<ES>>,
     pub history: Vec<CoreEditorState<ES>>,
+    pub future: Vec<CoreEditorState<ES>>,
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
@@ -106,6 +107,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             core: ES::initial_state(),
             menu: Default::default(),
             history: vec![],
+            future: vec![],
         }
     }
 
@@ -119,17 +121,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .unwrap_or_else(|err| println!("Failed to move: {err:?}"))
         }
     }
-
-    // /// Sets handle and does associated updates after checking if the handle is
-    // /// valid (via [EditorSpec::is_valid_handle]). Returns the handle back if
-    // /// the handle is invalid.
-    // pub fn set_handle_safe(&mut self, handle: Handle) -> Result<(), Handle> {
-    //     if !ES::is_valid_handle(&handle, &self.core.expr) {
-    //         return Err(handle);
-    //     }
-    //     self.set_handle_unsafe(handle);
-    //     Ok(())
-    // }
 
     pub fn update(&mut self, ctx: &egui::Context) {
         println!("\n[update]");
@@ -156,7 +147,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 if let Some(option) = menu.focus_option() {
                     // TODO: this still seems problematic that we are cloning the entire core state for every single update
                     if let Some(core) = (option.edit)(&menu.query, self.core.clone()) {
-                        self.handle_action(Action::SetCore(core));
+                        self.do_action(Action::SetCore(core));
                     } else {
                         println!("Edit failed");
                     }
@@ -178,17 +169,25 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let menu = ES::get_edits(self);
             self.menu = Some(EditMenu::new(menu));
         }
+        // undo
+        else if ctx.input(|i| i.key_pressed(egui::Key::Z)) {
+            self.do_action(Action::Undo);
+        }
+        // redo
+        else if ctx.input(|i| i.key_pressed(egui::Key::R)) {
+            self.do_action(Action::Redo);
+        }
         // cut
         else if ctx.input(|i| i.key_pressed(egui::Key::X)) {
-            self.handle_action(Action::Cut);
+            self.do_action(Action::Cut);
         }
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-            self.handle_action(Action::Copy);
+            self.do_action(Action::Copy);
         }
         // paste
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
-            self.handle_action(Action::Paste);
+            self.do_action(Action::Paste);
         }
         // rotate focus
         else if ctx.input(|i| i.modifiers.command_only())
@@ -210,7 +209,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                 if let Some(h) = self.core.handle.clone().drag(&self.core.expr, &target) {
                     if ES::is_valid_handle(&h, &self.core.expr) {
-                        self.handle_action(Action::SetHandle(h));
+                        self.do_action(Action::SetHandle(SetHandle {
+                            handle: h,
+                            snapshot: false,
+                        }));
                         break;
                     }
                 }
@@ -229,7 +231,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 if ES::is_valid_handle(&self.core.handle, &self.core.expr) {
                     break;
                 } else {
-                    self.handle_action(Action::SetHandle(origin.clone()));
+                    self.do_action(Action::SetHandle(SetHandle {
+                        handle: origin.clone(),
+                        snapshot: false,
+                    }));
                 }
             }
         }
@@ -297,7 +302,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }));
             if label.clicked() {
                 let h = Handle::Point(point.clone());
-                self.handle_action(Action::SetHandle(h));
+                self.do_action(Action::SetHandle(SetHandle {
+                    handle: h,
+                    snapshot: false,
+                }));
             }
 
             if is_handle && let Some(menu) = &mut self.menu {
@@ -450,12 +458,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             if label.clicked() {
                 let mut path = path.clone();
                 if let Some(s) = path.0.pop() {
-                    self.handle_action(Action::SetHandle(Handle::Span(SpanHandle {
-                        path: path,
-                        i_l: s.left_index(),
-                        i_r: s.right_index(),
-                        focus: SpanFocus::Left,
-                    })));
+                    self.do_action(Action::SetHandle(SetHandle {
+                        handle: Handle::Span(SpanHandle {
+                            path: path,
+                            i_l: s.left_index(),
+                            i_r: s.right_index(),
+                            focus: SpanFocus::Left,
+                        }),
+                        snapshot: false,
+                    }));
                 }
             }
 
@@ -488,34 +499,62 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ui.set_max_size(ui.min_size());
     }
 
-    pub fn handle_action(&mut self, action: Action<ES>) {
+    pub fn snapshot(&mut self) {
+        self.history.push(self.core.clone());
+        self.future = vec![];
+    }
+
+    pub fn do_action(&mut self, action: Action<ES>) {
         match action {
+            Action::Redo => {
+                if let Some(core) = self.future.pop() {
+                    self.history.push(self.core.clone());
+                    self.menu = None;
+                    self.core = core;
+                }
+            }
+            Action::Undo => {
+                if let Some(core) = self.history.pop() {
+                    self.future.push(self.core.clone());
+                    self.menu = None;
+                    self.core = core;
+                }
+            }
             Action::Copy => {
                 if let Some(frag) = self.core.expr.at_handle_cloned(&self.core.handle) {
+                    self.snapshot();
                     self.core.clipboard = Some(frag);
                 }
             }
             Action::Paste => {
                 if let Some(frag) = self.core.clipboard.clone() {
+                    self.snapshot();
+                    self.menu = None;
                     let handle = self.core.expr.insert(self.core.handle.clone(), frag);
                     self.core.handle = handle;
                 }
             }
             Action::Cut => {
                 if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
+                    self.snapshot();
+                    self.menu = None;
                     self.core.clipboard = Some(frag);
                     self.core.handle = h;
                 }
             }
-            Action::SetHandle(h) => {
-                if ES::is_valid_handle(&h, &self.core.expr) {
-                    self.core.handle = h;
-                    self.menu = Option::None;
+            Action::SetHandle(args) => {
+                if ES::is_valid_handle(&args.handle, &self.core.expr) {
+                    if args.snapshot {
+                        self.snapshot();
+                    }
+                    self.menu = None;
+                    self.core.handle = args.handle;
                 }
             }
             Action::SetCore(core) => {
+                self.snapshot();
+                self.menu = None;
                 self.core = core;
-                self.menu = Option::None;
             }
         }
     }
@@ -553,7 +592,7 @@ impl<ES: EditorSpec + ?Sized> CoreEditorState<ES> {
         CoreEditorState {
             expr,
             handle,
-            clipboard: Option::None,
+            clipboard: None,
         }
     }
 }
@@ -748,15 +787,22 @@ pub fn match_input_cycle_dir(ctx: &egui::Context) -> Option<CycleDir> {
 
 // -----------------------------------------------------------------------------
 
+pub struct StateAction<ES: EditorSpec + ?Sized> {
+    pub state: CoreEditorState<ES>,
+    pub action: Action<ES>,
+}
+
 pub enum Action<ES: EditorSpec + ?Sized> {
     Copy,
     Paste,
     Cut,
     SetCore(CoreEditorState<ES>),
-    SetHandle(Handle),
+    SetHandle(SetHandle),
+    Undo,
+    Redo,
 }
 
-pub struct StateAction<ES: EditorSpec + ?Sized> {
-    pub state: CoreEditorState<ES>,
-    pub action: Action<ES>,
+pub struct SetHandle {
+    pub handle: Handle,
+    pub snapshot: bool,
 }
