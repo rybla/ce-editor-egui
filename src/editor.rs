@@ -88,6 +88,7 @@ pub type EditorExpr<ES> = Expr<ExprLabel<ES>>;
 pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub core: CoreEditorState<ES>,
     pub menu: Option<EditMenu<ES>>,
+    pub history: Vec<CoreEditorState<ES>>,
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
@@ -100,14 +101,11 @@ impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
 }
 
 impl<ES: EditorSpec + ?Sized> EditorState<ES> {
-    pub fn new(expr: EditorExpr<ES>, handle: Handle) -> Self {
+    pub fn default() -> Self {
         Self {
-            core: CoreEditorState {
-                expr,
-                handle,
-                clipboard: Default::default(),
-            },
+            core: ES::initial_state(),
             menu: Default::default(),
+            history: vec![],
         }
     }
 

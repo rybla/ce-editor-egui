@@ -1,4 +1,4 @@
-use crate::editor;
+use crate::editor::{self, EditorState};
 
 pub struct App<ES: editor::EditorSpec + 'static> {
     pub editor_state: editor::EditorState<ES>,
@@ -7,10 +7,7 @@ pub struct App<ES: editor::EditorSpec + 'static> {
 impl<ES: editor::EditorSpec> Default for App<ES> {
     fn default() -> Self {
         Self {
-            editor_state: editor::EditorState {
-                core: ES::initial_state(),
-                menu: Option::None,
-            },
+            editor_state: EditorState::default(),
         }
     }
 }
