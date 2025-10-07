@@ -120,23 +120,16 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
     }
 
-    /// Sets handle and does associated updates after checking if the handle is
-    /// valid (via [EditorSpec::is_valid_handle]). Returns the handle back if
-    /// the handle is invalid.
-    pub fn set_handle_safe(&mut self, handle: Handle) -> Result<(), Handle> {
-        if !ES::is_valid_handle(&handle, &self.core.expr) {
-            return Err(handle);
-        }
-        self.set_handle_unsafe(handle);
-        Ok(())
-    }
-
-    /// Sets handle and does associated updates without checking if the handle
-    /// is valid first.
-    pub fn set_handle_unsafe(&mut self, handle: Handle) {
-        self.core.handle = handle;
-        self.menu = Option::None;
-    }
+    // /// Sets handle and does associated updates after checking if the handle is
+    // /// valid (via [EditorSpec::is_valid_handle]). Returns the handle back if
+    // /// the handle is invalid.
+    // pub fn set_handle_safe(&mut self, handle: Handle) -> Result<(), Handle> {
+    //     if !ES::is_valid_handle(&handle, &self.core.expr) {
+    //         return Err(handle);
+    //     }
+    //     self.set_handle_unsafe(handle);
+    //     Ok(())
+    // }
 
     pub fn update(&mut self, ctx: &egui::Context) {
         println!("\n[update]");
@@ -163,7 +156,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 if let Some(option) = menu.focus_option() {
                     // TODO: this still seems problematic that we are cloning the entire core state for every single update
                     if let Some(core) = (option.edit)(&menu.query, self.core.clone()) {
-                        self.set_core(core);
+                        self.handle_action(Action::SetCore(core));
                     } else {
                         println!("Edit failed");
                     }
@@ -187,23 +180,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // cut
         else if ctx.input(|i| i.key_pressed(egui::Key::X)) {
-            if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
-                self.core.clipboard = Some(frag);
-                self.core.handle = h;
-            }
+            self.handle_action(Action::Cut);
         }
         // copy
         else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
-            if let Some(frag) = self.core.expr.at_handle_cloned(&self.core.handle) {
-                self.core.clipboard = Some(frag);
-            }
+            self.handle_action(Action::Copy);
         }
         // paste
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
-            if let Some(frag) = self.core.clipboard.clone() {
-                let handle = self.core.expr.insert(self.core.handle.clone(), frag);
-                self.core.handle = handle;
-            }
+            self.handle_action(Action::Paste);
         }
         // rotate focus
         else if ctx.input(|i| i.modifiers.command_only())
@@ -223,9 +208,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     break;
                 }
 
-                if let Some(handle) = self.core.handle.clone().drag(&self.core.expr, &target) {
-                    if ES::is_valid_handle(&handle, &self.core.expr) {
-                        self.set_handle_unsafe(handle);
+                if let Some(h) = self.core.handle.clone().drag(&self.core.expr, &target) {
+                    if ES::is_valid_handle(&h, &self.core.expr) {
+                        self.handle_action(Action::SetHandle(h));
                         break;
                     }
                 }
@@ -244,7 +229,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 if ES::is_valid_handle(&self.core.handle, &self.core.expr) {
                     break;
                 } else {
-                    self.set_handle_unsafe(origin.clone());
+                    self.handle_action(Action::SetHandle(origin.clone()));
                 }
             }
         }
@@ -311,11 +296,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 Self::color_scheme(ui).normal_text
             }));
             if label.clicked() {
-                let handle = Handle::Point(point.clone());
-                let invalid_handle = self.set_handle_safe(handle);
-                if let Err(invalid_handle) = invalid_handle {
-                    println!("Invalid handle: {:?}", invalid_handle);
-                }
+                let h = Handle::Point(point.clone());
+                self.handle_action(Action::SetHandle(h));
             }
 
             if is_handle && let Some(menu) = &mut self.menu {
@@ -468,15 +450,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             if label.clicked() {
                 let mut path = path.clone();
                 if let Some(s) = path.0.pop() {
-                    let is_invalid_handle = self.set_handle_safe(Handle::Span(SpanHandle {
+                    self.handle_action(Action::SetHandle(Handle::Span(SpanHandle {
                         path: path,
                         i_l: s.left_index(),
                         i_r: s.right_index(),
                         focus: SpanFocus::Left,
-                    }));
-                    if let Err(invalid_handle) = is_invalid_handle {
-                        println!("Invalid handle: {:?}", invalid_handle);
-                    }
+                    })));
                 }
             }
 
@@ -509,36 +488,64 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ui.set_max_size(ui.min_size());
     }
 
-    pub fn set_expr_and_handle(&mut self, expr: Expr<ExprLabel<ES>>, handle: Handle) {
-        self.core.expr = expr;
-        let invalid_handle = self.set_handle_safe(handle);
-        if let Err(invalid_handle) = invalid_handle {
-            panic!(
-                "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
-                self.core.expr, invalid_handle
-            );
-        }
-    }
+    // pub fn set_expr_and_handle(&mut self, expr: Expr<ExprLabel<ES>>, handle: Handle) {
+    //     self.core.expr = expr;
+    //     let invalid_handle = self.set_handle_safe(handle);
+    //     if let Err(invalid_handle) = invalid_handle {
+    //         panic!(
+    //             "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
+    //             self.core.expr, invalid_handle
+    //         );
+    //     }
+    // }
 
-    pub fn set_core(&mut self, core: CoreEditorState<ES>) {
-        self.core.expr = core.expr;
-        let invalid_handle = self.set_handle_safe(core.handle);
-        if let Err(invalid_handle) = invalid_handle {
-            panic!(
-                "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
-                self.core.expr, invalid_handle
-            );
-        }
-        if let Some(clipboard) = core.clipboard {
-            println!("[set_core] update clipboard");
-            self.core.clipboard = Some(clipboard);
-        } else {
-            println!("[set_core] don't update clipboard");
-        }
-    }
+    // pub fn set_core(&mut self, core: CoreEditorState<ES>) {
+    //     self.core.expr = core.expr;
+    //     let invalid_handle = self.set_handle_safe(core.handle);
+    //     if let Err(invalid_handle) = invalid_handle {
+    //         panic!(
+    //             "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
+    //             self.core.expr, invalid_handle
+    //         );
+    //     }
+    //     if let Some(clipboard) = core.clipboard {
+    //         println!("[set_core] update clipboard");
+    //         self.core.clipboard = Some(clipboard);
+    //     } else {
+    //         println!("[set_core] don't update clipboard");
+    //     }
+    // }
 
-    pub fn handle_action(&mut self, _action: Action<ES>) {
-        todo!()
+    pub fn handle_action(&mut self, action: Action<ES>) {
+        match action {
+            Action::Copy => {
+                if let Some(frag) = self.core.expr.at_handle_cloned(&self.core.handle) {
+                    self.core.clipboard = Some(frag);
+                }
+            }
+            Action::Paste => {
+                if let Some(frag) = self.core.clipboard.clone() {
+                    let handle = self.core.expr.insert(self.core.handle.clone(), frag);
+                    self.core.handle = handle;
+                }
+            }
+            Action::Cut => {
+                if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
+                    self.core.clipboard = Some(frag);
+                    self.core.handle = h;
+                }
+            }
+            Action::SetHandle(h) => {
+                if ES::is_valid_handle(&h, &self.core.expr) {
+                    self.core.handle = h;
+                    self.menu = Option::None;
+                }
+            }
+            Action::SetCore(core) => {
+                self.core = core;
+                self.menu = Option::None;
+            }
+        }
     }
 }
 
@@ -773,7 +780,8 @@ pub enum Action<ES: EditorSpec + ?Sized> {
     Copy,
     Paste,
     Cut,
-    Insert(Fragment<ExprLabel<ES>>),
+    SetCore(CoreEditorState<ES>),
+    SetHandle(Handle),
 }
 
 pub struct StateAction<ES: EditorSpec + ?Sized> {
