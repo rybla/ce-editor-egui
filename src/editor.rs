@@ -293,13 +293,17 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             });
 
         frame.show(ui, |ui| {
-            let label = ui.label(egui::RichText::new(format!("•")).color(if is_handle {
-                Self::color_scheme(ui).active_text
-            } else if is_at_handle {
-                Self::color_scheme(ui).inactive_text
-            } else {
-                Self::color_scheme(ui).normal_text
-            }));
+            let label = ui.add(
+                egui::Button::new(egui::RichText::new(format!("•")).color(if is_handle {
+                    Self::color_scheme(ui).active_text
+                } else if is_at_handle {
+                    Self::color_scheme(ui).inactive_text
+                } else {
+                    Self::color_scheme(ui).normal_text
+                }))
+                .sense(egui::Sense::click()),
+            );
+
             if label.clicked() {
                 let h = Handle::Point(point.clone());
                 self.do_action(Action::SetHandle(SetHandle {

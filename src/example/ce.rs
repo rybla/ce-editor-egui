@@ -80,6 +80,8 @@ impl EditorSpec for Ce {
     }
 
     fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response {
-        ui.label(egui::RichText::new(label.constructor.clone()))
+        ui.add(egui::Button::new(egui::RichText::new(
+            label.constructor.clone(),
+        )))
     }
 }
