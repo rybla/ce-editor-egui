@@ -488,34 +488,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ui.set_max_size(ui.min_size());
     }
 
-    // pub fn set_expr_and_handle(&mut self, expr: Expr<ExprLabel<ES>>, handle: Handle) {
-    //     self.core.expr = expr;
-    //     let invalid_handle = self.set_handle_safe(handle);
-    //     if let Err(invalid_handle) = invalid_handle {
-    //         panic!(
-    //             "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
-    //             self.core.expr, invalid_handle
-    //         );
-    //     }
-    // }
-
-    // pub fn set_core(&mut self, core: CoreEditorState<ES>) {
-    //     self.core.expr = core.expr;
-    //     let invalid_handle = self.set_handle_safe(core.handle);
-    //     if let Err(invalid_handle) = invalid_handle {
-    //         panic!(
-    //             "Invalid handle:\nexpr = {:?}\nhandle= {:?}",
-    //             self.core.expr, invalid_handle
-    //         );
-    //     }
-    //     if let Some(clipboard) = core.clipboard {
-    //         println!("[set_core] update clipboard");
-    //         self.core.clipboard = Some(clipboard);
-    //     } else {
-    //         println!("[set_core] don't update clipboard");
-    //     }
-    // }
-
     pub fn handle_action(&mut self, action: Action<ES>) {
         match action {
             Action::Copy => {
