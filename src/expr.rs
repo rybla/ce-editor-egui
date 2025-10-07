@@ -1720,9 +1720,7 @@ mod tests {
         let source = Handle::Zipper(zipper_handle![[], 0, 1, [0], 0, 0, ZipperFocus::InnerLeft]);
         let e = ex!["root", [ex!["a", [ex!["b", []]]]]];
         let target = point![[0, 0], 0];
-
         let result = source.drag(&e, &target);
-
         assert_eq!(
             result,
             Some(Handle::Zipper(ZipperHandle {
@@ -1742,9 +1740,12 @@ mod tests {
         let mut e = ex!["root", [ex!["a", []]]];
         let h = Handle::Point(point![[0], 0]);
         let frag = Fragment::Zipper(zipper![[], [tooth!["b", [], []]], []]);
-        let result = e.insert(h, frag);
-        println!("e = {e}");
-        println!("h = {result}");
+        let h = e.insert(h, frag);
+        assert_eq!(e, ex!["root", [ex!["a", [ex!["b", []]]]]]);
+        assert_eq!(
+            h,
+            Handle::Zipper(zipper_handle![[0], 0, 1, [0], 0, 0, ZipperFocus::InnerLeft])
+        );
     }
 
     #[test]
@@ -1752,9 +1753,12 @@ mod tests {
         let mut e = ex!["root", [ex!["a", []]]];
         let h = Handle::Zipper(zipper_handle![[], 0, 1, [0], 0, 0, ZipperFocus::InnerLeft]);
         let (frag, h) = e.cut(&h).unwrap();
-        println!("e    = {e}");
-        println!("h    = {h}");
-        println!("frag = {frag}");
+        assert_eq!(e, ex!["root", []]);
+        assert_eq!(h, Handle::Span(span_handle![[], 0, 0, SpanFocus::Left]));
+        assert_eq!(
+            frag,
+            Fragment::Zipper(zipper![[], [tooth!["a", [], []]], []])
+        );
     }
 
     #[test]
@@ -1769,16 +1773,38 @@ mod tests {
     pub fn insert_zipper_ex2() {
         let mut e = ex!["root", [ex!["a", []]]];
         let h = span_handle![[], 0, 1, SpanFocus::Right];
-        let frag = zipper![[], [tooth!["a", [], []]], []];
+        let frag = zipper![[], [tooth!["b", [], []]], []];
         let h = e.insert(Handle::Span(h), Fragment::Zipper(frag));
-        println!("e = {e}");
-        println!("h = {h}");
+        assert_eq!(e, ex!["root", [ex!["b", [ex!["a", []]]]]]);
+        assert_eq!(
+            h,
+            Handle::Zipper(zipper_handle![[], 0, 1, [0], 0, 1, ZipperFocus::InnerRight])
+        );
     }
 
     #[test]
     pub fn cut_zipper_ex2() {
         // [cut] self = ex![root, [ex![a, [ex![b, [ex![c, []]]], ex![b, []], ex![c, []]]], ex![this is a test to see how long a constructor i can make, [ex![pretty long, it seems!, []]]]]]
         // [cut] h    = zipper_handle![[], 1, 2, [1], 0, 1, InnerLeft]
-        todo!("use comments above to impl test")
+        // todo!("use comments above to impl test")
+        let mut e = ex![
+            "root",
+            [
+                ex!["a", [ex!["b", [ex!["c", []]]], ex!["b", []], ex!["c", []]]],
+                ex![
+                    "this is a test to see how long a constructor i can make",
+                    [ex!["pretty long, it seems!", []]]
+                ]
+            ]
+        ];
+        let h = zipper_handle![[], 1, 2, [1], 0, 1, ZipperFocus::InnerLeft];
+        let frag = e.cut(&Handle::Zipper(h));
+        match frag {
+            None => println!("frag = None"),
+            Some((frag, h)) => {
+                println!("frag = {frag}");
+                println!("h = {h}");
+            }
+        }
     }
 }
