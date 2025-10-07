@@ -116,6 +116,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         if self.menu.is_some() {
             self.menu = None;
         } else {
+            // TODO: unify this into Action enumeration
             self.core
                 .handle
                 .escape()
@@ -177,6 +178,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // redo
         else if ctx.input(|i| i.key_pressed(egui::Key::R)) {
             self.do_action(Action::Redo);
+        }
+        // delete
+        else if ctx
+            .input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
+        {
+            self.do_action(Action::Cut);
         }
         // cut
         else if ctx.input(|i| i.key_pressed(egui::Key::X)) {
@@ -241,10 +248,17 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // move up
         else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            self.core
-                .handle
-                .move_up()
-                .unwrap_or_else(|err| println!("Failed to move up: {err:?}"))
+            // TODO: unify this into Action enumeration
+
+            let mut result = self.core.handle.move_up(&self.core.expr);
+
+            while result.is_ok() && !ES::is_valid_handle(&self.core.handle, &self.core.expr) {
+                result = self.core.handle.move_up(&self.core.expr);
+            }
+
+            if let Err(err) = result {
+                println!("Failed to move up: {err:?}")
+            }
         }
     }
 
@@ -592,6 +606,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     self.core.handle = h;
                 }
             }
+            Action::Delete => {
+                if let Some((_frag, h)) = self.core.expr.cut(&self.core.handle) {
+                    self.snapshot();
+                    self.menu = None;
+                    self.core.handle = h;
+                }
+            }
             Action::SetHandle(args) => {
                 if ES::is_valid_handle(&args.handle, &self.core.expr) {
                     if args.snapshot {
@@ -885,6 +906,7 @@ pub enum Action<ES: EditorSpec + ?Sized> {
     Copy,
     Paste,
     Cut,
+    Delete,
     SetCore(CoreEditorState<ES>),
     SetHandle(SetHandle),
     Undo,

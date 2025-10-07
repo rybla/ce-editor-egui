@@ -351,21 +351,51 @@ impl Handle {
         }
     }
 
-    pub fn move_up(&mut self) -> Result<(), MoveError> {
+    pub fn move_up<L: Debug + Display + Clone>(&mut self, expr: &Expr<L>) -> Result<(), MoveError> {
         match self {
-            Handle::Point(point) => {
-                let mut steps = point.path.0.drain(..).collect::<Vec<_>>();
-                let s = steps.pop().ok_or(MoveError::Boundary)?;
-                *self = Handle::Span(SpanHandle {
-                    path: Path(steps),
-                    i_l: s.left_index(),
-                    i_r: s.right_index(),
+            Handle::Point(p) => {
+                let e = expr.at_path(&p.path);
+                let path = Path(p.path.0.drain(..).collect::<Vec<_>>());
+                let mut h = SpanHandle {
+                    path,
+                    i_l: e.kids.leftmost_index(),
+                    i_r: e.kids.rightmost_index(),
                     focus: SpanFocus::Left,
-                });
+                };
+                // TODO: combine this logic with what appears in the Span case, since it's the same
+                if h.i_l == e.kids.leftmost_index() && h.i_r == e.kids.rightmost_index() {
+                    let mut path = Path(h.path.0.drain(..).collect::<Vec<_>>());
+                    let s = path.0.pop().ok_or(MoveError::Boundary)?;
+                    *self = Handle::Span(SpanHandle {
+                        path,
+                        i_l: s.left_index(),
+                        i_r: s.right_index(),
+                        focus: SpanFocus::Left,
+                    });
+                } else {
+                    *self = Handle::Span(h);
+                }
                 Ok(())
             }
-            Handle::Span(_) => self.escape(),
-            Handle::Zipper(_) => self.escape(),
+            Handle::Span(h) => {
+                let e = expr.at_path(&h.path);
+                if h.i_l == e.kids.leftmost_index() && h.i_r == e.kids.rightmost_index() {
+                    let mut path = Path(h.path.0.drain(..).collect::<Vec<_>>());
+                    let s = path.0.pop().ok_or(MoveError::Boundary)?;
+                    *self = Handle::Span(SpanHandle {
+                        path,
+                        i_l: s.left_index(),
+                        i_r: s.right_index(),
+                        focus: SpanFocus::Left,
+                    });
+                    Ok(())
+                } else {
+                    h.i_l = e.kids.leftmost_index();
+                    h.i_r = e.kids.rightmost_index();
+                    Ok(())
+                }
+            }
+            Handle::Zipper(_) => Err(MoveError::Undefined),
         }
     }
 
@@ -1743,5 +1773,12 @@ mod tests {
         let h = e.insert(Handle::Span(h), Fragment::Zipper(frag));
         println!("e = {e}");
         println!("h = {h}");
+    }
+
+    #[test]
+    pub fn cut_zipper_ex2() {
+        // [cut] self = ex![root, [ex![a, [ex![b, [ex![c, []]]], ex![b, []], ex![c, []]]], ex![this is a test to see how long a constructor i can make, [ex![pretty long, it seems!, []]]]]]
+        // [cut] h    = zipper_handle![[], 1, 2, [1], 0, 1, InnerLeft]
+        todo!("use comments above to impl test")
     }
 }
