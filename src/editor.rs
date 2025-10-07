@@ -88,7 +88,6 @@ pub type EditorExpr<ES> = Expr<ExprLabel<ES>>;
 pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub core: CoreEditorState<ES>,
     pub menu: Option<EditMenu<ES>>,
-    pub requested_menu_focus: bool,
 }
 
 impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
@@ -96,7 +95,6 @@ impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
         f.debug_struct("EditorState")
             .field("core", &self.core)
             .field("menu", &self.menu)
-            .field("requested_menu_focus", &self.requested_menu_focus)
             .finish()
     }
 }
@@ -110,14 +108,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 clipboard: Default::default(),
             },
             menu: Default::default(),
-            requested_menu_focus: false,
         }
     }
 
     pub fn escape(&mut self) {
         if self.menu.is_some() {
             self.menu = None;
-            self.requested_menu_focus = false;
         } else {
             self.core
                 .handle
