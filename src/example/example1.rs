@@ -83,10 +83,6 @@ impl EditorSpec for Example1 {
         vec![format!("this is an example diagnostic")]
     }
 
-    fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response {
-        ui.label(egui::RichText::new(label.constructor.clone()))
-    }
-
     fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel<Self>>) -> bool {
         match handle {
             Handle::Point(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
@@ -95,5 +91,19 @@ impl EditorSpec for Example1 {
                 !handle.path_m.0.is_empty() && !expr.at_path(&handle.path_i()).kids.0.is_empty()
             }
         }
+    }
+
+    fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response {
+        ui.label(egui::RichText::new(label.constructor.clone()))
+    }
+
+    fn assemble_rendered_expr(
+        _state: &mut EditorState<Self>,
+        _ui: &mut egui::Ui,
+        _path: &Path,
+        _expr: &EditorExpr<Self>,
+        _render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
+    ) -> egui::Response {
+        todo!()
     }
 }

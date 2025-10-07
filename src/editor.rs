@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+pub const WRAP_EXPR_AT_HEIGHT: bool = false;
 pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
 
 #[derive(Clone)]
@@ -29,8 +30,8 @@ lazy_static! {
         active_text: egui::Color32::WHITE,
         active_background: egui::Color32::BLUE,
         inactive_text: egui::Color32::WHITE,
-        inactive_background: egui::Color32::LIGHT_BLUE,
-        highlight_background: egui::Color32::LIGHT_BLUE,
+        inactive_background: egui::Color32::DARK_BLUE,
+        highlight_background: egui::Color32::DARK_BLUE,
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
         normal_text: egui::Color32::BLACK,
@@ -286,8 +287,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         let frame = Frame::new()
             .outer_margin(0)
             .inner_margin(egui::Margin {
-                left: 4,
-                right: 4,
+                left: 0,
+                right: 0,
                 top: 0,
                 bottom: 0,
             })
@@ -431,36 +432,105 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render_expr(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
-        if expr.height() <= MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
-            ui.horizontal_top(|ui| self.render_expr_contents(ui, expr, path));
-        } else {
+        if WRAP_EXPR_AT_HEIGHT && expr.height() > MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
             ui.vertical(|ui| self.render_expr_contents(ui, expr, path));
+        } else {
+            ui.horizontal_top(|ui| self.render_expr_contents(ui, expr, path));
         }
     }
 
     pub fn render_expr_contents(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
-        // This is the spacing between items in the horizontal/vertical row
-        ui.style_mut().spacing.item_spacing.x = 0f32;
-        ui.style_mut().spacing.item_spacing.y = 0f32;
+        if false {
+            // This is the spacing between items in the horizontal/vertical row
+            ui.style_mut().spacing.item_spacing.x = 0f32;
+            ui.style_mut().spacing.item_spacing.y = 0f32;
 
-        let frame = Frame::new()
-            .outer_margin(0)
-            .inner_margin(egui::Margin {
-                left: 0,
-                right: 0,
-                top: 4,
-                bottom: 4,
-            })
-            .fill(if self.core.handle.contains_path(path) {
-                Self::color_scheme(ui).highlight_background
-            } else {
-                Self::color_scheme(ui).normal_background
-            })
-            .stroke(egui::Stroke::new(1.0, Self::color_scheme(ui).normal_border));
+            let frame = Frame::new()
+                .outer_margin(0)
+                .inner_margin(egui::Margin {
+                    left: 0,
+                    right: 0,
+                    top: 4,
+                    bottom: 4,
+                })
+                .fill(if self.core.handle.contains_path(path) {
+                    Self::color_scheme(ui).highlight_background
+                } else {
+                    Self::color_scheme(ui).normal_background
+                })
+                .stroke(egui::Stroke::new(1.0, Self::color_scheme(ui).normal_border));
 
-        frame.show(ui, |ui| {
-            let label = ES::render_label(ui, &expr.label);
-            if label.clicked() {
+            frame.show(ui, |ui| {
+                let label = ES::render_label(ui, &expr.label);
+                if label.clicked() {
+                    let mut path = path.clone();
+                    if let Some(s) = path.0.pop() {
+                        self.do_action(Action::SetHandle(SetHandle {
+                            handle: Handle::Span(SpanHandle {
+                                path: path,
+                                i_l: s.left_index(),
+                                i_r: s.right_index(),
+                                focus: SpanFocus::Left,
+                            }),
+                            snapshot: false,
+                        }));
+                    }
+                }
+
+                for (step, kid) in expr.kids.steps_and_kids() {
+                    // render left point
+                    self.render_point(
+                        ui,
+                        &Point {
+                            path: path.clone(),
+                            i: step.left_index(),
+                        },
+                    );
+
+                    // render kid
+                    let mut kid_path = path.clone();
+                    kid_path.0.push(step);
+                    self.render_expr(ui, kid, &kid_path);
+                }
+
+                // render last point
+                self.render_point(
+                    ui,
+                    &Point {
+                        path: path.clone(),
+                        i: expr.kids.rightmost_index(),
+                    },
+                );
+            });
+
+            ui.set_max_size(ui.min_size());
+        } else {
+            let mut render_steps_and_kids = vec![];
+
+            for (s, e) in expr.kids.steps_and_kids() {
+                render_steps_and_kids.push((
+                    RenderPoint {
+                        path,
+                        i: s.left_index(),
+                    },
+                    Some(RenderExpr {
+                        expr: e,
+                        path: path.clone().append(Path(vec![s])),
+                    }),
+                ));
+            }
+
+            render_steps_and_kids.push((
+                RenderPoint {
+                    path,
+                    i: expr.kids.rightmost_index(),
+                },
+                None,
+            ));
+
+            let response = ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids);
+
+            if response.clicked() {
                 let mut path = path.clone();
                 if let Some(s) = path.0.pop() {
                     self.do_action(Action::SetHandle(SetHandle {
@@ -475,33 +545,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
             }
 
-            for (step, kid) in expr.kids.steps_and_exprs() {
-                // render left point
-                self.render_point(
-                    ui,
-                    &Point {
-                        path: path.clone(),
-                        i: step.left_index(),
-                    },
-                );
-
-                // render kid
-                let mut kid_path = path.clone();
-                kid_path.0.push(step);
-                self.render_expr(ui, kid, &kid_path);
-            }
-
-            // render last point
-            self.render_point(
-                ui,
-                &Point {
-                    path: path.clone(),
-                    i: expr.kids.rightmost_index(),
-                },
-            );
-        });
-
-        ui.set_max_size(ui.min_size());
+            ui.set_max_size(ui.min_size());
+        }
     }
 
     pub fn snapshot(&mut self) {
@@ -768,6 +813,14 @@ pub trait EditorSpec: 'static {
     fn is_valid_handle(handle: &Handle, expr: &EditorExpr<Self>) -> bool;
 
     fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response;
+
+    fn assemble_rendered_expr(
+        state: &mut EditorState<Self>,
+        ui: &mut egui::Ui,
+        path: &Path,
+        expr: &EditorExpr<Self>,
+        render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
+    ) -> egui::Response;
 }
 
 pub fn match_input_move_dir(ctx: &egui::Context) -> Option<MoveDir> {
@@ -787,6 +840,37 @@ pub fn match_input_cycle_dir(ctx: &egui::Context) -> Option<CycleDir> {
         Some(CycleDir::Next)
     } else {
         None
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+pub struct RenderPoint<'a> {
+    pub path: &'a Path,
+    pub i: Index,
+}
+
+impl<'a> RenderPoint<'a> {
+    pub fn render<ES: EditorSpec>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
+        EditorState::render_point(
+            state,
+            ui,
+            &Point {
+                path: self.path.clone(),
+                i: self.i,
+            },
+        );
+    }
+}
+
+pub struct RenderExpr<'a, ES: EditorSpec + ?Sized> {
+    pub path: Path,
+    pub expr: &'a EditorExpr<ES>,
+}
+
+impl<'a, ES: EditorSpec + ?Sized> RenderExpr<'a, ES> {
+    pub fn render(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
+        EditorState::render_expr(state, ui, self.expr, &self.path);
     }
 }
 

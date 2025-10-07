@@ -1447,7 +1447,7 @@ impl<L: Debug + Display + Clone> Span<L> {
         (Span(left), middle, Span(right))
     }
 
-    pub fn steps_and_exprs(&self) -> impl Iterator<Item = (Step, &Expr<L>)> {
+    pub fn steps_and_kids(&self) -> impl Iterator<Item = (Step, &Expr<L>)> {
         self.0.iter().enumerate().map(|(i, e)| (Step(i), e))
     }
 
