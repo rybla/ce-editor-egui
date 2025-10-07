@@ -27,19 +27,19 @@ lazy_static! {
         normal_background: egui::Color32::BLACK,
         normal_border: egui::Color32::WHITE,
         active_text: egui::Color32::WHITE,
-        active_background: egui::Color32::RED,
+        active_background: egui::Color32::BLUE,
         inactive_text: egui::Color32::WHITE,
-        inactive_background: egui::Color32::PURPLE,
-        highlight_background: egui::Color32::DARK_BLUE,
+        inactive_background: egui::Color32::LIGHT_BLUE,
+        highlight_background: egui::Color32::LIGHT_BLUE,
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
         normal_text: egui::Color32::BLACK,
         normal_background: egui::Color32::WHITE,
         normal_border: egui::Color32::BLACK,
         active_text: egui::Color32::WHITE,
-        active_background: egui::Color32::RED,
+        active_background: egui::Color32::BLUE,
         inactive_text: egui::Color32::WHITE,
-        inactive_background: egui::Color32::PURPLE,
+        inactive_background: egui::Color32::LIGHT_BLUE,
         highlight_background: egui::Color32::LIGHT_BLUE,
     };
 }
@@ -274,6 +274,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         let is_in_handle = self.core.handle.contains_point(point);
 
+        let fill = if is_handle {
+            Self::color_scheme(ui).active_background
+        } else if is_at_handle {
+            Self::color_scheme(ui).inactive_background
+        } else if is_in_handle {
+            Self::color_scheme(ui).highlight_background
+        } else {
+            Self::color_scheme(ui).normal_background
+        };
         let frame = Frame::new()
             .outer_margin(0)
             .inner_margin(egui::Margin {
@@ -282,15 +291,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 top: 0,
                 bottom: 0,
             })
-            .fill(if is_handle {
-                Self::color_scheme(ui).active_background
-            } else if is_at_handle {
-                Self::color_scheme(ui).inactive_background
-            } else if is_in_handle {
-                Self::color_scheme(ui).highlight_background
-            } else {
-                Self::color_scheme(ui).normal_background
-            });
+            .fill(fill);
 
         frame.show(ui, |ui| {
             let label = ui.add(
@@ -301,7 +302,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 } else {
                     Self::color_scheme(ui).normal_text
                 }))
-                .sense(egui::Sense::click()),
+                .fill(fill),
             );
 
             if label.clicked() {
