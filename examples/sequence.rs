@@ -1,7 +1,5 @@
 //! A demo showing a wrapping horizontal layout with colored labels.
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-
 use eframe::egui;
 use egui::{Align, Color32, CornerRadius, Frame, Layout, Vec2, epaint::Hsva};
 
