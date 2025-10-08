@@ -93,10 +93,6 @@ impl EditorSpec for Example1 {
         }
     }
 
-    fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response {
-        ui.label(egui::RichText::new(label.constructor.clone()))
-    }
-
     fn assemble_rendered_expr(
         _state: &mut EditorState<Self>,
         _ui: &mut egui::Ui,

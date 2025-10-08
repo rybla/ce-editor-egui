@@ -454,113 +454,47 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render_expr_contents(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
-        if false {
-            // This is the spacing between items in the horizontal/vertical row
-            ui.style_mut().spacing.item_spacing.x = 0f32;
-            ui.style_mut().spacing.item_spacing.y = 0f32;
+        let mut render_steps_and_kids = vec![];
 
-            let frame = Frame::new()
-                .outer_margin(0)
-                .inner_margin(egui::Margin {
-                    left: 0,
-                    right: 0,
-                    top: 4,
-                    bottom: 4,
-                })
-                .fill(if self.core.handle.contains_path(path) {
-                    Self::color_scheme(ui).highlight_background
-                } else {
-                    Self::color_scheme(ui).normal_background
-                })
-                .stroke(egui::Stroke::new(1.0, Self::color_scheme(ui).normal_border));
-
-            frame.show(ui, |ui| {
-                let label = ES::render_label(ui, &expr.label);
-                if label.clicked() {
-                    let mut path = path.clone();
-                    if let Some(s) = path.0.pop() {
-                        self.do_action(Action::SetHandle(SetHandle {
-                            handle: Handle::Span(SpanHandle {
-                                path: path,
-                                i_l: s.left_index(),
-                                i_r: s.right_index(),
-                                focus: SpanFocus::Left,
-                            }),
-                            snapshot: false,
-                        }));
-                    }
-                }
-
-                for (step, kid) in expr.kids.steps_and_kids() {
-                    // render left point
-                    self.render_point(
-                        ui,
-                        &Point {
-                            path: path.clone(),
-                            i: step.left_index(),
-                        },
-                    );
-
-                    // render kid
-                    let mut kid_path = path.clone();
-                    kid_path.0.push(step);
-                    self.render_expr(ui, kid, &kid_path);
-                }
-
-                // render last point
-                self.render_point(
-                    ui,
-                    &Point {
-                        path: path.clone(),
-                        i: expr.kids.rightmost_index(),
-                    },
-                );
-            });
-
-            ui.set_max_size(ui.min_size());
-        } else {
-            let mut render_steps_and_kids = vec![];
-
-            for (s, e) in expr.kids.steps_and_kids() {
-                render_steps_and_kids.push((
-                    RenderPoint {
-                        path,
-                        i: s.left_index(),
-                    },
-                    Some(RenderExpr {
-                        expr: e,
-                        path: path.clone().append(Path(vec![s])),
-                    }),
-                ));
-            }
-
+        for (s, e) in expr.kids.steps_and_kids() {
             render_steps_and_kids.push((
                 RenderPoint {
                     path,
-                    i: expr.kids.rightmost_index(),
+                    i: s.left_index(),
                 },
-                None,
+                Some(RenderExpr {
+                    expr: e,
+                    path: path.clone().append(Path(vec![s])),
+                }),
             ));
-
-            let response = ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids);
-
-            if response.clicked() {
-                let mut path = path.clone();
-                if let Some(s) = path.0.pop() {
-                    self.do_action(Action::SetHandle(SetHandle {
-                        handle: Handle::Span(SpanHandle {
-                            path: path,
-                            i_l: s.left_index(),
-                            i_r: s.right_index(),
-                            focus: SpanFocus::Left,
-                        }),
-                        snapshot: false,
-                    }));
-                }
-            }
-
-            ui.set_max_size(ui.min_size());
         }
+
+        render_steps_and_kids.push((
+            RenderPoint {
+                path,
+                i: expr.kids.rightmost_index(),
+            },
+            None,
+        ));
+
+        let response = ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids);
+
+        if response.clicked() {
+            let mut path = path.clone();
+            if let Some(s) = path.0.pop() {
+                self.do_action(Action::SetHandle(SetHandle {
+                    handle: Handle::Span(SpanHandle {
+                        path: path,
+                        i_l: s.left_index(),
+                        i_r: s.right_index(),
+                        focus: SpanFocus::Left,
+                    }),
+                    snapshot: false,
+                }));
+            }
+        }
+
+        ui.set_max_size(ui.min_size());
     }
 
     pub fn snapshot(&mut self) {
@@ -832,8 +766,6 @@ pub trait EditorSpec: 'static {
     fn get_diagnostics(state: EditorState<Self>) -> Vec<Self::Diagnostic>;
 
     fn is_valid_handle(handle: &Handle, expr: &EditorExpr<Self>) -> bool;
-
-    fn render_label(ui: &mut egui::Ui, label: &ExprLabel<Self>) -> egui::Response;
 
     fn assemble_rendered_expr(
         state: &mut EditorState<Self>,
