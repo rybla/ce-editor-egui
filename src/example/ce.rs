@@ -1,5 +1,3 @@
-use egui::Frame;
-
 use crate::{
     editor::{self, *},
     expr::*,
@@ -92,37 +90,68 @@ impl EditorSpec for Ce {
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
     ) {
         let color_scheme = editor::EditorState::<Ce>::color_scheme(ui);
-        ui.style_mut().spacing.item_spacing.x = 0f32;
-        ui.style_mut().spacing.item_spacing.y = 0f32;
-        let frame = Frame::new()
-            .outer_margin(0)
-            .inner_margin(egui::Margin {
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-            })
-            .fill(if state.core.handle.contains_path(path) {
-                color_scheme.highlight_background
-            } else {
-                color_scheme.normal_background
-            })
-            // .stroke(egui::Stroke::new(1.0, color_scheme.normal_border));
-            .stroke(egui::Stroke::new(0.0, color_scheme.normal_border));
 
-        frame.show(ui, |ui| {
-            ui.add(egui::Label::new("("));
-            ui.add(
-                egui::Label::new(egui::RichText::new(expr.label.constructor.clone()))
-                    .sense(egui::Sense::hover()),
-            );
-            for (step, kid) in render_steps_and_kids.iter() {
-                step.render(state, ui);
-                if let Some(kid) = kid {
-                    kid.render(state, ui);
-                }
+        // ui.style_mut().spacing.item_spacing.x = 0f32;
+        // ui.style_mut().spacing.item_spacing.y = 0f32;
+        // let frame = Frame::new()
+        //     .outer_margin(0)
+        //     .inner_margin(egui::Margin {
+        //         left: 0,
+        //         right: 0,
+        //         top: 0,
+        //         bottom: 0,
+        //     })
+        //     .fill(if state.core.handle.contains_path(path) {
+        //         color_scheme.highlight_background
+        //     } else {
+        //         color_scheme.normal_background
+        //     })
+        //     // .stroke(egui::Stroke::new(1.0, color_scheme.normal_border));
+        //     .stroke(egui::Stroke::new(0.0, color_scheme.normal_border));
+
+        // frame.show(ui, |ui| {
+
+        // });
+
+        // let x = if state.core.handle.contains_path(path) {
+        //     color_scheme.highlight_background
+        // } else {
+        //     color_scheme.normal_background
+        // };
+
+        // TODO
+        let selected = state.core.handle.contains_path(path);
+        let background_color = if selected {
+            color_scheme.highlight_background
+        } else {
+            color_scheme.normal_background
+        };
+        let text_color = if selected {
+            color_scheme.active_text
+        } else {
+            color_scheme.normal_text
+        };
+
+        ui.add(egui::Label::new(
+            egui::RichText::new("(")
+                .background_color(background_color)
+                .color(text_color),
+        ));
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(format!(" {} ", expr.label.constructor))
+                    .background_color(background_color)
+                    .color(text_color),
+            )
+            .sense(egui::Sense::hover())
+            ,
+        );
+        for (step, kid) in render_steps_and_kids.iter() {
+            step.render(state, ui);
+            if let Some(kid) = kid {
+                kid.render(state, ui);
             }
-            ui.add(egui::Label::new(")"));
-        });
+        }
+        ui.add(egui::Label::new(")"));
     }
 }

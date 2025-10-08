@@ -446,11 +446,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render_expr(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
-        if WRAP_EXPR_AT_HEIGHT && expr.height() > MAX_EXPR_HEIGHT_FOR_HORIZONTAL {
-            ui.vertical(|ui| self.render_expr_contents(ui, expr, path));
-        } else {
-            ui.horizontal_top(|ui| self.render_expr_contents(ui, expr, path));
-        }
+        println!("[render_expr] self.core.expr = {}", self.core.expr);
+        self.render_expr_contents(ui, expr, path)
     }
 
     pub fn render_expr_contents(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
@@ -494,7 +491,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         //     }
         // }
 
-        ui.set_max_size(ui.min_size());
+        // ui.set_max_size(ui.min_size());
     }
 
     pub fn snapshot(&mut self) {
@@ -823,7 +820,12 @@ pub struct RenderExpr<'a, ES: EditorSpec + ?Sized> {
 
 impl<'a, ES: EditorSpec + ?Sized> RenderExpr<'a, ES> {
     pub fn render(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
-        EditorState::render_expr(state, ui, self.expr, &self.path);
+        ui.horizontal_top(|ui| {
+            println!("[render]");
+            ui.style_mut().spacing.item_spacing.x = 0f32;
+            ui.style_mut().spacing.item_spacing.y = 0f32;
+            EditorState::render_expr(state, ui, self.expr, &self.path)
+        });
     }
 }
 

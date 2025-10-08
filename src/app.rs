@@ -1,3 +1,5 @@
+use egui::style::ScrollStyle;
+
 use crate::editor::{self, EditorState};
 
 pub struct App<ES: editor::EditorSpec + 'static> {
@@ -49,6 +51,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("ce-editor-egui");
 
+            ui.spacing_mut().scroll = ScrollStyle::floating();
             egui::ScrollArea::both()
                 .auto_shrink([false, true])
                 .scroll_source(egui::containers::scroll_area::ScrollSource::MOUSE_WHEEL)
