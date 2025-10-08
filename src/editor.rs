@@ -1,5 +1,5 @@
 use crate::expr::*;
-use egui::Frame;
+use egui::{Frame, Sense};
 use lazy_static::lazy_static;
 use nucleo;
 use std::{
@@ -270,10 +270,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render(&mut self, ui: &mut egui::Ui) {
-        self.render_expr(ui, &self.core.expr.clone(), &Path::empty());
+        ui.horizontal_top(|ui| {
+            ui.style_mut().spacing.item_spacing.x = 0f32;
+            ui.style_mut().spacing.item_spacing.y = 0f32;
+
+            self.render_expr(ui, true, &Path::empty(), &self.core.expr.clone());
+        });
     }
 
-    pub fn render_point(&mut self, ui: &mut egui::Ui, point: &Point) {
+    pub fn render_point(&mut self, ui: &mut egui::Ui, interactive: bool, point: &Point) {
         let is_handle = point == &self.core.handle.focus_point();
 
         let is_at_handle = match &self.core.handle {
@@ -317,6 +322,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 } else {
                     Self::color_scheme(ui).normal_text
                 }))
+                .sense(if interactive {
+                    Sense::click()
+                } else {
+                    Sense::empty()
+                })
                 .fill(fill),
             );
 
@@ -445,12 +455,23 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         });
     }
 
-    pub fn render_expr(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
-        println!("[render_expr] self.core.expr = {}", self.core.expr);
-        self.render_expr_contents(ui, expr, path)
+    pub fn render_expr(
+        &mut self,
+        ui: &mut egui::Ui,
+        interactive: bool,
+        path: &Path,
+        expr: &EditorExpr<ES>,
+    ) {
+        self.render_expr_contents(ui, interactive, path, expr)
     }
 
-    pub fn render_expr_contents(&mut self, ui: &mut egui::Ui, expr: &EditorExpr<ES>, path: &Path) {
+    pub fn render_expr_contents(
+        &mut self,
+        ui: &mut egui::Ui,
+        interactive: bool,
+        path: &Path,
+        expr: &EditorExpr<ES>,
+    ) {
         let mut render_steps_and_kids = vec![];
 
         for (s, e) in expr.kids.steps_and_kids() {
@@ -458,6 +479,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 RenderPoint {
                     path,
                     i: s.left_index(),
+                    interactive,
                 },
                 Some(RenderExpr {
                     expr: e,
@@ -470,6 +492,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             RenderPoint {
                 path,
                 i: expr.kids.rightmost_index(),
+                interactive,
             },
             None,
         ));
@@ -798,6 +821,7 @@ pub fn match_input_cycle_dir(ctx: &egui::Context) -> Option<CycleDir> {
 pub struct RenderPoint<'a> {
     pub path: &'a Path,
     pub i: Index,
+    pub interactive: bool,
 }
 
 impl<'a> RenderPoint<'a> {
@@ -805,6 +829,7 @@ impl<'a> RenderPoint<'a> {
         EditorState::render_point(
             state,
             ui,
+            self.interactive,
             &Point {
                 path: self.path.clone(),
                 i: self.i,
@@ -820,12 +845,7 @@ pub struct RenderExpr<'a, ES: EditorSpec + ?Sized> {
 
 impl<'a, ES: EditorSpec + ?Sized> RenderExpr<'a, ES> {
     pub fn render(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
-        ui.horizontal_top(|ui| {
-            println!("[render]");
-            ui.style_mut().spacing.item_spacing.x = 0f32;
-            ui.style_mut().spacing.item_spacing.y = 0f32;
-            EditorState::render_expr(state, ui, self.expr, &self.path)
-        });
+        EditorState::render_expr(state, ui, true, &self.path, self.expr)
     }
 }
 

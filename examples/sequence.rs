@@ -98,12 +98,15 @@ impl eframe::App for MyApp {
                 egui::ScrollArea::both().show(ui, |ui| {ui.with_layout(layout, |ui| {
                     // Set item_spacing to zero to make elements touch.
                     ui.spacing_mut().item_spacing = Vec2::ZERO;
+                    let text_height = ui.text_style_height(&egui::TextStyle::Body);
 
                     for (i, element) in self.elements.iter().enumerate() {
                         let color = color_for_index(i);
 
                         match element {
                             SequenceElement::Label(text) => {
+                                ui.set_row_height(text_height);
+
                                 // For each label, create a Frame for its background.
                                 Frame::default()
                                     // Add some padding inside the colored box for the text.
@@ -115,7 +118,7 @@ impl eframe::App for MyApp {
                                     // Set the background color.
                                     .fill(color)
                                     .show(ui, |ui| {
-                                        ui.label(text);
+                                        ui.add(egui::Label::new(text).extend())
                                     });
                             }
                             SequenceElement::LineBreak => {

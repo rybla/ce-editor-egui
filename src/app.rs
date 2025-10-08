@@ -51,20 +51,22 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("ce-editor-egui");
 
-            ui.spacing_mut().scroll = ScrollStyle::floating();
             egui::ScrollArea::both()
                 .auto_shrink([false, true])
                 .scroll_source(egui::containers::scroll_area::ScrollSource::MOUSE_WHEEL)
                 .show(ui, |ui| {
+                    ui.spacing_mut().scroll = ScrollStyle::floating();
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+
                     self.editor_state.render(ui);
+
+                    ui.set_max_size(ui.min_size());
                 });
 
-            ui.label(format!("handle: {:#?}", &self.editor_state.core.handle));
-            ui.label(format!(
-                "clipboard: {:#?}",
-                &self.editor_state.core.clipboard
-            ));
+            ui.label(format!("handle: {}", &self.editor_state.core.handle));
+            if let Some(frag) = &self.editor_state.core.clipboard {
+                ui.label(format!("{frag}"));
+            }
         });
     }
 }
