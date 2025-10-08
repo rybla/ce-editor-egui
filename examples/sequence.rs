@@ -40,8 +40,11 @@ impl Default for MyApp {
                 SequenceElement::Label("different".to_string()),
                 SequenceElement::Label("lengths".to_string()),
                 SequenceElement::Label("will".to_string()),
-                SequenceElement::Label("reflow".to_string()),
-                SequenceElement::Label("gracefully.".to_string()),
+                SequenceElement::Label("wrap".to_string()),
+                SequenceElement::Label("to".to_string()),
+                SequenceElement::Label("the".to_string()),
+                SequenceElement::Label("next".to_string()),
+                SequenceElement::Label("line.".to_string()),
             ],
             label_counter: 0,
         }
@@ -57,8 +60,9 @@ fn color_for_index(i: usize) -> Color32 {
 }
 
 impl eframe::App for MyApp {
-    /// Called each time the UI needs repainting.
+    /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // The CentralPanel is the main content area of the window.
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Wrapping Layout Demo");
             ui.label("This demo shows labels with different background colors in a wrapping horizontal layout. The colored blocks are perfectly aligned next to each other.");
@@ -92,7 +96,8 @@ impl eframe::App for MyApp {
                 // Define the wrapping layout.
                 let layout = Layout::left_to_right(Align::TOP).with_main_wrap(true);
 
-                ui.with_layout(layout, |ui| {
+                // Wrap the content in a ScrollArea for both horizontal and vertical scrolling.
+                egui::ScrollArea::both().show(ui, |ui| {ui.with_layout(layout, |ui| {
                     // Set item_spacing to zero to make elements touch.
                     ui.spacing_mut().item_spacing = Vec2::ZERO;
 
@@ -121,7 +126,7 @@ impl eframe::App for MyApp {
                             }
                         }
                     }
-                });
+                });})
             });
         });
     }
@@ -130,7 +135,6 @@ impl eframe::App for MyApp {
 /// Main function to run the eframe application.
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        // initial_window_size: Some(egui::vec2(600.0, 400.0)),
         ..Default::default()
     };
     eframe::run_native(
