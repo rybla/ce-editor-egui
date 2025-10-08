@@ -90,7 +90,7 @@ impl EditorSpec for Ce {
         path: &Path,
         expr: &EditorExpr<Self>,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
-    ) -> egui::Response {
+    ) {
         let color_scheme = editor::EditorState::<Ce>::color_scheme(ui);
         ui.style_mut().spacing.item_spacing.x = 0f32;
         ui.style_mut().spacing.item_spacing.y = 0f32;
@@ -110,21 +110,19 @@ impl EditorSpec for Ce {
             // .stroke(egui::Stroke::new(1.0, color_scheme.normal_border));
             .stroke(egui::Stroke::new(0.0, color_scheme.normal_border));
 
-        frame
-            .show(ui, |ui| {
-                ui.add(egui::Label::new("("));
-                ui.add(
-                    egui::Label::new(egui::RichText::new(expr.label.constructor.clone()))
-                        .sense(egui::Sense::hover()),
-                );
-                for (step, kid) in render_steps_and_kids.iter() {
-                    step.render(state, ui);
-                    if let Some(kid) = kid {
-                        kid.render(state, ui);
-                    }
+        frame.show(ui, |ui| {
+            ui.add(egui::Label::new("("));
+            ui.add(
+                egui::Label::new(egui::RichText::new(expr.label.constructor.clone()))
+                    .sense(egui::Sense::hover()),
+            );
+            for (step, kid) in render_steps_and_kids.iter() {
+                step.render(state, ui);
+                if let Some(kid) = kid {
+                    kid.render(state, ui);
                 }
-                ui.add(egui::Label::new(")"));
-            })
-            .response
+            }
+            ui.add(egui::Label::new(")"));
+        });
     }
 }

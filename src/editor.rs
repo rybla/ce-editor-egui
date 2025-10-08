@@ -477,22 +477,22 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             None,
         ));
 
-        let response = ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids);
+        ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids);
 
-        if response.clicked() {
-            let mut path = path.clone();
-            if let Some(s) = path.0.pop() {
-                self.do_action(Action::SetHandle(SetHandle {
-                    handle: Handle::Span(SpanHandle {
-                        path: path,
-                        i_l: s.left_index(),
-                        i_r: s.right_index(),
-                        focus: SpanFocus::Left,
-                    }),
-                    snapshot: false,
-                }));
-            }
-        }
+        // if response.clicked() {
+        //     let mut path = path.clone();
+        //     if let Some(s) = path.0.pop() {
+        //         self.do_action(Action::SetHandle(SetHandle {
+        //             handle: Handle::Span(SpanHandle {
+        //                 path: path,
+        //                 i_l: s.left_index(),
+        //                 i_r: s.right_index(),
+        //                 focus: SpanFocus::Left,
+        //             }),
+        //             snapshot: false,
+        //         }));
+        //     }
+        // }
 
         ui.set_max_size(ui.min_size());
     }
@@ -773,7 +773,7 @@ pub trait EditorSpec: 'static {
         path: &Path,
         expr: &EditorExpr<Self>,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
-    ) -> egui::Response;
+    );
 }
 
 pub fn match_input_move_dir(ctx: &egui::Context) -> Option<MoveDir> {
