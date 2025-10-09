@@ -294,6 +294,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render_point(&mut self, ui: &mut egui::Ui, interactive: bool, point: &Point) {
+        let color_scheme = Self::color_scheme(ui);
+
         let is_handle = point == &self.core.handle.focus_point();
 
         let is_at_handle = match &self.core.handle {
@@ -310,24 +312,16 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         let is_in_handle = self.core.handle.contains_point(point);
 
         let fill_color = if is_handle {
-            Self::color_scheme(ui).active_background
+            color_scheme.active_background
         } else if is_at_handle {
-            Self::color_scheme(ui).inactive_background
+            color_scheme.inactive_background
         } else if is_in_handle {
-            Self::color_scheme(ui).highlight_background
+            color_scheme.highlight_background
         } else {
-            Self::color_scheme(ui).normal_background
+            color_scheme.normal_background
         };
 
-        // TODO: this isn't working properly, points inside the handle are not
-        // given right text color
-        let text_color = if is_handle {
-            Self::color_scheme(ui).active_text
-        } else if is_at_handle {
-            Self::color_scheme(ui).inactive_text
-        } else {
-            Self::color_scheme(ui).normal_text
-        };
+        let text_color = color_scheme.normal_text;
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
             let label = ui.add(egui::Label::new(

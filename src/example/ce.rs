@@ -97,11 +97,7 @@ impl EditorSpec for Ce {
         } else {
             color_scheme.normal_background
         };
-        let text_color = if selected {
-            color_scheme.active_text
-        } else {
-            color_scheme.normal_text
-        };
+        let text_color = color_scheme.normal_text;
 
         // TODO: generic way of handling newlines; does this need to be in ce directly, or would it be in a language built on top of ce?
         if expr.label.constructor == format!("newline") {
