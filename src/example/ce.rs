@@ -16,7 +16,7 @@ impl EditorSpec for Ce {
         CoreEditorState::new(
             Expr::new(
                 ExprLabel {
-                    constructor: Constructor::Literal(format!("root")),
+                    constructor: Constructor::Root,
                     diagnostic: Default::default(),
                 },
                 Span::empty(),

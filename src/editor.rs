@@ -486,6 +486,14 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             Constructor::Literal(literal) => {
                 ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids, literal)
             }
+            Constructor::Root => {
+                for (step, kid) in render_steps_and_kids.iter() {
+                    step.render(self, ui);
+                    if let Some(kid) = kid {
+                        kid.render(self, ui);
+                    }
+                }
+            }
             Constructor::Newline => {
                 ui.end_row();
             }
@@ -691,6 +699,7 @@ pub type Edit = fn(&String, CoreEditorState) -> Option<CoreEditorState>;
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Constructor {
     Literal(String),
+    Root,
     Newline,
 }
 
@@ -699,6 +708,7 @@ impl Display for Constructor {
         match self {
             Constructor::Literal(s) => write!(f, "{}", s),
             Constructor::Newline => write!(f, "<newline>"),
+            Constructor::Root => write!(f, "<root>"),
         }
     }
 }
@@ -762,7 +772,7 @@ pub struct RenderPoint<'a> {
 }
 
 impl<'a> RenderPoint<'a> {
-    pub fn render<ES: EditorSpec>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
+    pub fn render<ES: EditorSpec + ?Sized>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
         EditorState::render_point(
             state,
             ui,
@@ -781,7 +791,7 @@ pub struct RenderExpr<'a> {
 }
 
 impl<'a> RenderExpr<'a> {
-    pub fn render<ES: EditorSpec>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
+    pub fn render<ES: EditorSpec + ?Sized>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
         EditorState::render_expr(state, ui, true, &self.path, self.expr)
     }
 }
