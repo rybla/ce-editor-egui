@@ -159,7 +159,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx
             .input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
         {
-            self.do_action(Action::Cut);
+            self.do_action(Action::Delete);
         }
         // cut
         else if ctx.input(|i| i.key_pressed(egui::Key::X)) {

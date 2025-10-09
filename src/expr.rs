@@ -284,7 +284,7 @@ impl Point {
             path: self.path.clone(),
             i_l: self.i,
             i_r: self.i,
-            focus: SpanFocus::Left,
+            focus: SpanFocus::Right,
         }
     }
 
@@ -360,7 +360,7 @@ impl Handle {
                     path,
                     i_l: e.kids.leftmost_index(),
                     i_r: e.kids.rightmost_index(),
-                    focus: SpanFocus::Left,
+                    focus: SpanFocus::Right,
                 };
                 // TODO: combine this logic with what appears in the Span case, since it's the same
                 if h.i_l == e.kids.leftmost_index() && h.i_r == e.kids.rightmost_index() {
@@ -370,7 +370,7 @@ impl Handle {
                         path,
                         i_l: s.left_index(),
                         i_r: s.right_index(),
-                        focus: SpanFocus::Left,
+                        focus: SpanFocus::Right,
                     });
                 } else {
                     *self = Handle::Span(h);
@@ -386,7 +386,7 @@ impl Handle {
                         path,
                         i_l: s.left_index(),
                         i_r: s.right_index(),
-                        focus: SpanFocus::Left,
+                        focus: SpanFocus::Right,
                     });
                     Ok(())
                 } else {
@@ -815,14 +815,8 @@ impl Display for SpanFocus {
 impl SpanFocus {
     pub fn rotate_dir(&self, dir: &MoveDir) -> SpanFocus {
         match self {
-            SpanFocus::Left => match dir {
-                MoveDir::Prev => SpanFocus::Right,
-                MoveDir::Next => SpanFocus::Right,
-            },
-            SpanFocus::Right => match dir {
-                MoveDir::Prev => SpanFocus::Left,
-                MoveDir::Next => SpanFocus::Left,
-            },
+            SpanFocus::Left => SpanFocus::Right,
+            SpanFocus::Right => SpanFocus::Left,
         }
     }
 
