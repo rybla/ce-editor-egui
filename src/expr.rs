@@ -813,7 +813,7 @@ impl Display for SpanFocus {
 }
 
 impl SpanFocus {
-    pub fn rotate_dir(&self, dir: &MoveDir) -> SpanFocus {
+    pub fn rotate_dir(&self, _dir: &MoveDir) -> SpanFocus {
         match self {
             SpanFocus::Left => SpanFocus::Right,
             SpanFocus::Right => SpanFocus::Left,
@@ -1705,14 +1705,7 @@ pub enum MoveDir {
     Next,
 }
 
-macro_rules! ex_pat {
-    ( $label: expr, $pat: pat, $body: expr ) => {
-        Expr {
-            label: $label,
-            kids: Span(kids),
-        } if let $pat = kids.as_slice()
-    };
-}
+
 
 // -----------------------------------------------------------------------------
 // Tests
