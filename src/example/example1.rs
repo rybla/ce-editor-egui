@@ -93,6 +93,7 @@ impl EditorSpec for Example1 {
         _path: &Path,
         _expr: &EditorExpr,
         _render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
+        _literal: &String,
     ) {
         todo!()
     }

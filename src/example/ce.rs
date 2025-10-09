@@ -102,8 +102,9 @@ impl EditorSpec for Ce {
         state: &mut EditorState<Self>,
         ui: &mut egui::Ui,
         path: &Path,
-        expr: &EditorExpr,
+        _expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
+        label: &String,
     ) {
         let color_scheme = editor::EditorState::<Ce>::color_scheme(ui);
 
@@ -115,30 +116,25 @@ impl EditorSpec for Ce {
         };
         let text_color = color_scheme.normal_text;
 
-        // TODO: generic way of handling newlines; does this need to be in ce directly, or would it be in a language built on top of ce?
-        if expr.label.constructor == Constructor::Newline {
-            ui.end_row();
-        } else {
-            egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                ui.add(egui::Label::new(egui::RichText::new("(").color(text_color)));
-            });
+        egui::Frame::new().fill(fill_color).show(ui, |ui| {
+            ui.add(egui::Label::new(egui::RichText::new("(").color(text_color)));
+        });
 
-            egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                ui.add(egui::Label::new(
-                    egui::RichText::new(format!("{}", expr.label.constructor)).color(text_color),
-                ));
-            });
+        egui::Frame::new().fill(fill_color).show(ui, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(format!("{}", label)).color(text_color),
+            ));
+        });
 
-            for (step, kid) in render_steps_and_kids.iter() {
-                step.render(state, ui);
-                if let Some(kid) = kid {
-                    kid.render(state, ui);
-                }
+        for (step, kid) in render_steps_and_kids.iter() {
+            step.render(state, ui);
+            if let Some(kid) = kid {
+                kid.render(state, ui);
             }
-
-            egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                ui.add(egui::Label::new(egui::RichText::new(")").color(text_color)));
-            });
         }
+
+        egui::Frame::new().fill(fill_color).show(ui, |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(")").color(text_color)));
+        });
     }
 }

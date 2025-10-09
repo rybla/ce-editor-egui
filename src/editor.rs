@@ -482,7 +482,14 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             None,
         ));
 
-        ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids);
+        match &expr.label.constructor {
+            Constructor::Literal(literal) => {
+                ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids, literal)
+            }
+            Constructor::Newline => {
+                ui.end_row();
+            }
+        }
     }
 
     pub fn snapshot(&mut self) {
@@ -722,6 +729,7 @@ pub trait EditorSpec: 'static {
         path: &Path,
         expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
+        literal: &String,
     );
 }
 
