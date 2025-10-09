@@ -270,13 +270,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 )
             })
         });
-
-        // ui.horizontal_top(|ui| {
-        //     ui.style_mut().spacing.item_spacing.x = 0f32;
-        //     ui.style_mut().spacing.item_spacing.y = 0f32;
-
-        //     self.render_expr(ui, true, &Path::empty(), &self.core.expr.clone());
-        // });
     }
 
     pub fn render_point(&mut self, ui: &mut egui::Ui, interactive: bool, point: &Point) {
