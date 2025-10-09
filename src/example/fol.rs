@@ -1,9 +1,13 @@
 use crate::{
-    editor::{self, *}, expr::*
+    editor::{self, *},
+    expr::*,
 };
+use lazy_static::lazy_static;
+use map_macro::hash_map;
+use std::collections::HashMap;
 
 // (Name, Sort, kids' sorts)
-const _PROP_GRAMMAR : &[(&str, &str, &[&str])]  = &[
+const _PROP_GRAMMAR: &[(&str, &str, &[&str])] = &[
     // Prop
     ("<", "Prop", &["Num", "Num"]),
     (">", "Prop", &["Num", "Num"]),
@@ -28,11 +32,51 @@ const _PROP_GRAMMAR : &[(&str, &str, &[&str])]  = &[
     // ("floor", "Num", &["Num"]),
 ];
 
-pub struct Ce {}
+pub type Str = &'static str;
 
-impl Ce {}
+pub struct Rule {
+    pub sort: Str,
+    pub kids: &'static [Str],
+}
 
-impl EditorSpec for Ce {
+macro_rules! rule {
+    ( $sort: expr, $( $kid: expr ),* ) => {
+        Rule { sort: $sort, kids: &[ $( $kid ),* ] }
+    };
+}
+
+lazy_static! {
+    static ref GRAMMAR: HashMap<Str, Rule> = hash_map! {
+        // Prop
+        "<" => Rule { sort: "Prop", kids: &["Num", "Num"] },
+        ">" => Rule { sort: "Prop", kids: &["Num", "Num"] },
+        ">=" => Rule { sort: "Prop", kids: &["Num", "Num"] },
+        ">=" => Rule { sort: "Prop", kids: &["Num", "Num"] },
+        "=" => Rule { sort: "Prop", kids: &["Num", "Num"] },
+        "And" => Rule { sort: "Prop", kids: &["Prop", "Prop"] },
+        "Or" => Rule { sort: "Prop", kids: &["Prop", "Prop"] },
+        "Arrow" => Rule { sort: "Prop", kids: &["Prop", "Prop"] },
+        "Not" => Rule { sort: "Prop", kids: &["Prop"] },
+        "Forall" => Rule { sort: "Prop", kids: &["Var", "Prop"] },
+        "Exists" => Rule { sort: "Prop", kids: &["Var", "Prop"] },
+        // Num
+        "+" => Rule { sort: "Num", kids: &["Num", "Num"] },
+        "-" => Rule { sort: "Num", kids: &["Num", "Num"] },
+        "*" => Rule { sort: "Num", kids: &["Num", "Num"] },
+        "/" => Rule { sort: "Num", kids: &["Num", "Num"] },
+        // TODO: but how can we add number literals if the labels are strings?
+        // maybe we'll add these too:
+        "abs" => Rule { sort: "Num", kids: &["Num"] },
+        "ceil" => Rule { sort: "Num", kids: &["Num"] },
+        "floor" => Rule { sort: "Num", kids: &["Num"] },
+    };
+}
+
+pub struct Fol {}
+
+impl Fol {}
+
+impl EditorSpec for Fol {
     fn name() -> String {
         format!("ce")
     }
@@ -51,8 +95,7 @@ impl EditorSpec for Ce {
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
-        vec![
-        ]
+        vec![]
     }
 
     fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
@@ -72,7 +115,7 @@ impl EditorSpec for Ce {
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
         label: &String,
     ) {
-        let color_scheme = editor::EditorState::<Ce>::color_scheme(ui);
+        let color_scheme = editor::EditorState::<Fol>::color_scheme(ui);
 
         let selected = state.core.handle.contains_path(path);
         let fill_color = if selected {

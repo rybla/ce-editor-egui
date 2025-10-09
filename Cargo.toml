@@ -20,13 +20,13 @@ eframe = { version = "0.32", default-features = false, features = [
     "wayland",       # To support Linux (and CI)
     "x11",           # To support older Linux distributions (restores one of the default features)
 ] }
-log = "0.4.27"
-
 # You only need serde if you want app persistence:
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0"
 lazy_static = "1.5.0"
 nucleo = "0.5.0"
+map-macro = "0.3.0"
+log = "0.4.27"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
