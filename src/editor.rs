@@ -1,5 +1,5 @@
 use crate::{ex, expr::*, span};
-use egui::{Frame, Layout};
+use egui::{Frame, Layout, Sense};
 use lazy_static::lazy_static;
 use nucleo;
 use std::{
@@ -303,9 +303,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         let text_color = color_scheme.normal_text;
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            let label = ui.add(egui::Label::new(
-                egui::RichText::new(format!("•")).color(text_color),
-            ));
+            let label = ui.add(
+                egui::Label::new(egui::RichText::new(format!("•")).color(text_color))
+                    .selectable(false)
+                    .sense(Sense::click()),
+            );
 
             if interactive && label.clicked() {
                 println!("clicked point frame");

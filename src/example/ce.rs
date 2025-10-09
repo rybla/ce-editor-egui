@@ -117,13 +117,14 @@ impl EditorSpec for Ce {
         let text_color = color_scheme.normal_text;
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            ui.add(egui::Label::new(egui::RichText::new("(").color(text_color)));
+            ui.add(egui::Label::new(egui::RichText::new("(").color(text_color)).selectable(false));
         });
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            ui.add(egui::Label::new(
-                egui::RichText::new(format!("{}", label)).color(text_color),
-            ));
+            ui.add(
+                egui::Label::new(egui::RichText::new(format!("{}", label)).color(text_color))
+                    .selectable(false),
+            );
         });
 
         for (step, kid) in render_steps_and_kids.iter() {
@@ -134,7 +135,7 @@ impl EditorSpec for Ce {
         }
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            ui.add(egui::Label::new(egui::RichText::new(")").color(text_color)));
+            ui.add(egui::Label::new(egui::RichText::new(")").color(text_color)).selectable(false));
         });
     }
 }
