@@ -384,7 +384,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                             for (item_index, option) in menu.all_options.iter().enumerate() {
                                 let label = option.pattern.label();
                                 let rich_text =
-                                    egui::RichText::new(format!("[{item_index}] {}", label));
+                                    egui::RichText::new(label.clone());
                                 if item_index == focus_index {
                                     ui.label(
                                         rich_text

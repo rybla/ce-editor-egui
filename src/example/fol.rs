@@ -1,36 +1,11 @@
 use crate::{
     editor::{self, *},
+    ex,
     expr::*,
 };
 use lazy_static::lazy_static;
 use map_macro::hash_map;
 use std::collections::HashMap;
-
-// (Name, Sort, kids' sorts)
-const _PROP_GRAMMAR: &[(&str, &str, &[&str])] = &[
-    // Prop
-    ("<", "Prop", &["Num", "Num"]),
-    (">", "Prop", &["Num", "Num"]),
-    (">=", "Prop", &["Num", "Num"]),
-    (">=", "Prop", &["Num", "Num"]),
-    ("=", "Prop", &["Num", "Num"]),
-    ("And", "Prop", &["Prop", "Prop"]),
-    ("Or", "Prop", &["Prop", "Prop"]),
-    ("Arrow", "Prop", &["Prop", "Prop"]),
-    ("Not", "Prop", &["Prop"]),
-    ("Forall", "Prop", &["Var", "Prop"]),
-    ("Exists", "Prop", &["Var", "Prop"]),
-    // Num
-    ("+", "Num", &["Num", "Num"]),
-    ("-", "Num", &["Num", "Num"]),
-    ("*", "Num", &["Num", "Num"]),
-    ("/", "Num", &["Num", "Num"]),
-    // TODO: but how can we add number literals if the labels are strings?
-    // maybe we'll add these too:
-    // ("abs", "Num", &["Num"]),
-    // ("ceil", "Num", &["Num"]),
-    // ("floor", "Num", &["Num"]),
-];
 
 pub type Str = &'static str;
 
@@ -40,7 +15,7 @@ pub struct Rule {
 }
 
 macro_rules! rule {
-    ( $sort: expr, $( $kid: expr ),* ) => {
+    ( $sort: expr, [ $( $kid: expr ),* ] ) => {
         Rule { sort: $sort, kids: &[ $( $kid ),* ] }
     };
 }
@@ -48,27 +23,62 @@ macro_rules! rule {
 lazy_static! {
     static ref GRAMMAR: HashMap<Str, Rule> = hash_map! {
         // Prop
-        "<" => Rule { sort: "Prop", kids: &["Num", "Num"] },
-        ">" => Rule { sort: "Prop", kids: &["Num", "Num"] },
-        ">=" => Rule { sort: "Prop", kids: &["Num", "Num"] },
-        ">=" => Rule { sort: "Prop", kids: &["Num", "Num"] },
-        "=" => Rule { sort: "Prop", kids: &["Num", "Num"] },
-        "And" => Rule { sort: "Prop", kids: &["Prop", "Prop"] },
-        "Or" => Rule { sort: "Prop", kids: &["Prop", "Prop"] },
-        "Arrow" => Rule { sort: "Prop", kids: &["Prop", "Prop"] },
-        "Not" => Rule { sort: "Prop", kids: &["Prop"] },
-        "Forall" => Rule { sort: "Prop", kids: &["Var", "Prop"] },
-        "Exists" => Rule { sort: "Prop", kids: &["Var", "Prop"] },
+        "<" => rule!["Prop", ["Num", "Num"]],
+        ">" => rule!["Prop", ["Num", "Num"]],
+        ">=" => rule!["Prop", ["Num", "Num"]],
+        ">=" => rule!["Prop", ["Num", "Num"]],
+        "=" => rule!["Prop", ["Num", "Num"]],
+        "and" => rule!["Prop", ["Prop", "Prop"]],
+        "or" => rule!["Prop", ["Prop", "Prop"]],
+        "arrow" => rule!["Prop", ["Prop", "Prop"]],
+        "not" => rule!["Prop", ["Prop"]],
+        "forall" => rule!["Prop", ["Var", "Prop"]],
+        "exists" => rule!["Prop", ["Var", "Prop"]],
         // Num
-        "+" => Rule { sort: "Num", kids: &["Num", "Num"] },
-        "-" => Rule { sort: "Num", kids: &["Num", "Num"] },
-        "*" => Rule { sort: "Num", kids: &["Num", "Num"] },
-        "/" => Rule { sort: "Num", kids: &["Num", "Num"] },
+        "+" => rule!["Num", ["Num", "Num"]],
+        "-" => rule!["Num", ["Num", "Num"]],
+        "*" => rule!["Num", ["Num", "Num"]],
+        "/" => rule!["Num", ["Num", "Num"]],
         // TODO: but how can we add number literals if the labels are strings?
         // maybe we'll add these too:
-        "abs" => Rule { sort: "Num", kids: &["Num"] },
-        "ceil" => Rule { sort: "Num", kids: &["Num"] },
-        "floor" => Rule { sort: "Num", kids: &["Num"] },
+        "abs" => rule!["Num", ["Num"]],
+        "ceil" => rule!["Num", ["Num"]],
+        "floor" => rule!["Num", ["Num"]],
+    };
+}
+
+macro_rules! simple_edit {
+    ( $name: expr ) => {
+        EditMenuOption::new(EditMenuPattern::Static(format!($name)), |_query, state| {
+            let mut state = state;
+
+            let info = GRAMMAR.get($name).unwrap();
+
+            let mut kids: Vec<Expr<ExprLabel>> = vec![];
+            for _ in 0..info.kids.len() {
+                kids.push(ex![
+                    ExprLabel::new(Constructor::Literal(format!("arg")), vec![]),
+                    []
+                ]);
+            }
+
+            let handle = state.expr.insert(
+                state.handle,
+                Fragment::Zipper(Zipper {
+                    span_ol: Span::empty(),
+                    span_or: Span::empty(),
+                    middle: Context(vec![Tooth {
+                        label: ExprLabel::new(Constructor::Literal(format!($name)), vec![]),
+                        span_l: Span::empty(),
+                        span_r: Span(kids),
+                    }]),
+                }),
+            );
+
+            state.handle = handle;
+
+            Some(state)
+        })
     };
 }
 
@@ -95,7 +105,26 @@ impl EditorSpec for Fol {
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
-        vec![]
+        vec![
+            simple_edit!["<"],
+            simple_edit![">"],
+            simple_edit![">="],
+            simple_edit!["<="],
+            simple_edit!["="],
+            simple_edit!["and"],
+            simple_edit!["or"],
+            simple_edit!["arrow"],
+            simple_edit!["not"],
+            simple_edit!["forall"],
+            simple_edit!["exists"],
+            simple_edit!["+"],
+            simple_edit!["-"],
+            simple_edit!["*"],
+            simple_edit!["/"],
+            simple_edit!["abs"],
+            simple_edit!["ceil"],
+            simple_edit!["floor"],
+        ]
     }
 
     fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
