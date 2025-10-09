@@ -103,15 +103,17 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
-        println!("\n[update]");
+        // println!("\n[update]");
 
         if let Some(menu) = &mut self.menu {
             menu.nucleo.tick(10);
         }
 
-        if let Some(drag_origin) = &self.drag_origin {
-            // if ctx.input(|i| i.up)
-            todo!()
+        if self.drag_origin.is_some() {
+            if ctx.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+                println!("[end drag]");
+                self.drag_origin = None;
+            }
         }
 
         if false {
@@ -279,23 +281,23 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         });
     }
 
-    pub fn render_point(&mut self, ui: &mut egui::Ui, interactive: bool, point: &Point) {
+    pub fn render_point(&mut self, ui: &mut egui::Ui, interactive: bool, p: &Point) {
         let color_scheme = Self::color_scheme(ui);
 
-        let is_handle = point == &self.core.handle.focus_point();
+        let is_handle = p == &self.core.handle.focus_point();
 
         let is_at_handle = match &self.core.handle {
-            Handle::Point(handle) => point == handle,
-            Handle::Span(handle) => point == &handle.p_l() || point == &handle.p_r(),
+            Handle::Point(handle) => p == handle,
+            Handle::Span(handle) => p == &handle.p_l() || p == &handle.p_r(),
             Handle::Zipper(handle) => {
-                point == &handle.p_ol()
-                    || point == &handle.p_or()
-                    || point == &handle.p_il()
-                    || point == &handle.p_ir()
+                p == &handle.p_ol()
+                    || p == &handle.p_or()
+                    || p == &handle.p_il()
+                    || p == &handle.p_ir()
             }
         };
 
-        let is_in_handle = self.core.handle.contains_point(point);
+        let is_in_handle = self.core.handle.contains_point(p);
 
         let fill_color = if is_handle {
             color_scheme.active_background
@@ -317,25 +319,29 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             );
 
             if interactive && label.clicked() {
-                println!("clicked point frame");
-                let h = Handle::Point(point.clone());
+                println!("[clicked point]");
+                let h = Handle::Point(p.clone());
                 self.do_action(Action::SetHandle(SetHandle {
                     handle: h,
                     snapshot: false,
                 }));
             }
 
-            if interactive && label.drag_started() {
-                println!("[drag_started]");
-                self.drag_origin = Some(Handle::Point(point.clone()));
+            if interactive && label.drag_started_by(egui::PointerButton::Primary) {
+                println!("[start drag at point]");
+                self.drag_origin = Some(Handle::Point(p.clone()));
             }
 
             if interactive
                 && let Some(drag_origin) = &self.drag_origin
                 && label.hovered()
             {
-                if let Some(h) = drag_origin.clone().drag(&self.core.expr, point) {
-                    self.core.handle = h;
+                println!("dragging");
+                if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
+                    self.do_action(Action::SetHandle(SetHandle {
+                        handle: h.clone(),
+                        snapshot: false,
+                    }));
                 }
             }
 
