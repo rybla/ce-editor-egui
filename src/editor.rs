@@ -197,6 +197,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
             self.do_action(Action::Paste);
         }
+        // newline
+        else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            todo!()
+        }
         // rotate focus
         else if ctx.input(|i| i.modifiers.command_only())
             && let Some(dir) = match_input_move_dir(ctx)
