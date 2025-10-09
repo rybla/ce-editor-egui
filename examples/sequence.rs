@@ -99,13 +99,13 @@ impl eframe::App for MyApp {
                     // Set item_spacing to zero to make elements touch.
                     ui.spacing_mut().item_spacing = Vec2::ZERO;
                     let text_height = ui.text_style_height(&egui::TextStyle::Body);
+                    ui.set_row_height(text_height);
 
                     for (i, element) in self.elements.iter().enumerate() {
                         let color = color_for_index(i);
 
                         match element {
                             SequenceElement::Label(text) => {
-                                ui.set_row_height(text_height);
 
                                 // For each label, create a Frame for its background.
                                 Frame::default()

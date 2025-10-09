@@ -1,5 +1,5 @@
 use crate::expr::*;
-use egui::{Frame, Sense};
+use egui::{Frame, Layout, Sense};
 use lazy_static::lazy_static;
 use nucleo;
 use std::{
@@ -270,12 +270,27 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_top(|ui| {
-            ui.style_mut().spacing.item_spacing.x = 0f32;
-            ui.style_mut().spacing.item_spacing.y = 0f32;
+        Frame::new().show(ui, |ui| {
+            egui::ScrollArea::both().show(ui, |ui| {
+                ui.with_layout(
+                    Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
+                    |ui| {
+                        ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                        let text_height = ui.text_style_height(&egui::TextStyle::Body);
+                        ui.set_row_height(text_height);
 
-            self.render_expr(ui, true, &Path::empty(), &self.core.expr.clone());
+                        self.render_expr(ui, true, &Path::empty(), &self.core.expr.clone());
+                    },
+                )
+            })
         });
+
+        // ui.horizontal_top(|ui| {
+        //     ui.style_mut().spacing.item_spacing.x = 0f32;
+        //     ui.style_mut().spacing.item_spacing.y = 0f32;
+
+        //     self.render_expr(ui, true, &Path::empty(), &self.core.expr.clone());
+        // });
     }
 
     pub fn render_point(&mut self, ui: &mut egui::Ui, interactive: bool, point: &Point) {
@@ -294,7 +309,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         let is_in_handle = self.core.handle.contains_point(point);
 
-        let fill = if is_handle {
+        let fill_color = if is_handle {
             Self::color_scheme(ui).active_background
         } else if is_at_handle {
             Self::color_scheme(ui).inactive_background
@@ -303,34 +318,20 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         } else {
             Self::color_scheme(ui).normal_background
         };
-        let frame = Frame::new()
-            .outer_margin(0)
-            .inner_margin(egui::Margin {
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-            })
-            .fill(fill);
 
-        frame.show(ui, |ui| {
-            let label = ui.add(
-                egui::Button::new(egui::RichText::new(format!("•")).color(if is_handle {
+        egui::Frame::new().fill(fill_color).show(ui, |ui| {
+            let label = ui.add(egui::Label::new(egui::RichText::new(format!("•")).color(
+                if is_handle {
                     Self::color_scheme(ui).active_text
                 } else if is_at_handle {
                     Self::color_scheme(ui).inactive_text
                 } else {
                     Self::color_scheme(ui).normal_text
-                }))
-                .sense(if interactive {
-                    Sense::click()
-                } else {
-                    Sense::empty()
-                })
-                .fill(fill),
-            );
+                },
+            )));
 
-            if label.clicked() {
+            if interactive && label.clicked() {
+                println!("clicked point frame");
                 let h = Handle::Point(point.clone());
                 self.do_action(Action::SetHandle(SetHandle {
                     handle: h,
@@ -498,23 +499,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ));
 
         ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids);
-
-        // if response.clicked() {
-        //     let mut path = path.clone();
-        //     if let Some(s) = path.0.pop() {
-        //         self.do_action(Action::SetHandle(SetHandle {
-        //             handle: Handle::Span(SpanHandle {
-        //                 path: path,
-        //                 i_l: s.left_index(),
-        //                 i_r: s.right_index(),
-        //                 focus: SpanFocus::Left,
-        //             }),
-        //             snapshot: false,
-        //         }));
-        //     }
-        // }
-
-        // ui.set_max_size(ui.min_size());
     }
 
     pub fn snapshot(&mut self) {
