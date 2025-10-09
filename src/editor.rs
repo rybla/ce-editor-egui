@@ -75,6 +75,7 @@ pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub menu: Option<EditMenu>,
     pub history: Vec<CoreEditorState>,
     pub future: Vec<CoreEditorState>,
+    pub drag_origin: Option<Handle>,
 }
 
 impl<ES: EditorSpec + ?Sized> EditorState<ES> {
@@ -85,6 +86,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             menu: Default::default(),
             history: vec![],
             future: vec![],
+            drag_origin: Default::default(),
         }
     }
 
@@ -105,6 +107,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         if let Some(menu) = &mut self.menu {
             menu.nucleo.tick(10);
+        }
+
+        if let Some(drag_origin) = self.drag_origin {
+            // if ctx.input(|i| i.up)
+            todo!()
         }
 
         if false {
@@ -306,7 +313,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let label = ui.add(
                 egui::Label::new(egui::RichText::new(format!("•")).color(text_color))
                     .selectable(false)
-                    .sense(Sense::click()),
+                    .sense(Sense::click_and_drag()),
             );
 
             if interactive && label.clicked() {
@@ -316,6 +323,20 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     handle: h,
                     snapshot: false,
                 }));
+            }
+
+            if interactive && label.drag_started() {
+                println!("[drag_started]");
+                self.drag_origin = Some(Handle::Point(point.clone()));
+            }
+
+            if interactive
+                && let Some(drag_origin) = &self.drag_origin
+                && label.hovered()
+            {
+                if let Some(h) = drag_origin.clone().drag(&self.core.expr, point) {
+                    self.core.handle = h;
+                }
             }
 
             if is_handle && let Some(menu) = &mut self.menu {
