@@ -319,16 +319,20 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             Self::color_scheme(ui).normal_background
         };
 
+        // TODO: this isn't working properly, points inside the handle are not
+        // given right text color
+        let text_color = if is_handle {
+            Self::color_scheme(ui).active_text
+        } else if is_at_handle {
+            Self::color_scheme(ui).inactive_text
+        } else {
+            Self::color_scheme(ui).normal_text
+        };
+
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            let label = ui.add(egui::Label::new(egui::RichText::new(format!("•")).color(
-                if is_handle {
-                    Self::color_scheme(ui).active_text
-                } else if is_at_handle {
-                    Self::color_scheme(ui).inactive_text
-                } else {
-                    Self::color_scheme(ui).normal_text
-                },
-            )));
+            let label = ui.add(egui::Label::new(
+                egui::RichText::new(format!("•")).color(text_color),
+            ));
 
             if interactive && label.clicked() {
                 println!("clicked point frame");
