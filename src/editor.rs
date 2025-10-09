@@ -1,9 +1,10 @@
-use crate::expr::*;
-use egui::{Frame, Layout, Sense};
+use crate::{ex, expr::*, span};
+use egui::{Frame, Layout};
 use lazy_static::lazy_static;
 use nucleo;
 use std::{
     fmt::{Debug, Display},
+    marker::PhantomData,
     sync::Arc,
 };
 
@@ -45,38 +46,20 @@ lazy_static! {
     };
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct ExprLabel<ES: EditorSpec + ?Sized> {
-    pub constructor: ES::Constructor,
-    pub diagnostic: ES::Diagnostic,
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ExprLabel {
+    pub constructor: Constructor,
+    pub diagnostic: Vec<Diagnostic>,
 }
 
-impl<ES: EditorSpec + ?Sized> Display for ExprLabel<ES> {
+impl Display for ExprLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.constructor)
     }
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for ExprLabel<ES> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ExprLabel")
-            .field("constructor", &self.constructor)
-            .field("diagnostic", &self.diagnostic)
-            .finish()
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> Clone for ExprLabel<ES> {
-    fn clone(&self) -> Self {
-        Self {
-            constructor: self.constructor.clone(),
-            diagnostic: self.diagnostic.clone(),
-        }
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> ExprLabel<ES> {
-    pub fn new(constructor: ES::Constructor, diagnostic: ES::Diagnostic) -> Self {
+impl ExprLabel {
+    pub fn new(constructor: Constructor, diagnostic: Vec<Diagnostic>) -> Self {
         Self {
             constructor,
             diagnostic,
@@ -84,27 +67,20 @@ impl<ES: EditorSpec + ?Sized> ExprLabel<ES> {
     }
 }
 
-pub type EditorExpr<ES> = Expr<ExprLabel<ES>>;
+pub type EditorExpr = Expr<ExprLabel>;
 
 pub struct EditorState<ES: EditorSpec + ?Sized> {
-    pub core: CoreEditorState<ES>,
-    pub menu: Option<EditMenu<ES>>,
-    pub history: Vec<CoreEditorState<ES>>,
-    pub future: Vec<CoreEditorState<ES>>,
-}
-
-impl<ES: EditorSpec + ?Sized> Debug for EditorState<ES> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EditorState")
-            .field("core", &self.core)
-            .field("menu", &self.menu)
-            .finish()
-    }
+    pub spec: PhantomData<ES>,
+    pub core: CoreEditorState,
+    pub menu: Option<EditMenu>,
+    pub history: Vec<CoreEditorState>,
+    pub future: Vec<CoreEditorState>,
 }
 
 impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     pub fn default() -> Self {
         Self {
+            spec: PhantomData,
             core: ES::initial_state(),
             menu: Default::default(),
             history: vec![],
@@ -199,7 +175,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // newline
         else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            todo!()
+            let mut core = self.core.clone();
+            let h = core.expr.insert(
+                core.handle,
+                Fragment::Span(span![ex![ExprLabel::new(Constructor::Newline, vec![]), []]]),
+            );
+            core.handle = h;
+            self.do_action(Action::SetCore(core));
         }
         // rotate focus
         else if ctx.input(|i| i.modifiers.command_only())
@@ -463,7 +445,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ui: &mut egui::Ui,
         interactive: bool,
         path: &Path,
-        expr: &EditorExpr<ES>,
+        expr: &EditorExpr,
     ) {
         self.render_expr_contents(ui, interactive, path, expr)
     }
@@ -473,7 +455,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ui: &mut egui::Ui,
         interactive: bool,
         path: &Path,
-        expr: &EditorExpr<ES>,
+        expr: &EditorExpr,
     ) {
         let mut render_steps_and_kids = vec![];
 
@@ -508,7 +490,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         self.future = vec![];
     }
 
-    pub fn do_action(&mut self, action: Action<ES>) {
+    pub fn do_action(&mut self, action: Action) {
         match action {
             Action::Redo => {
                 if let Some(core) = self.future.pop() {
@@ -571,35 +553,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct CoreEditorState<ES: EditorSpec + ?Sized> {
-    pub expr: EditorExpr<ES>,
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct CoreEditorState {
+    pub expr: EditorExpr,
     pub handle: Handle,
-    pub clipboard: Option<Fragment<ExprLabel<ES>>>,
+    pub clipboard: Option<Fragment<ExprLabel>>,
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for CoreEditorState<ES> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CoreEditorState")
-            .field("expr", &self.expr)
-            .field("handle", &self.handle)
-            .field("clipboard", &self.clipboard)
-            .finish()
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> Clone for CoreEditorState<ES> {
-    fn clone(&self) -> Self {
-        Self {
-            expr: self.expr.clone(),
-            handle: self.handle.clone(),
-            clipboard: self.clipboard.clone(),
-        }
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> CoreEditorState<ES> {
-    pub fn new(expr: EditorExpr<ES>, handle: Handle) -> Self {
+impl CoreEditorState {
+    pub fn new(expr: EditorExpr, handle: Handle) -> Self {
         CoreEditorState {
             expr,
             handle,
@@ -608,26 +570,15 @@ impl<ES: EditorSpec + ?Sized> CoreEditorState<ES> {
     }
 }
 
-pub struct EditMenu<ES: EditorSpec + ?Sized> {
+pub struct EditMenu {
     pub query: String,
-    pub all_options: Vec<EditMenuOption<ES>>,
+    pub all_options: Vec<EditMenuOption>,
     pub index: i8,
-    pub nucleo: nucleo::Nucleo<EditMenuOption<ES>>,
+    pub nucleo: nucleo::Nucleo<EditMenuOption>,
 }
 
-impl<ES: EditorSpec + ?Sized> Debug for EditMenu<ES> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EditMenu")
-            .field("query", &self.query)
-            .field("options", &self.all_options)
-            .field("index", &self.index)
-            .field("nucleo", &"nucleo")
-            .finish()
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
-    fn new(all_options: Vec<EditMenuOption<ES>>) -> Self {
+impl EditMenu {
+    fn new(all_options: Vec<EditMenuOption>) -> Self {
         let nucleo = nucleo::Nucleo::new(
             nucleo::Config::DEFAULT,
             Arc::new(|| {
@@ -654,8 +605,8 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
         }
     }
 
-    pub fn matched_items(&self) -> Vec<(Option<String>, &EditMenuOption<ES>)> {
-        let matched_dynamic_items: Vec<(Option<String>, &EditMenuOption<ES>)> = self
+    pub fn matched_items(&self) -> Vec<(Option<String>, &EditMenuOption)> {
+        let matched_dynamic_items: Vec<(Option<String>, &EditMenuOption)> = self
             .all_options
             .iter()
             .filter_map(|item| match item.pattern {
@@ -664,7 +615,7 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
             })
             .collect::<Vec<_>>();
 
-        let matched_static_items: Vec<(Option<String>, &EditMenuOption<ES>)> = self
+        let matched_static_items: Vec<(Option<String>, &EditMenuOption)> = self
             .nucleo
             .snapshot()
             .matched_items(..)
@@ -674,7 +625,7 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
         [matched_dynamic_items, matched_static_items].concat()
     }
 
-    pub fn focus_option(&self) -> Option<&EditMenuOption<ES>> {
+    pub fn focus_option(&self) -> Option<&EditMenuOption> {
         let matched_items = self.matched_items();
 
         if matched_items.is_empty() {
@@ -701,31 +652,14 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     }
 }
 
-pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
+#[derive(Debug, Clone)]
+pub struct EditMenuOption {
     pub pattern: EditMenuPattern,
-    pub edit: Edit<ES>,
+    pub edit: Edit,
 }
 
-impl<ES: EditorSpec + ?Sized> Clone for EditMenuOption<ES> {
-    fn clone(&self) -> Self {
-        Self {
-            pattern: self.pattern.clone(),
-            edit: self.edit.clone(),
-        }
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> Debug for EditMenuOption<ES> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EditMenuOption")
-            .field("label", &self.pattern)
-            .field("edit", &format!("<function>"))
-            .finish()
-    }
-}
-
-impl<ES: EditorSpec + ?Sized> EditMenuOption<ES> {
-    pub fn new(pattern: EditMenuPattern, edit: Edit<ES>) -> Self {
+impl EditMenuOption {
+    pub fn new(pattern: EditMenuPattern, edit: Edit) -> Self {
         Self { pattern, edit }
     }
 }
@@ -745,40 +679,49 @@ impl EditMenuPattern {
     }
 }
 
-pub type Edit<ES> = fn(&String, CoreEditorState<ES>) -> Option<CoreEditorState<ES>>;
+pub type Edit = fn(&String, CoreEditorState) -> Option<CoreEditorState>;
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum Constructor {
+    Literal(String),
+    Newline,
+}
+
+impl Display for Constructor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Constructor::Literal(s) => write!(f, "{}", s),
+            Constructor::Newline => write!(f, "<newline>"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Diagnostic(pub String);
+
+impl Display for Diagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub trait EditorSpec: 'static {
-    type Constructor: Debug
-        + Display
-        + Clone
-        + Sized
-        + PartialEq
-        + serde::Serialize
-        + for<'a> serde::Deserialize<'a>;
-    type Diagnostic: Debug
-        + Display
-        + Clone
-        + Sized
-        + PartialEq
-        + serde::Serialize
-        + for<'a> serde::Deserialize<'a>;
-
     fn name() -> String;
 
-    fn initial_state() -> CoreEditorState<Self>;
+    fn initial_state() -> CoreEditorState;
 
-    fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption<Self>>;
+    fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption>;
 
-    fn get_diagnostics(state: EditorState<Self>) -> Vec<Self::Diagnostic>;
+    fn get_diagnostics(state: EditorState<Self>) -> Vec<Diagnostic>;
 
-    fn is_valid_handle(handle: &Handle, expr: &EditorExpr<Self>) -> bool;
+    fn is_valid_handle(handle: &Handle, expr: &EditorExpr) -> bool;
 
     fn assemble_rendered_expr(
         state: &mut EditorState<Self>,
         ui: &mut egui::Ui,
         path: &Path,
-        expr: &EditorExpr<Self>,
-        render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
+        expr: &EditorExpr,
+        render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
     );
 }
 
@@ -824,30 +767,30 @@ impl<'a> RenderPoint<'a> {
     }
 }
 
-pub struct RenderExpr<'a, ES: EditorSpec + ?Sized> {
+pub struct RenderExpr<'a> {
     pub path: Path,
-    pub expr: &'a EditorExpr<ES>,
+    pub expr: &'a EditorExpr,
 }
 
-impl<'a, ES: EditorSpec + ?Sized> RenderExpr<'a, ES> {
-    pub fn render(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
+impl<'a> RenderExpr<'a> {
+    pub fn render<ES: EditorSpec>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
         EditorState::render_expr(state, ui, true, &self.path, self.expr)
     }
 }
 
 // -----------------------------------------------------------------------------
 
-pub struct StateAction<ES: EditorSpec + ?Sized> {
-    pub state: CoreEditorState<ES>,
-    pub action: Action<ES>,
+pub struct StateAction {
+    pub state: CoreEditorState,
+    pub action: Action,
 }
 
-pub enum Action<ES: EditorSpec + ?Sized> {
+pub enum Action {
     Copy,
     Paste,
     Cut,
     Delete,
-    SetCore(CoreEditorState<ES>),
+    SetCore(CoreEditorState),
     SetHandle(SetHandle),
     Undo,
     Redo,

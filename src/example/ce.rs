@@ -3,26 +3,20 @@ use crate::{
     expr::*,
 };
 
-type C = String;
-type D = String;
-
 pub struct Ce {}
 
 impl Ce {}
 
 impl EditorSpec for Ce {
-    type Constructor = C;
-    type Diagnostic = D;
-
     fn name() -> String {
         format!("ce")
     }
 
-    fn initial_state() -> CoreEditorState<Self> {
+    fn initial_state() -> CoreEditorState {
         CoreEditorState::new(
             Expr::new(
                 ExprLabel {
-                    constructor: format!("root"),
+                    constructor: Constructor::Literal(format!("root")),
                     diagnostic: Default::default(),
                 },
                 Span::empty(),
@@ -31,7 +25,7 @@ impl EditorSpec for Ce {
         )
     }
 
-    fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
+    fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
         vec![
             EditMenuOption::new(
                 EditMenuPattern::Dynamic(format!("<name> (constructor)"), |query| {
@@ -48,7 +42,10 @@ impl EditorSpec for Ce {
                             span_ol: Span::empty(),
                             span_or: Span::empty(),
                             middle: Context(vec![Tooth {
-                                label: ExprLabel::new(query.clone(), String::new()),
+                                label: ExprLabel::new(
+                                    Constructor::Literal(query.clone()),
+                                    Vec::new(),
+                                ),
                                 span_l: Span::empty(),
                                 span_r: Span::empty(),
                             }]),
@@ -74,11 +71,30 @@ impl EditorSpec for Ce {
         ]
     }
 
-    fn get_diagnostics(_state: EditorState<Self>) -> Vec<Self::Diagnostic> {
+    fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
         Default::default()
     }
 
-    fn is_valid_handle(_handle: &Handle, _expr: &EditorExpr<Self>) -> bool {
+    fn is_valid_handle(_h: &Handle, _e: &EditorExpr) -> bool {
+        // TODO: there's a bug in movement that enters infinite loop
+        // match h {
+        //     Handle::Point(p) => {
+        //         let e = e.at_path(&p.path);
+        //         e.label.constructor != Constructor::Newline
+        //     }
+        //     Handle::Span(h) => {
+        //         let e = e.at_path(&h.path);
+        //         e.label.constructor != Constructor::Newline
+        //     }
+        //     Handle::Zipper(h) => {
+        //         let e = e.at_path(&h.path_o);
+        //         if !(e.label.constructor != Constructor::Newline) {
+        //             return false;
+        //         }
+        //         let e = e.at_path(&h.path_i());
+        //         e.label.constructor != Constructor::Newline
+        //     }
+        // }
         true
     }
 
@@ -86,8 +102,8 @@ impl EditorSpec for Ce {
         state: &mut EditorState<Self>,
         ui: &mut egui::Ui,
         path: &Path,
-        expr: &EditorExpr<Self>,
-        render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
+        expr: &EditorExpr,
+        render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
     ) {
         let color_scheme = editor::EditorState::<Ce>::color_scheme(ui);
 
@@ -100,7 +116,7 @@ impl EditorSpec for Ce {
         let text_color = color_scheme.normal_text;
 
         // TODO: generic way of handling newlines; does this need to be in ce directly, or would it be in a language built on top of ce?
-        if expr.label.constructor == format!("newline") {
+        if expr.label.constructor == Constructor::Newline {
             ui.end_row();
         } else {
             egui::Frame::new().fill(fill_color).show(ui, |ui| {

@@ -1,8 +1,5 @@
 use crate::{editor::*, expr::*};
 
-type Constructor = String;
-type Diagnostic = String;
-
 pub struct Example1 {}
 
 macro_rules! make_edit_menu_option_that_inserts_frag {
@@ -21,34 +18,31 @@ macro_rules! make_edit_menu_option_that_inserts_frag {
 impl Example1 {}
 
 impl EditorSpec for Example1 {
-    type Constructor = Constructor;
-    type Diagnostic = Diagnostic;
-
     fn name() -> String {
         format!("example1")
     }
 
-    fn initial_state() -> CoreEditorState<Self> {
+    fn initial_state() -> CoreEditorState {
         let mut i = 0;
 
         let mut mk_label = || {
             i += 1;
             ExprLabel {
-                constructor: format!(" label_{i} "),
-                diagnostic: format!(" diagnostic "),
+                constructor: Constructor::Literal(format!(" label_{i} ")),
+                diagnostic: vec![Diagnostic(format!(" diagnostic "))],
             }
         };
 
         CoreEditorState::new(Expr::example(&mut mk_label, 2, 3), Default::default())
     }
 
-    fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
+    fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
         vec![
             make_edit_menu_option_that_inserts_frag!(
                 format!("a"),
                 Fragment::Span(Span(vec![Expr {
                     label: ExprLabel {
-                        constructor: format!("A"),
+                        constructor: Constructor::Literal(format!("A")),
                         diagnostic: Default::default(),
                     },
                     kids: Span(vec![]),
@@ -79,11 +73,11 @@ impl EditorSpec for Example1 {
         ]
     }
 
-    fn get_diagnostics(_state: EditorState<Self>) -> Vec<Self::Diagnostic> {
-        vec![format!("this is an example diagnostic")]
+    fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
+        vec![Diagnostic(format!("this is an example diagnostic"))]
     }
 
-    fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel<Self>>) -> bool {
+    fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel>) -> bool {
         match handle {
             Handle::Point(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
             Handle::Span(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
@@ -97,8 +91,8 @@ impl EditorSpec for Example1 {
         _state: &mut EditorState<Self>,
         _ui: &mut egui::Ui,
         _path: &Path,
-        _expr: &EditorExpr<Self>,
-        _render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
+        _expr: &EditorExpr,
+        _render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
     ) {
         todo!()
     }
