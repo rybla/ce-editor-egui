@@ -1044,6 +1044,10 @@ impl<L: Display> Display for Expr<L> {
 }
 
 impl<L: Debug + Display + Clone> Expr<L> {
+    pub fn pat(&self) -> (&L, &[Expr<L>]) {
+        (&self.label, self.kids.0.as_slice())
+    }
+
     pub fn new(label: L, kids: Span<L>) -> Self {
         Self { label, kids }
     }
@@ -1699,6 +1703,15 @@ pub enum CycleDir {
 pub enum MoveDir {
     Prev,
     Next,
+}
+
+macro_rules! ex_pat {
+    ( $label: expr, $pat: pat, $body: expr ) => {
+        Expr {
+            label: $label,
+            kids: Span(kids),
+        } if let $pat = kids.as_slice()
+    };
 }
 
 // -----------------------------------------------------------------------------

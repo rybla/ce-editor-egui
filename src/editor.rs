@@ -109,7 +109,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             menu.nucleo.tick(10);
         }
 
-        if let Some(drag_origin) = self.drag_origin {
+        if let Some(drag_origin) = &self.drag_origin {
             // if ctx.input(|i| i.up)
             todo!()
         }
