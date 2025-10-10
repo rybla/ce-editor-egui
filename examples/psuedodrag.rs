@@ -1,160 +1,138 @@
-use eframe::egui;
+//! A simple egui app that demonstrates drag-and-drop interaction between labels.
 
-/// Main function to run the eframe application.
+use eframe::egui;
+use egui::{Color32, Rect, RichText, Sense};
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
         ..Default::default()
     };
     eframe::run_native(
-        "Circle Connector",
+        "Label Drag-and-Drop",
         options,
-        Box::new(|_cc| Ok(Box::<MyApp>::default())),
+        Box::new(|_cc| Ok(Box::new(MyApp::new()))),
     )
 }
 
-/// Represents a single circle to be drawn and interacted with.
-struct Circle {
-    pos: egui::Pos2,
-    radius: f32,
-    label: String,
-}
-
-/// The main application state.
 struct MyApp {
-    /// A vector of all circles to be displayed.
-    circles: Vec<Circle>,
-    /// The index of the circle where a drag gesture started. `None` if no drag is active.
-    drag_start_idx: Option<usize>,
-    /// The final, successfully connected pair of circles, stored by their indices.
+    /// The list of items we are displaying.
+    items: Vec<String>,
+    /// The index of the item the user is currently dragging.
+    drag_start_index: Option<usize>,
+    /// The index of the item the user is currently hovering over while dragging.
+    /// This is updated each frame.
+    hovered_index: Option<usize>,
+    /// The successfully connected start and end indices.
     connection: Option<(usize, usize)>,
 }
 
-/// Implementation of the `Default` trait to create the initial state of the app.
-impl Default for MyApp {
-    fn default() -> Self {
+impl MyApp {
+    /// Initializes the application with some default items.
+    fn new() -> Self {
         Self {
-            // Pre-populate with some circles at different positions.
-            circles: vec![
-                Circle {
-                    pos: egui::pos2(100.0, 150.0),
-                    radius: 30.0,
-                    label: "Alpha".to_string(),
-                },
-                Circle {
-                    pos: egui::pos2(500.0, 450.0),
-                    radius: 30.0,
-                    label: "Beta".to_string(),
-                },
-                Circle {
-                    pos: egui::pos2(250.0, 400.0),
-                    radius: 30.0,
-                    label: "Gamma".to_string(),
-                },
-                Circle {
-                    pos: egui::pos2(400.0, 200.0),
-                    radius: 30.0,
-                    label: "Delta".to_string(),
-                },
-            ],
-            drag_start_idx: None,
+            items: (0..5).map(|i| format!("Label {}", i + 1)).collect(),
+            drag_start_index: None,
+            hovered_index: None,
             connection: None,
         }
     }
 }
 
-/// Implementation of the main application logic.
 impl eframe::App for MyApp {
-    /// This method is called on each frame to update the UI.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // Display instructions and the result of the last connection at the top.
-            ui.vertical_centered(|ui| {
-                ui.heading("Circle Connector");
-                if let Some((start_idx, end_idx)) = self.connection {
-                    let start_label = &self.circles[start_idx].label;
-                    let end_label = &self.circles[end_idx].label;
-                    // 5. A UI element is updated with the labels.
-                    ui.label(format!("Last connection: {} -> {}", start_label, end_label));
-                } else {
-                    ui.label("Drag from one circle to another to connect them.");
+        println!("self.hovered_index = {:?}", self.hovered_index);
+
+        // --- State Update ---
+        // First, handle the end of a drag operation.
+        // We detect this when the primary mouse button is released.
+        let is_pointer_released = ctx.input(|i| i.pointer.primary_released());
+        let is_dragging = self.drag_start_index.is_some();
+
+        if is_dragging && is_pointer_released {
+            // A drag operation was just completed.
+            if let (Some(start_index), Some(hovered_index)) =
+                (self.drag_start_index, self.hovered_index)
+            {
+                // We have both a start and an end point, so a connection is made.
+                if start_index != hovered_index {
+                    self.connection = Some((start_index, hovered_index));
                 }
-            });
+            }
+            // Clear the drag state regardless of whether a connection was made.
+            self.drag_start_index = None;
+            self.hovered_index = None;
+        }
+
+        // // Reset the hovered index at the beginning of each frame's UI rendering.
+        // self.hovered_index = None;
+
+        // --- UI Rendering ---
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Drag-and-Drop Connection");
+            ui.label("Click and drag from one label to another.");
             ui.separator();
 
-            // Allocate the rest of the panel for our custom painting and interaction.
-            let (response, painter) =
-                ui.allocate_painter(ui.available_size(), egui::Sense::click_and_drag());
-
-            // --- Interaction Logic ---
-
-            // 1. Detect which circle is currently being hovered over by the pointer.
-            let mut hovered_circle_idx = None;
-            if let Some(hover_pos) = response.hover_pos() {
-                for (i, circle) in self.circles.iter().enumerate() {
-                    if circle.pos.distance(hover_pos) <= circle.radius {
-                        hovered_circle_idx = Some(i);
-                        break;
-                    }
-                }
-            }
-
-            // 2. Handle the start of a drag.
-            if response.drag_started() {
-                // If the drag started on a circle, remember which one.
-                self.drag_start_idx = hovered_circle_idx;
-            }
-
-            // 4. Handle the end of a drag.
-            if response.drag_stopped() {
-                if let (Some(start_idx), Some(end_idx)) = (self.drag_start_idx, hovered_circle_idx)
-                {
-                    // Ensure the drag ends on a different circle than it started.
-                    if start_idx != end_idx {
-                        // Store the successful connection.
-                        self.connection = Some((start_idx, end_idx));
-                    }
-                }
-                // End the drag regardless of whether it was successful.
-                self.drag_start_idx = None;
-            }
-
-            // --- Drawing Logic ---
-
-            // While dragging, draw a line from the center of the start circle to the pointer.
-            if let Some(start_idx) = self.drag_start_idx {
-                if let Some(hover_pos) = response.hover_pos() {
-                    let start_circle = &self.circles[start_idx];
-                    painter.line_segment(
-                        [start_circle.pos, hover_pos],
-                        egui::Stroke::new(2.0, egui::Color32::WHITE),
-                    );
-                }
-            }
-
-            // Draw all the circles, changing their color based on the interaction state.
-            for (i, circle) in self.circles.iter().enumerate() {
-                let is_drag_start = self.drag_start_idx == Some(i);
-                let is_drag_target = self.drag_start_idx.is_some()
-                    && hovered_circle_idx == Some(i)
-                    && !is_drag_start;
-
-                // Determine the fill color based on the interaction state.
-                let fill_color = if is_drag_start {
-                    egui::Color32::GREEN // 2. The circle being dragged from is green.
-                } else if is_drag_target {
-                    egui::Color32::RED // 3. The circle being dragged to is red.
-                } else {
-                    ui.visuals().widgets.inactive.bg_fill // Default color.
-                };
-
-                painter.circle_filled(circle.pos, circle.radius, fill_color);
-                painter.text(
-                    circle.pos,
-                    egui::Align2::CENTER_CENTER,
-                    &circle.label,
-                    egui::FontId::proportional(20.0),
-                    ui.visuals().strong_text_color(),
+            // Display the current connection status.
+            if let Some((start, end)) = self.connection {
+                ui.label(
+                    RichText::new(format!(
+                        "Connected: {} -> {}",
+                        self.items[start], self.items[end]
+                    ))
+                    .color(Color32::LIGHT_BLUE)
+                    .strong(),
                 );
+            } else {
+                ui.label("Connection: None");
+            }
+            ui.add_space(10.0);
+
+            let mut label_rects: Vec<(Rect, usize)> = vec![];
+
+            // Create a vertical layout for our labels.
+            ui.vertical(|ui| {
+                // Iterate over each item to create a label for it.
+                for i in 0..self.items.len() {
+                    let item_text = &self.items[i];
+                    let mut rich_text = RichText::new(item_text).size(20.0);
+
+                    // Determine the label's color based on the interaction state.
+                    if Some(i) == self.drag_start_index {
+                        rich_text = rich_text.color(Color32::GREEN).strong();
+                    } else if Some(i) == self.hovered_index {
+                        rich_text = rich_text.color(Color32::RED).strong();
+                    }
+
+                    // Create the label widget and make it sensitive to clicks and drags.
+                    let response = ui.add(
+                        egui::Label::new(rich_text)
+                            .sense(Sense::click_and_drag())
+                            .selectable(false),
+                    );
+
+                    label_rects.push((response.rect, i));
+
+                    // --- Post-Render State Update ---
+                    // After adding the widget, we check its response to update our state.
+                    if response.drag_started() {
+                        // The user started dragging this label (Step 2).
+                        self.drag_start_index = Some(i);
+                        // Clear any previous connection when starting a new drag.
+                        self.connection = None;
+                    }
+                }
+            });
+
+            if self.drag_start_index.is_some() {
+                self.hovered_index = None;
+                if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
+                    for (rect, i) in label_rects.iter() {
+                        if rect.contains(pointer_pos) {
+                            self.hovered_index = Some(*i);
+                        }
+                    }
+                }
             }
         });
     }

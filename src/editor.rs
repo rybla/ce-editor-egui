@@ -1,6 +1,7 @@
 use crate::{ex, expr::*, span};
 use egui::{Frame, Layout, Sense};
 use lazy_static::lazy_static;
+use log::info;
 use nucleo;
 use std::{
     fmt::{Debug, Display},
@@ -98,12 +99,12 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.core
                 .handle
                 .escape()
-                .unwrap_or_else(|err| println!("Failed to move: {err:?}"))
+                .unwrap_or_else(|e| info!(target: "editor.move", "escape failed: {e:?}"))
         }
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
-        // println!("\n[update]");
+        info!(target: "editor.update", "update");
 
         if let Some(menu) = &mut self.menu {
             menu.nucleo.tick(10);
@@ -111,7 +112,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         if self.drag_origin.is_some() {
             if ctx.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-                println!("[end drag]");
+                info!(target: "editor.drag", "end drag; h = {}", self.core.handle);
                 self.drag_origin = None;
             }
         }
@@ -136,10 +137,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     if let Some(core) = (option.edit)(&menu.query, self.core.clone()) {
                         self.do_action(Action::SetCore(core));
                     } else {
-                        println!("Edit failed");
+                        info!(target: "editor.edit", "edit failed");
                     }
                 } else {
-                    println!("There are no edit options available")
+                    info!(target: "editor.edit", "there are no edit options available");
                 }
             }
             // move menu option
@@ -152,7 +153,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // open edit menu
         else if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
-            println!("[menu] open");
+            info!(target: "editor.edit", "open EditMenu");
             let menu = ES::get_edits(self);
             self.menu = Some(EditMenu::new(menu));
         }
@@ -206,7 +207,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             loop {
                 let move_status = target.move_dir(&self.core.expr, &dir);
                 if !move_status.is_ok() {
-                    println!("[select] bailed since a move failed");
+                    info!(target: "editor.move", "select bailed since a move failed");
                     break;
                 }
 
@@ -227,7 +228,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             loop {
                 let move_status = self.core.handle.move_dir(&self.core.expr, &dir);
                 if !move_status.is_ok() {
-                    println!("[move] bailed since a move failed");
+                    info!(target: "editor.move", "move bailed since a move failed");
                     break;
                 }
 
@@ -252,7 +253,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
 
             if let Err(err) = result {
-                println!("Failed to move up: {err:?}")
+                info!(target: "editor.move", "Failed to move up: {err:?}")
             }
         }
     }
@@ -315,35 +316,40 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let label = ui.add(
                 egui::Label::new(egui::RichText::new(format!("•")).color(text_color))
                     .selectable(false)
+                    // .sense(Sense::click().union(Sense::hover())),
                     .sense(Sense::click_and_drag()),
             );
 
-            if interactive && label.clicked() {
-                println!("[clicked point]");
-                let h = Handle::Point(p.clone());
-                self.do_action(Action::SetHandle(SetHandle {
-                    handle: h,
-                    snapshot: false,
-                }));
+            // if interactive && label.clicked() {
+            //     info!(target: "editor", "click at point: p = {p}");
+            //     let h = Handle::Point(p.clone());
+            //     self.do_action(Action::SetHandle(SetHandle {
+            //         handle: h,
+            //         snapshot: false,
+            //     }));
+            // }
+
+            if label.is_pointer_button_down_on() {
+                info!(target:"editor.drag", "is_pointer_button_down_on {p}");
             }
 
-            if interactive && label.drag_started_by(egui::PointerButton::Primary) {
-                println!("[start drag at point]");
-                self.drag_origin = Some(Handle::Point(p.clone()));
-            }
+            // if interactive && label.drag_started_by(egui::PointerButton::Primary) {
+            //     info!(target: "editor.drag", "drag start at point: p = {p}");
+            //     self.drag_origin = Some(Handle::Point(p.clone()));
+            // }
 
-            if interactive
-                && let Some(drag_origin) = &self.drag_origin
-                && label.hovered()
-            {
-                println!("dragging");
-                if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
-                    self.do_action(Action::SetHandle(SetHandle {
-                        handle: h.clone(),
-                        snapshot: false,
-                    }));
-                }
-            }
+            // if interactive
+            //     && let Some(drag_origin) = &self.drag_origin
+            //     && label.hovered()
+            // {
+            //     info!(target: "editor.drag", "drag hover at point: p = {p}");
+            //     if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
+            //         self.do_action(Action::SetHandle(SetHandle {
+            //             handle: h.clone(),
+            //             snapshot: false,
+            //         }));
+            //     }
+            // }
 
             if is_handle && let Some(menu) = &mut self.menu {
                 // render edit menu stuff
@@ -383,8 +389,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                 menu.index.rem_euclid(menu.all_options.len() as i8) as usize;
                             for (item_index, option) in menu.all_options.iter().enumerate() {
                                 let label = option.pattern.label();
-                                let rich_text =
-                                    egui::RichText::new(label.clone());
+                                let rich_text = egui::RichText::new(label.clone());
                                 if item_index == focus_index {
                                     ui.label(
                                         rich_text
@@ -620,7 +625,7 @@ impl EditMenu {
             nucleo::Config::DEFAULT,
             Arc::new(|| {
                 // TODO: not sure what this could be useful for
-                println!("[notify]");
+                info!(target: "nucleo", "notify");
             }),
             Some(1),
             1,
@@ -675,7 +680,7 @@ impl EditMenu {
     }
 
     pub fn update(&mut self) {
-        // println!("[EditMenu.update] {}", self.query);
+        info!(target: "editor.edit", "update; self.query = {}", self.query);
         self.nucleo.pattern.reparse(
             0,
             &self.query,

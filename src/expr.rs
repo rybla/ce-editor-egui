@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use log::info;
+
 use crate::utility::{display_slice, extract_from_vec_at_index, split_vec_at_index};
 
 // -----------------------------------------------------------------------------
@@ -457,9 +459,9 @@ impl Handle {
     }
 
     pub fn drag<L: Debug + Display + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Handle> {
-        println!("[drag] self   = {self}");
-        println!("[drag] e      = {e}");
-        println!("[drag] target = {target}");
+        info!(target: "expr.drag", "self   = {self}");
+        info!(target: "expr.drag", "e      = {e}");
+        info!(target: "expr.drag", "target = {target}");
 
         match self {
             Handle::Point(source) => {
@@ -492,7 +494,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && p_ol.i.is_left_of_step(s)
                     {
-                        println!("drag from inner left to outer left");
+                        info!(target: "expr.drag", "drag from inner left to outer left");
                         let path_o = p_ol.path.clone();
                         let i_or = s.right_index();
                         let i_ol = p_ol.i;
@@ -516,7 +518,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && s.is_left_of_index(&p_or.i)
                     {
-                        println!("drag from inner right to outer right");
+                        info!(target: "expr.drag", "drag from inner right to outer right");
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
                         let i_or = p_or.i;
@@ -540,7 +542,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && p_ol.i.is_left_of_step(s)
                     {
-                        println!("drag from outer left to inner left");
+                        info!(target: "expr.drag", "drag from outer left to inner left");
                         let path_o = p_ol.path.clone();
                         let i_ol = p_ol.i;
                         let i_or = s.right_index();
@@ -564,7 +566,7 @@ impl Handle {
                         && let Some(s) = path_m.0.first()
                         && s.is_left_of_index(&p_or.i)
                     {
-                        println!("drag from outer right to inner right");
+                        info!(target: "expr.drag", "drag from outer right to inner right");
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
                         let i_or = p_or.i;
@@ -591,7 +593,7 @@ impl Handle {
 
                 match source.focus {
                     ZipperFocus::OuterLeft if target.path.is_prefix_of(&path_i) => {
-                        println!("adjust i_ol");
+                        info!(target: "expr.drag", "adjust i_ol");
                         Handle::Point(source.p_il())
                             .drag(e, target)
                             .and_then(|h| match h {
@@ -613,7 +615,7 @@ impl Handle {
                             })
                     }
                     ZipperFocus::OuterRight if target.path.is_prefix_of(&path_i) => {
-                        println!("adjust i_or");
+                        info!(target: "expr.drag", "adjust i_or");
                         Handle::Point(source.p_ir())
                             .drag(e, target)
                             .and_then(|h| match h {
@@ -637,7 +639,7 @@ impl Handle {
                             })
                     }
                     ZipperFocus::InnerLeft if source.path_o.is_prefix_of(&target.path) => {
-                        println!("adjust i_il");
+                        info!(target: "expr.drag", "adjust i_il");
                         Handle::Point(source.p_ol())
                             .drag(e, target)
                             .and_then(|h| match h {
@@ -656,7 +658,7 @@ impl Handle {
                             })
                     }
                     ZipperFocus::InnerRight if source.path_o.is_prefix_of(&target.path) => {
-                        println!("adjust i_ir");
+                        info!(target: "expr.drag", "adjust i_ir");
                         Handle::Point(source.p_or())
                             .drag(e, target)
                             .and_then(|h| match h {
@@ -1068,9 +1070,9 @@ impl<L: Debug + Display + Clone> Expr<L> {
     }
 
     pub fn insert(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
-        println!("[insert] self = {self}");
-        println!("[insert] h    = {h}");
-        println!("[insert] frag = {frag}");
+        info!(target: "expr.insert", "self = {self}");
+        info!(target: "expr.insert", "h    = {h}");
+        info!(target: "expr.insert", "frag = {frag}");
 
         match h {
             Handle::Point(p) => match frag {
@@ -1117,9 +1119,9 @@ impl<L: Debug + Display + Clone> Expr<L> {
     /// Replaces the span at the handle with the new span and returns the old
     /// span.
     pub fn replace_span(&mut self, h: &SpanHandle, new_span: Span<L>) -> (Span<L>, SpanHandle) {
-        println!("[replace_span] self     = {self}");
-        println!("[replace_span] h        = {h}");
-        println!("[replace_span] new_span = {new_span}");
+        info!(target: "expr.replace_span", "self     = {self}");
+        info!(target: "expr.replace_span", "h        = {h}");
+        info!(target: "expr.replace_span", "new_span = {new_span}");
 
         let parent = self.at_path_mut(&h.path);
         let new_span_offset = &new_span.offset();
@@ -1142,9 +1144,9 @@ impl<L: Debug + Display + Clone> Expr<L> {
         h: &ZipperHandle,
         new_zipper: Zipper<L>,
     ) -> (Zipper<L>, ZipperHandle) {
-        println!("[replace_zipper] self       = {self}");
-        println!("[replace_zipper] h          = {h}");
-        println!("[replace_zipper] new_zipper = {new_zipper}");
+        info!(target: "expr.replace_zipper", "self       = {self}");
+        info!(target: "expr.replace_zipper", "h          = {h}");
+        info!(target: "expr.replace_zipper", "new_zipper = {new_zipper}");
 
         // take the inner span
         let e_o = self.at_path_mut(&h.path_o);
@@ -1171,11 +1173,11 @@ impl<L: Debug + Display + Clone> Expr<L> {
             // replaced the span above with an empty span, we actually did that
             // in e_o's kids directly, Which means we need to just go to a point
             // here.
-            e_o.kids.replace_sub_span(&h.i_ol, &h.i_ol, new_span_m)
+            e_o.kids.replace_subspan(&h.i_ol, &h.i_ol, new_span_m)
         } else {
-            e_o.kids.replace_sub_span(&h.i_ol, &h.i_or, new_span_m)
+            e_o.kids.replace_subspan(&h.i_ol, &h.i_or, new_span_m)
         };
-        println!("[replace_zipper] old_span_m = {old_span_m}");
+        info!(target: "expr.replace_zipper", "old_span_m = {old_span_m}");
 
         let old_zipper: Zipper<L> = old_span_m.into_zipper(
             &(Point {
@@ -1184,7 +1186,7 @@ impl<L: Debug + Display + Clone> Expr<L> {
             })
             .sub_offset_at_top(&h.i_il.to_offset()),
         );
-        println!("[replace_zipper] old_zipper = {old_zipper}");
+        info!(target: "expr.replace_zipper", "old_zipper = {old_zipper}");
 
         (
             old_zipper,
@@ -1201,8 +1203,8 @@ impl<L: Debug + Display + Clone> Expr<L> {
     }
 
     pub fn cut(&mut self, h: &Handle) -> Option<(Fragment<L>, Handle)> {
-        println!("[cut] self = {self}");
-        println!("[cut] h    = {h}");
+        info!(target: "expr.cut", "self = {self}");
+        info!(target: "expr.cut", "h    = {h}");
         match h {
             Handle::Point(_) => None,
             Handle::Span(h) => {
@@ -1409,26 +1411,26 @@ impl<L: Display> Display for Span<L> {
 }
 
 impl<L: Debug + Display + Clone> Span<L> {
-    pub fn replace_sub_span(&mut self, i_l: &Index, i_r: &Index, new_span: Span<L>) -> Self {
-        println!("[replace_span_sub] self     = {self}");
-        println!("[replace_span_sub] i_l      = {i_l}");
-        println!("[replace_span_sub] i_r      = {i_r}");
-        println!("[replace_span_sub] new_span = {new_span}");
+    pub fn replace_subspan(&mut self, i_l: &Index, i_r: &Index, new_span: Span<L>) -> Self {
+        info!(target: "expr.replace_subspan", "self     = {self}");
+        info!(target: "expr.replace_subspan", "i_l      = {i_l}");
+        info!(target: "expr.replace_subspan", "i_r      = {i_r}");
+        info!(target: "expr.replace_subspan", "new_span = {new_span}");
         Span(self.0.splice(i_l.0..i_r.0, new_span.0).collect())
     }
 
     pub fn into_zipper(self, p: &Point) -> Zipper<L> {
-        println!("[into_zipper] self = {self}");
-        println!("[into_zipper] p    = {p}");
+        info!(target: "expr.into_zipper", "self = {self}");
+        info!(target: "expr.into_zipper", "p    = {p}");
 
         if let Some(s) = p.path.0.first() {
             self.assert_step_in_bounds(s);
             let (span_ol, e, span_or) = self.extract_at_step(s);
-            println!("[into_zipper] span_ol = {span_ol}");
-            println!("[into_zipper] e       = {e}");
-            println!("[into_zipper] span_or = {span_or}");
+            info!(target: "expr.into_zipper", "span_ol = {span_ol}");
+            info!(target: "expr.into_zipper", "e       = {e}");
+            info!(target: "expr.into_zipper", "span_or = {span_or}");
             let middle = e.into_context_from_point(&Point::new(Path(p.path.0[1..].to_vec()), p.i));
-            println!("[into_zipper] middle = {middle}");
+            info!(target: "expr.into_zipper", "middle = {middle}");
             Zipper {
                 span_ol: span_ol,
                 span_or: span_or,
