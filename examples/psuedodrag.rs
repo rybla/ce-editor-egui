@@ -47,6 +47,7 @@ impl eframe::App for MyApp {
         // First, handle the end of a drag operation.
         // We detect this when the primary mouse button is released.
         let is_pointer_released = ctx.input(|i| i.pointer.primary_released());
+        let pointer_latest_pos = ctx.pointer_latest_pos();
         let is_dragging = self.drag_start_index.is_some();
 
         if is_dragging && is_pointer_released {
@@ -88,8 +89,6 @@ impl eframe::App for MyApp {
             }
             ui.add_space(10.0);
 
-            let mut label_rects: Vec<(Rect, usize)> = vec![];
-
             // Create a vertical layout for our labels.
             ui.vertical(|ui| {
                 // Iterate over each item to create a label for it.
@@ -111,7 +110,12 @@ impl eframe::App for MyApp {
                             .selectable(false),
                     );
 
-                    label_rects.push((response.rect, i));
+                    if self.drag_start_index.is_some()
+                        && let Some(p) = pointer_latest_pos
+                        && response.rect.contains(p)
+                    {
+                        self.hovered_index = Some(i);
+                    }
 
                     // --- Post-Render State Update ---
                     // After adding the widget, we check its response to update our state.
@@ -124,16 +128,16 @@ impl eframe::App for MyApp {
                 }
             });
 
-            if self.drag_start_index.is_some() {
-                self.hovered_index = None;
-                if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
-                    for (rect, i) in label_rects.iter() {
-                        if rect.contains(pointer_pos) {
-                            self.hovered_index = Some(*i);
-                        }
-                    }
-                }
-            }
+            // if self.drag_start_index.is_some() {
+            //     self.hovered_index = None;
+            //     if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
+            //         for (rect, i) in label_rects.iter() {
+            //             if rect.contains(pointer_pos) {
+            //                 self.hovered_index = Some(*i);
+            //             }
+            //         }
+            //     }
+            // }
         });
     }
 }
