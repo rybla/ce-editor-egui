@@ -88,7 +88,7 @@ impl Fol {}
 
 impl EditorSpec for Fol {
     fn name() -> String {
-        format!("ce")
+        "fol".to_owned()
     }
 
     fn initial_state() -> CoreEditorState {
@@ -143,9 +143,9 @@ impl EditorSpec for Fol {
         path: &Path,
         _expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
-        label: &String,
+        label: &str,
     ) {
-        let color_scheme = editor::EditorState::<Fol>::color_scheme(ui);
+        let color_scheme = editor::EditorState::<Self>::color_scheme(ui);
 
         let selected = state.core.handle.contains_path(path);
         let fill_color = if selected {
@@ -161,12 +161,12 @@ impl EditorSpec for Fol {
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
             ui.add(
-                egui::Label::new(egui::RichText::new(format!("{}", label)).color(text_color))
+                egui::Label::new(egui::RichText::new(label.to_owned()).color(text_color))
                     .selectable(false),
             );
         });
 
-        for (step, kid) in render_steps_and_kids.iter() {
+        for (step, kid) in &render_steps_and_kids {
             step.render(ctx, ui, state);
             if let Some(kid) = kid {
                 kid.render(ctx, ui, state);

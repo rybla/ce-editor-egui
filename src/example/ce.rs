@@ -9,7 +9,7 @@ impl Ce {}
 
 impl EditorSpec for Ce {
     fn name() -> String {
-        format!("ce")
+        "ce".to_owned()
     }
 
     fn initial_state() -> CoreEditorState {
@@ -28,8 +28,8 @@ impl EditorSpec for Ce {
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
         vec![
             EditMenuOption::new(
-                EditMenuPattern::Dynamic(format!("<name> (constructor)"), |query| {
-                    Some(format!("{} (constructor)", query))
+                EditMenuPattern::Dynamic("<name> (constructor)".to_owned(), |query| {
+                    Some(format!("{query} (constructor)"))
                 }),
                 |query, state| {
                     println!("insert_node: {query}");
@@ -57,7 +57,7 @@ impl EditorSpec for Ce {
                     Some(state)
                 },
             ),
-            EditMenuOption::new(EditMenuPattern::Static(format!("copy")), |_query, state| {
+            EditMenuOption::new(EditMenuPattern::Static("copy".to_owned()), |_query, state| {
                 println!("copy");
                 state
                     .expr
@@ -105,9 +105,9 @@ impl EditorSpec for Ce {
         path: &Path,
         _expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
-        label: &String,
+        label: &str,
     ) {
-        let color_scheme = editor::EditorState::<Ce>::color_scheme(ui);
+        let color_scheme = editor::EditorState::<Self>::color_scheme(ui);
 
         let selected = state.core.handle.contains_path(path);
         let fill_color = if selected {
@@ -123,12 +123,12 @@ impl EditorSpec for Ce {
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
             ui.add(
-                egui::Label::new(egui::RichText::new(format!("{}", label)).color(text_color))
+                egui::Label::new(egui::RichText::new(label.to_owned()).color(text_color))
                     .selectable(false),
             );
         });
 
-        for (step, kid) in render_steps_and_kids.iter() {
+        for (step, kid) in &render_steps_and_kids {
             step.render(ctx, ui, state);
             if let Some(kid) = kid {
                 kid.render(ctx, ui, state);

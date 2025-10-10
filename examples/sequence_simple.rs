@@ -22,24 +22,24 @@ impl Default for MyApp {
         Self {
             // Start with some default elements to demonstrate the layout.
             elements: vec![
-                SequenceElement::Label("Hello".to_string()),
-                SequenceElement::Label("World!".to_string()),
+                SequenceElement::Label("Hello".to_owned()),
+                SequenceElement::Label("World!".to_owned()),
                 SequenceElement::LineBreak,
-                SequenceElement::Label("This".to_string()),
-                SequenceElement::Label("is".to_string()),
-                SequenceElement::Label("a".to_string()),
-                SequenceElement::Label("wrapping".to_string()),
-                SequenceElement::Label("layout.".to_string()),
-                SequenceElement::Label("Labels".to_string()),
-                SequenceElement::Label("with".to_string()),
-                SequenceElement::Label("different".to_string()),
-                SequenceElement::Label("lengths".to_string()),
-                SequenceElement::Label("will".to_string()),
-                SequenceElement::Label("wrap".to_string()),
-                SequenceElement::Label("to".to_string()),
-                SequenceElement::Label("the".to_string()),
-                SequenceElement::Label("next".to_string()),
-                SequenceElement::Label("line.".to_string()),
+                SequenceElement::Label("This".to_owned()),
+                SequenceElement::Label("is".to_owned()),
+                SequenceElement::Label("a".to_owned()),
+                SequenceElement::Label("wrapping".to_owned()),
+                SequenceElement::Label("layout.".to_owned()),
+                SequenceElement::Label("Labels".to_owned()),
+                SequenceElement::Label("with".to_owned()),
+                SequenceElement::Label("different".to_owned()),
+                SequenceElement::Label("lengths".to_owned()),
+                SequenceElement::Label("will".to_owned()),
+                SequenceElement::Label("wrap".to_owned()),
+                SequenceElement::Label("to".to_owned()),
+                SequenceElement::Label("the".to_owned()),
+                SequenceElement::Label("next".to_owned()),
+                SequenceElement::Label("line.".to_owned()),
             ],
         }
     }
@@ -99,9 +99,7 @@ impl eframe::App for MyApp {
 }
 
 fn main() -> Result<(), eframe::Error> {
-    let options = eframe::NativeOptions {
-        ..Default::default()
-    };
+    let options = Default::default();
     eframe::run_native(
         "Wrapping Layout Demo",
         options,

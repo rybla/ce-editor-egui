@@ -47,7 +47,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExprLabel {
     pub constructor: Constructor,
     pub diagnostic: Vec<Diagnostic>,
@@ -79,8 +79,8 @@ pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub drag_origin: Option<Handle>,
 }
 
-impl<ES: EditorSpec + ?Sized> EditorState<ES> {
-    pub fn default() -> Self {
+impl<ES: EditorSpec + ?Sized> Default for EditorState<ES> {
+    fn default() -> Self {
         Self {
             spec: PhantomData,
             core: ES::initial_state(),
@@ -90,7 +90,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             drag_origin: Default::default(),
         }
     }
+}
 
+impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     pub fn escape(&mut self) {
         if self.menu.is_some() {
             self.menu = None;
@@ -99,7 +101,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.core
                 .handle
                 .escape()
-                .unwrap_or_else(|e| info!(target: "editor.move", "escape failed: {e:?}"))
+                .unwrap_or_else(|e| info!(target: "editor.move", "escape failed: {e:?}"));
         }
     }
 
@@ -201,10 +203,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         else if ctx.input(|i| i.modifiers.shift)
             && let Some(dir) = match_input_move_dir(ctx)
         {
-            let mut target: Point = self.core.handle.focus_point();
+            let mut target = self.core.handle.focus_point();
             loop {
                 let move_status = target.move_dir(&self.core.expr, &dir);
-                if !move_status.is_ok() {
+                if move_status.is_err() {
                     info!(target: "editor.move", "select bailed since a move failed");
                     break;
                 }
@@ -225,7 +227,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let origin = self.core.handle.clone();
             loop {
                 let move_status = self.core.handle.move_dir(&self.core.expr, &dir);
-                if !move_status.is_ok() {
+                if move_status.is_err() {
                     info!(target: "editor.move", "move bailed since a move failed");
                     break;
                 }
@@ -251,7 +253,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
 
             if let Err(err) = result {
-                info!(target: "editor.move", "Failed to move up: {err:?}")
+                info!(target: "editor.move", "Failed to move up: {err:?}");
             }
         }
     }
@@ -318,7 +320,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
             let label = ui.add(
-                egui::Label::new(egui::RichText::new(format!("•")).color(text_color))
+                egui::Label::new(egui::RichText::new("•".to_owned()).color(text_color))
                     .selectable(false)
                     // .sense(Sense::click().union(Sense::hover())),
                     .sense(Sense::click_and_drag()),
@@ -386,7 +388,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     if menu.query.is_empty() {
                         if menu.all_options.is_empty() {
                             let rich_text =
-                                egui::RichText::new(format!("no edit options available here!"));
+                                egui::RichText::new("no edit options available here!".to_owned());
                             ui.label(
                                 rich_text
                                     .color(Self::color_scheme(ui).active_text)
@@ -449,7 +451,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                 .chain(matched_static_items.iter());
                             for (item_index, (label, _item)) in matched_items.enumerate() {
                                 let rich_text =
-                                    egui::RichText::new(format!("[{item_index}] {}", label));
+                                    egui::RichText::new(format!("[{item_index}] {label}"));
                                 if item_index == focus_index {
                                     ui.label(
                                         rich_text
@@ -483,7 +485,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         path: &Path,
         expr: &EditorExpr,
     ) {
-        self.render_expr_contents(ctx, ui, interactive, path, expr)
+        self.render_expr_contents(ctx, ui, interactive, path, expr);
     }
 
     pub fn render_expr_contents(
@@ -530,7 +532,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 literal,
             ),
             Constructor::Root => {
-                for (step, kid) in render_steps_and_kids.iter() {
+                for (step, kid) in &render_steps_and_kids {
                     step.render(ctx, ui, self);
                     if let Some(kid) = kid {
                         kid.render(ctx, ui, self);
@@ -620,7 +622,7 @@ pub struct CoreEditorState {
 
 impl CoreEditorState {
     pub fn new(expr: EditorExpr, handle: Handle) -> Self {
-        CoreEditorState {
+        Self {
             expr,
             handle,
             clipboard: None,
@@ -647,7 +649,7 @@ impl EditMenu {
             1,
         );
         let injector = nucleo.injector();
-        for option in all_options.iter() {
+        for option in &all_options {
             match option.pattern {
                 EditMenuPattern::Static(_) => {
                     injector.push(option.clone(), |x, cols| cols[0] = x.pattern.label().into());
@@ -731,15 +733,15 @@ pub enum EditMenuPattern {
 impl EditMenuPattern {
     pub fn label(&self) -> String {
         match self {
-            EditMenuPattern::Static(s) => s.clone(),
-            EditMenuPattern::Dynamic(s, _f) => s.clone(), // TODO: instead of just this tring, have dynamic patterns also have a static laberl that's shown in this situation
+            Self::Static(s) => s.clone(),
+            Self::Dynamic(s, _f) => s.clone(), // TODO: instead of just this tring, have dynamic patterns also have a static laberl that's shown in this situation
         }
     }
 }
 
 pub type Edit = fn(&String, CoreEditorState) -> Option<CoreEditorState>;
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Constructor {
     Literal(String),
     Root,
@@ -749,14 +751,14 @@ pub enum Constructor {
 impl Display for Constructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Constructor::Literal(s) => write!(f, "{}", s),
-            Constructor::Newline => write!(f, "<newline>"),
-            Constructor::Root => write!(f, "<root>"),
+            Self::Literal(s) => write!(f, "{s}"),
+            Self::Newline => write!(f, "<newline>"),
+            Self::Root => write!(f, "<root>"),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Diagnostic(pub String);
 
 impl Display for Diagnostic {
@@ -783,7 +785,7 @@ pub trait EditorSpec: 'static {
         path: &Path,
         expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
-        literal: &String,
+        literal: &str,
     );
 }
 
@@ -846,7 +848,7 @@ impl<'a> RenderExpr<'a> {
         ui: &mut egui::Ui,
         state: &mut EditorState<ES>,
     ) {
-        EditorState::render_expr(state, ctx, ui, true, &self.path, self.expr)
+        EditorState::render_expr(state, ctx, ui, true, &self.path, self.expr);
     }
 }
 

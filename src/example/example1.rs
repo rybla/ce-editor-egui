@@ -19,7 +19,7 @@ impl Example1 {}
 
 impl EditorSpec for Example1 {
     fn name() -> String {
-        format!("example1")
+        "example1".to_owned()
     }
 
     fn initial_state() -> CoreEditorState {
@@ -29,7 +29,7 @@ impl EditorSpec for Example1 {
             i += 1;
             ExprLabel {
                 constructor: Constructor::Literal(format!(" label_{i} ")),
-                diagnostic: vec![Diagnostic(format!(" diagnostic "))],
+                diagnostic: vec![Diagnostic(" diagnostic ".to_owned())],
             }
         };
 
@@ -42,14 +42,14 @@ impl EditorSpec for Example1 {
                 format!("a"),
                 Fragment::Span(Span(vec![Expr {
                     label: ExprLabel {
-                        constructor: Constructor::Literal(format!("A")),
+                        constructor: Constructor::Literal("A".to_owned()),
                         diagnostic: Default::default(),
                     },
                     kids: Span(vec![]),
                 }]))
             ),
             EditMenuOption {
-                pattern: EditMenuPattern::Static(format!("copy")),
+                pattern: EditMenuPattern::Static("copy".to_owned()),
                 edit: |_query, state| {
                     println!("[edit] copy");
                     state.expr.at_handle(&state.handle).map(|frag| {
@@ -67,20 +67,20 @@ impl EditorSpec for Example1 {
             // TODO: cut
             // TODO: delete
             EditMenuOption {
-                pattern: EditMenuPattern::Static(format!("id")),
+                pattern: EditMenuPattern::Static("id".to_owned()),
                 edit: |_query, state| Some(state.clone()),
             },
         ]
     }
 
     fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
-        vec![Diagnostic(format!("this is an example diagnostic"))]
+        vec![Diagnostic("this is an example diagnostic".to_owned())]
     }
 
     fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel>) -> bool {
         match handle {
-            Handle::Point(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
-            Handle::Span(handle) => expr.at_path(&handle.path).kids.0.len() > 0,
+            Handle::Point(handle) => !expr.at_path(&handle.path).kids.0.is_empty(),
+            Handle::Span(handle) => !expr.at_path(&handle.path).kids.0.is_empty(),
             Handle::Zipper(handle) => {
                 !handle.path_m.0.is_empty() && !expr.at_path(&handle.path_i()).kids.0.is_empty()
             }
@@ -94,7 +94,7 @@ impl EditorSpec for Example1 {
         _path: &Path,
         _expr: &EditorExpr,
         _render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
-        _literal: &String,
+        _literal: &str,
     ) {
         todo!()
     }

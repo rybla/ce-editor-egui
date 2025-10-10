@@ -10,7 +10,7 @@ use crate::utility::{display_slice, extract_from_vec_at_index, split_vec_at_inde
 
 /// An index between kids, or left the first kid, or right of the last kid of an
 /// [Expr].
-#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct Index(pub usize);
 
 impl Display for Index {
@@ -20,7 +20,7 @@ impl Display for Index {
 }
 
 impl Index {
-    pub fn is_left_of_index(&self, other: &Index) -> bool {
+    pub fn is_left_of_index(&self, other: &Self) -> bool {
         self.0 < other.0
     }
 
@@ -28,12 +28,12 @@ impl Index {
         self.0 <= s.0
     }
 
-    pub fn sub_offset(&self, offset: &Offset) -> Index {
-        Index(self.0 - offset.0)
+    pub fn sub_offset(&self, offset: &Offset) -> Self {
+        Self(self.0 - offset.0)
     }
 
-    pub fn add_offset(&self, offset: &Offset) -> Index {
-        Index(self.0 + offset.0)
+    pub fn add_offset(&self, offset: &Offset) -> Self {
+        Self(self.0 + offset.0)
     }
 
     pub fn is_right_of_step(&self, s: &Step) -> bool {
@@ -58,7 +58,7 @@ impl Index {
 // -----------------------------------------------------------------------------
 
 /// A step from an [Expr] to one of its kids.
-#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct Step(pub usize);
 
 impl Display for Step {
@@ -68,11 +68,11 @@ impl Display for Step {
 }
 
 impl Step {
-    pub fn left_step(&self) -> Step {
+    pub fn left_step(&self) -> Self {
         self.sub_offset(&Offset(1))
     }
 
-    pub fn right_step(&self) -> Step {
+    pub fn right_step(&self) -> Self {
         self.add_offset(&Offset(1))
     }
 
@@ -88,12 +88,12 @@ impl Step {
         self.0 < i.0
     }
 
-    pub fn sub_offset(&self, offset: &Offset) -> Step {
-        Step(self.0 - offset.0)
+    pub fn sub_offset(&self, offset: &Offset) -> Self {
+        Self(self.0 - offset.0)
     }
 
-    pub fn add_offset(&self, offset: &Offset) -> Step {
-        Step(self.0 + offset.0)
+    pub fn add_offset(&self, offset: &Offset) -> Self {
+        Self(self.0 + offset.0)
     }
 }
 
@@ -102,7 +102,7 @@ impl Step {
 // -----------------------------------------------------------------------------
 
 /// A path from the top [Expr] to an [Expr].
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct Path(pub Vec<Step>);
 
 #[macro_export]
@@ -126,7 +126,7 @@ impl Path {
         }
         let s0 = path.remove(0);
         path.insert(0, s0.add_offset(offset));
-        Some(Path(path))
+        Some(Self(path))
     }
 
     pub fn sub_offset_to_first_step(self, offset: &Offset) -> Option<Self> {
@@ -136,18 +136,19 @@ impl Path {
         }
         let s0 = path.remove(0);
         path.insert(0, s0.sub_offset(offset));
-        Some(Path(path))
+        Some(Self(path))
     }
 
     pub fn empty() -> Self {
-        Path(vec![])
+        Self(vec![])
     }
 
-    /// If `self` is a sibling of an ancestor of `other`, then is [Option::Some] of:
+    /// If `self` is a sibling of an ancestor of `other`, then is [`Option::Some`] of:
     ///   - the [Step] into the parent of `self` that goes down towards `other`
     ///   - the path `path` such that `self.path.append(path) = other.path`
-    /// Otherwise is [Option::None].
-    pub fn is_sibling_of_ancestor_of(&self, other: &Self) -> Option<(Step, Path)> {
+    ///
+    /// Otherwise is [`Option::None`].
+    pub fn is_sibling_of_ancestor_of(&self, other: &Self) -> Option<(Step, Self)> {
         for (i, s0) in self.0.iter().enumerate() {
             let s1 = other.0.get(i)?;
             if !(s0 == s1) {
@@ -156,21 +157,21 @@ impl Path {
         }
         let mut other_suffix = other.0[self.0.len()..].to_vec();
         let s = other_suffix.remove(0);
-        Some((s, Path(other_suffix)))
+        Some((s, Self(other_suffix)))
     }
 
-    pub fn append(self, other: Self) -> Path {
+    pub fn append(self, other: Self) -> Self {
         let mut path0 = self.0;
         let mut path1 = other.0;
         path0.append(&mut path1);
-        Path(path0)
+        Self(path0)
     }
 
     /// If `self` is a prefix of `other`, then return the path `suffix` such
     /// that `self.append(suffix) == other`
     pub fn diff(&self, other: &Self) -> Option<Self> {
         let suffix = other.0.strip_prefix(self.0.as_slice())?;
-        Some(Path(suffix.to_vec()))
+        Some(Self(suffix.to_vec()))
     }
 
     pub fn is_prefix_of(&self, other: &Self) -> bool {
@@ -183,7 +184,7 @@ impl Path {
 // -----------------------------------------------------------------------------
 
 /// A point between two [Expr]s.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct Point {
     pub path: Path,
     pub i: Index,
@@ -215,27 +216,27 @@ impl Default for Point {
 }
 
 impl Point {
-    pub fn add_offset_at_top(self, offset: &Offset) -> Point {
+    pub fn add_offset_at_top(self, offset: &Offset) -> Self {
         let mut p = self;
         if let Some(s0) = p.path.0.get_mut(0) {
-            *s0 = s0.add_offset(offset)
+            *s0 = s0.add_offset(offset);
         } else {
-            p.i = p.i.add_offset(offset)
+            p.i = p.i.add_offset(offset);
         }
         p
     }
 
-    pub fn sub_offset_at_top(self, offset: &Offset) -> Point {
+    pub fn sub_offset_at_top(self, offset: &Offset) -> Self {
         let mut p = self;
         if let Some(s0) = p.path.0.get_mut(0) {
-            *s0 = s0.sub_offset(offset)
+            *s0 = s0.sub_offset(offset);
         } else {
-            p.i = p.i.sub_offset(offset)
+            p.i = p.i.sub_offset(offset);
         }
         p
     }
 
-    pub fn is_left_adjacent_to_point(&self, other: &Point) -> bool {
+    pub fn is_left_adjacent_to_point(&self, other: &Self) -> bool {
         self.path == other.path && self.i.is_left_of_index(&other.i)
     }
 
@@ -254,13 +255,11 @@ impl Point {
                     let e = expr.at_path(&self.path);
                     self.i = e.kids.rightmost_index();
                     Ok(())
+                } else if let Some(s) = self.path.0.pop() {
+                    self.i = s.left_index();
+                    Ok(())
                 } else {
-                    if let Some(s) = self.path.0.pop() {
-                        self.i = s.left_index();
-                        Ok(())
-                    } else {
-                        Err(MoveError::Boundary)
-                    }
+                    Err(MoveError::Boundary)
                 }
             }
             MoveDir::Next => {
@@ -269,13 +268,11 @@ impl Point {
                     let e = expr.at_path(&self.path);
                     self.i = e.kids.leftmost_index();
                     Ok(())
+                } else if let Some(s) = self.path.0.pop() {
+                    self.i = s.right_index();
+                    Ok(())
                 } else {
-                    if let Some(s) = self.path.0.pop() {
-                        self.i = s.right_index();
-                        Ok(())
-                    } else {
-                        Err(MoveError::Boundary)
-                    }
+                    Err(MoveError::Boundary)
                 }
             }
         }
@@ -322,40 +319,40 @@ pub enum Handle {
 impl Display for Handle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Handle::Point(p) => std::fmt::Display::fmt(&p, f),
-            Handle::Span(h) => std::fmt::Display::fmt(&h, f),
-            Handle::Zipper(h) => std::fmt::Display::fmt(&h, f),
+            Self::Point(p) => std::fmt::Display::fmt(&p, f),
+            Self::Span(h) => std::fmt::Display::fmt(&h, f),
+            Self::Zipper(h) => std::fmt::Display::fmt(&h, f),
         }
     }
 }
 
 impl Default for Handle {
     fn default() -> Self {
-        Handle::Point(Default::default())
+        Self::Point(Default::default())
     }
 }
 
 impl Handle {
-    /// When a [SpanHandle] is empty (the two endpoints are the same),
+    /// When a [`SpanHandle`] is empty (the two endpoints are the same),
     /// then collapse it to a [Point].
     ///
     /// When the middle path of the zipper handle is empty, then collapse
-    /// it to a [SpanHandle].
-    pub fn norm(self) -> Handle {
+    /// it to a [`SpanHandle`].
+    pub fn norm(self) -> Self {
         match &self {
-            Handle::Span(h) if h.i_l == h.i_r => Handle::Point(h.focus_point()),
+            Self::Span(h) if h.i_l == h.i_r => Self::Point(h.focus_point()),
             // NOTE: the choice to return h_o rather than h_i here should be
             // arbitrary, but perhaps there might be edge cases where it matters
             // which one, even when the middle [Path] is empty? Nothing really
             // should depend on using a "flat" ZipperHandle, right?
-            Handle::Zipper(h) if h.path_m.0.is_empty() => Handle::Span(h.handle_o()),
+            Self::Zipper(h) if h.path_m.0.is_empty() => Self::Span(h.handle_o()),
             _ => self,
         }
     }
 
     pub fn move_up<L: Debug + Display + Clone>(&mut self, expr: &Expr<L>) -> Result<(), MoveError> {
         match self {
-            Handle::Point(p) => {
+            Self::Point(p) => {
                 let e = expr.at_path(&p.path);
                 let path = Path(p.path.0.drain(..).collect::<Vec<_>>());
                 let mut h = SpanHandle {
@@ -368,23 +365,23 @@ impl Handle {
                 if h.i_l == e.kids.leftmost_index() && h.i_r == e.kids.rightmost_index() {
                     let mut path = Path(h.path.0.drain(..).collect::<Vec<_>>());
                     let s = path.0.pop().ok_or(MoveError::Boundary)?;
-                    *self = Handle::Span(SpanHandle {
+                    *self = Self::Span(SpanHandle {
                         path,
                         i_l: s.left_index(),
                         i_r: s.right_index(),
                         focus: SpanFocus::Right,
                     });
                 } else {
-                    *self = Handle::Span(h);
+                    *self = Self::Span(h);
                 }
                 Ok(())
             }
-            Handle::Span(h) => {
+            Self::Span(h) => {
                 let e = expr.at_path(&h.path);
                 if h.i_l == e.kids.leftmost_index() && h.i_r == e.kids.rightmost_index() {
                     let mut path = Path(h.path.0.drain(..).collect::<Vec<_>>());
                     let s = path.0.pop().ok_or(MoveError::Boundary)?;
-                    *self = Handle::Span(SpanHandle {
+                    *self = Self::Span(SpanHandle {
                         path,
                         i_l: s.left_index(),
                         i_r: s.right_index(),
@@ -397,7 +394,7 @@ impl Handle {
                     Ok(())
                 }
             }
-            Handle::Zipper(_) => Err(MoveError::Undefined),
+            Self::Zipper(_) => Err(MoveError::Undefined),
         }
     }
 
@@ -407,22 +404,22 @@ impl Handle {
         dir: &MoveDir,
     ) -> Result<(), MoveError> {
         match self {
-            Handle::Point(point) => {
+            Self::Point(point) => {
                 point.move_dir(expr, dir)?;
                 Ok(())
             }
-            Handle::Span(h) => match dir {
+            Self::Span(h) => match dir {
                 MoveDir::Prev => {
-                    *self = Handle::Point(h.p_l());
+                    *self = Self::Point(h.p_l());
                     Ok(())
                 }
                 MoveDir::Next => {
-                    *self = Handle::Point(h.p_r());
+                    *self = Self::Point(h.p_r());
                     Ok(())
                 }
             },
-            Handle::Zipper(h) => {
-                *self = Handle::Point(h.focus_point());
+            Self::Zipper(h) => {
+                *self = Self::Point(h.focus_point());
                 Ok(())
             }
         }
@@ -430,53 +427,53 @@ impl Handle {
 
     pub fn focus_point(&self) -> Point {
         match self {
-            Handle::Point(point) => point.clone(),
-            Handle::Span(handle) => handle.focus_point(),
-            Handle::Zipper(handle) => handle.focus_point(),
+            Self::Point(point) => point.clone(),
+            Self::Span(handle) => handle.focus_point(),
+            Self::Zipper(handle) => handle.focus_point(),
         }
     }
 
     pub fn rotate_focus_dir(&mut self, dir: &MoveDir) {
         match self {
-            Handle::Point(_handle) => (),
-            Handle::Span(handle) => handle.focus = handle.focus.rotate_dir(dir),
-            Handle::Zipper(handle) => handle.focus = handle.focus.rotate_dir(dir),
+            Self::Point(_handle) => (),
+            Self::Span(handle) => handle.focus = handle.focus.rotate_dir(dir),
+            Self::Zipper(handle) => handle.focus = handle.focus.rotate_dir(dir),
         }
     }
 
     pub fn escape(&mut self) -> Result<(), MoveError> {
         match self {
-            Handle::Point(_) => Err(MoveError::Undefined),
-            Handle::Span(h) => {
-                *self = Handle::Point(h.focus_point());
+            Self::Point(_) => Err(MoveError::Undefined),
+            Self::Span(h) => {
+                *self = Self::Point(h.focus_point());
                 Ok(())
             }
-            Handle::Zipper(h) => {
-                *self = Handle::Point(h.focus_point());
+            Self::Zipper(h) => {
+                *self = Self::Point(h.focus_point());
                 Ok(())
             }
         }
     }
 
-    pub fn drag<L: Debug + Display + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Handle> {
+    pub fn drag<L: Debug + Display + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Self> {
         info!(target: "expr.drag", "self   = {self}");
         info!(target: "expr.drag", "e      = {e}");
         info!(target: "expr.drag", "target = {target}");
 
         match self {
-            Handle::Point(source) => {
+            Self::Point(source) => {
                 if target.path == source.path {
                     if target.i.is_left_of_index(&source.i) {
-                        Some(Handle::Span(SpanHandle {
+                        Some(Self::Span(SpanHandle {
                             path: source.path,
                             i_l: target.i,
                             i_r: source.i,
                             focus: SpanFocus::Left,
                         }))
                     } else if target.i == source.i {
-                        Some(Handle::Point(source))
+                        Some(Self::Point(source))
                     } else if source.i.is_left_of_index(&target.i) {
-                        Some(Handle::Span(SpanHandle {
+                        Some(Self::Span(SpanHandle {
                             path: source.path,
                             i_l: source.i,
                             i_r: target.i,
@@ -487,7 +484,7 @@ impl Handle {
                     }
                 } else {
                     // drag from inner left to outer left
-                    #[allow(irrefutable_let_patterns)]
+                    #[expect(irrefutable_let_patterns)]
                     if let p_il = &source
                         && let p_ol = &target
                         && let Some(path_m) = p_ol.path.diff(&p_il.path)
@@ -501,7 +498,7 @@ impl Handle {
                         let i_il = p_il.i;
                         let i_ir = e.at_path(&p_il.path).kids.rightmost_index();
                         let focus = ZipperFocus::OuterLeft;
-                        Some(Handle::Zipper(ZipperHandle {
+                        Some(Self::Zipper(ZipperHandle {
                             path_o,
                             i_ol,
                             i_or,
@@ -525,7 +522,7 @@ impl Handle {
                         let i_il = e.at_path(&p_ir.path).kids.leftmost_index();
                         let i_ir = p_ir.i;
                         let focus = ZipperFocus::OuterRight;
-                        Some(Handle::Zipper(ZipperHandle {
+                        Some(Self::Zipper(ZipperHandle {
                             path_o,
                             i_ol,
                             i_or,
@@ -549,7 +546,7 @@ impl Handle {
                         let i_il = p_il.i;
                         let i_ir = e.at_path(&p_il.path).kids.rightmost_index();
                         let focus = ZipperFocus::InnerLeft;
-                        Some(Handle::Zipper(ZipperHandle {
+                        Some(Self::Zipper(ZipperHandle {
                             path_o,
                             i_ol,
                             i_or,
@@ -573,7 +570,7 @@ impl Handle {
                         let i_il = e.at_path(&p_ir.path).kids.leftmost_index();
                         let i_ir = p_ir.i;
                         let focus = ZipperFocus::InnerRight;
-                        Some(Handle::Zipper(ZipperHandle {
+                        Some(Self::Zipper(ZipperHandle {
                             path_o,
                             i_ol,
                             i_or,
@@ -587,14 +584,14 @@ impl Handle {
                     }
                 }
             }
-            Handle::Span(handle) => Handle::Point(handle.nonfocus_point()).drag(e, target),
-            Handle::Zipper(source) => {
-                let path_i: Path = source.path_i();
+            Self::Span(handle) => Self::Point(handle.nonfocus_point()).drag(e, target),
+            Self::Zipper(source) => {
+                let path_i = source.path_i();
 
                 match source.focus {
                     ZipperFocus::OuterLeft if target.path.is_prefix_of(&path_i) => {
                         info!(target: "expr.drag", "adjust i_ol");
-                        Handle::Point(source.p_il())
+                        Self::Point(source.p_il())
                             .drag(e, target)
                             .and_then(|h| match h {
                                 Handle::Zipper(h) => {
@@ -1432,8 +1429,8 @@ impl<L: Debug + Display + Clone> Span<L> {
             let middle = e.into_context_from_point(&Point::new(Path(p.path.0[1..].to_vec()), p.i));
             info!(target: "expr.into_zipper", "middle = {middle}");
             Zipper {
-                span_ol: span_ol,
-                span_or: span_or,
+                span_ol,
+                span_or,
                 middle,
             }
         } else {
@@ -1706,8 +1703,6 @@ pub enum MoveDir {
     Prev,
     Next,
 }
-
-
 
 // -----------------------------------------------------------------------------
 // Tests
