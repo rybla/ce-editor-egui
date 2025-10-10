@@ -88,8 +88,9 @@ impl EditorSpec for Example1 {
     }
 
     fn assemble_rendered_expr(
-        _state: &mut EditorState<Self>,
+        _ctx: &egui::Context,
         _ui: &mut egui::Ui,
+        _state: &mut EditorState<Self>,
         _path: &Path,
         _expr: &EditorExpr,
         _render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,

@@ -1786,9 +1786,6 @@ mod tests {
 
     #[test]
     pub fn cut_zipper_ex2() {
-        // [cut] self = ex![root, [ex![a, [ex![b, [ex![c, []]]], ex![b, []], ex![c, []]]], ex![this is a test to see how long a constructor i can make, [ex![pretty long, it seems!, []]]]]]
-        // [cut] h    = zipper_handle![[], 1, 2, [1], 0, 1, InnerLeft]
-        // todo!("use comments above to impl test")
         let mut e = ex![
             "root",
             [
@@ -1808,5 +1805,6 @@ mod tests {
                 println!("h = {h}");
             }
         }
+        // TODO: specify correct output
     }
 }

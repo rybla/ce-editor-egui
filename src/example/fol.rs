@@ -137,8 +137,9 @@ impl EditorSpec for Fol {
 
     // TODO, this is currently just copied from ce
     fn assemble_rendered_expr(
-        state: &mut EditorState<Self>,
+        ctx: &egui::Context,
         ui: &mut egui::Ui,
+        state: &mut EditorState<Self>,
         path: &Path,
         _expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
@@ -166,9 +167,9 @@ impl EditorSpec for Fol {
         });
 
         for (step, kid) in render_steps_and_kids.iter() {
-            step.render(state, ui);
+            step.render(ctx, ui, state);
             if let Some(kid) = kid {
-                kid.render(state, ui);
+                kid.render(ctx, ui, state);
             }
         }
 

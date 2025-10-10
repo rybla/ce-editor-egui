@@ -110,11 +110,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             menu.nucleo.tick(10);
         }
 
-        if self.drag_origin.is_some() {
-            if ctx.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-                info!(target: "editor.drag", "end drag; h = {}", self.core.handle);
-                self.drag_origin = None;
-            }
+        if self.drag_origin.is_some() && ctx.input(|i| i.pointer.primary_released()) {
+            info!(target: "editor.drag", "end drag; h = {}", self.core.handle);
+            self.drag_origin = None;
         }
 
         if false {
@@ -265,7 +263,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
     }
 
-    pub fn render(&mut self, ui: &mut egui::Ui) {
+    pub fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         Frame::new().show(ui, |ui| {
             egui::ScrollArea::both().show(ui, |ui| {
                 ui.with_layout(
@@ -275,14 +273,20 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         let text_height = ui.text_style_height(&egui::TextStyle::Body);
                         ui.set_row_height(text_height);
 
-                        self.render_expr(ui, true, &Path::empty(), &self.core.expr.clone());
+                        self.render_expr(ctx, ui, true, &Path::empty(), &self.core.expr.clone());
                     },
                 )
             })
         });
     }
 
-    pub fn render_point(&mut self, ui: &mut egui::Ui, interactive: bool, p: &Point) {
+    pub fn render_point(
+        &mut self,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        interactive: bool,
+        p: &Point,
+    ) {
         let color_scheme = Self::color_scheme(ui);
 
         let is_handle = p == &self.core.handle.focus_point();
@@ -320,36 +324,40 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     .sense(Sense::click_and_drag()),
             );
 
-            // if interactive && label.clicked() {
-            //     info!(target: "editor", "click at point: p = {p}");
-            //     let h = Handle::Point(p.clone());
-            //     self.do_action(Action::SetHandle(SetHandle {
-            //         handle: h,
-            //         snapshot: false,
-            //     }));
+            // if label.is_pointer_button_down_on() {
+            //     info!(target:"editor.drag", "is_pointer_button_down_on {p}");
             // }
 
-            if label.is_pointer_button_down_on() {
-                info!(target:"editor.drag", "is_pointer_button_down_on {p}");
+            if interactive {
+                if label.clicked() {
+                    info!(target: "editor", "click at point: p = {p}");
+                    let h = Handle::Point(p.clone());
+                    self.do_action(Action::SetHandle(SetHandle {
+                        handle: h,
+                        snapshot: false,
+                    }));
+                }
+
+                if label.drag_started_by(egui::PointerButton::Primary) {
+                    info!(target: "editor.drag", "drag start at point: p = {p}");
+                    self.do_action(Action::SetHandle(SetHandle {
+                        handle: Handle::Point(p.clone()),
+                        snapshot: false,
+                    }));
+                    self.drag_origin = Some(Handle::Point(p.clone()));
+                } else if let Some(drag_origin) = &self.drag_origin
+                    && let Some(pointer_pos) = ctx.pointer_latest_pos()
+                    && label.rect.contains(pointer_pos)
+                {
+                    info!(target: "editor.drag", "drag hover at point: p = {p}");
+                    if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
+                        self.do_action(Action::SetHandle(SetHandle {
+                            handle: h.clone(),
+                            snapshot: false,
+                        }));
+                    }
+                }
             }
-
-            // if interactive && label.drag_started_by(egui::PointerButton::Primary) {
-            //     info!(target: "editor.drag", "drag start at point: p = {p}");
-            //     self.drag_origin = Some(Handle::Point(p.clone()));
-            // }
-
-            // if interactive
-            //     && let Some(drag_origin) = &self.drag_origin
-            //     && label.hovered()
-            // {
-            //     info!(target: "editor.drag", "drag hover at point: p = {p}");
-            //     if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
-            //         self.do_action(Action::SetHandle(SetHandle {
-            //             handle: h.clone(),
-            //             snapshot: false,
-            //         }));
-            //     }
-            // }
 
             if is_handle && let Some(menu) = &mut self.menu {
                 // render edit menu stuff
@@ -469,16 +477,18 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
     pub fn render_expr(
         &mut self,
+        ctx: &egui::Context,
         ui: &mut egui::Ui,
         interactive: bool,
         path: &Path,
         expr: &EditorExpr,
     ) {
-        self.render_expr_contents(ui, interactive, path, expr)
+        self.render_expr_contents(ctx, ui, interactive, path, expr)
     }
 
     pub fn render_expr_contents(
         &mut self,
+        ctx: &egui::Context,
         ui: &mut egui::Ui,
         interactive: bool,
         path: &Path,
@@ -510,14 +520,20 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ));
 
         match &expr.label.constructor {
-            Constructor::Literal(literal) => {
-                ES::assemble_rendered_expr(self, ui, path, expr, render_steps_and_kids, literal)
-            }
+            Constructor::Literal(literal) => ES::assemble_rendered_expr(
+                ctx,
+                ui,
+                self,
+                path,
+                expr,
+                render_steps_and_kids,
+                literal,
+            ),
             Constructor::Root => {
                 for (step, kid) in render_steps_and_kids.iter() {
-                    step.render(self, ui);
+                    step.render(ctx, ui, self);
                     if let Some(kid) = kid {
-                        kid.render(self, ui);
+                        kid.render(ctx, ui, self);
                     }
                 }
             }
@@ -761,8 +777,9 @@ pub trait EditorSpec: 'static {
     fn is_valid_handle(handle: &Handle, expr: &EditorExpr) -> bool;
 
     fn assemble_rendered_expr(
-        state: &mut EditorState<Self>,
+        ctx: &egui::Context,
         ui: &mut egui::Ui,
+        state: &mut EditorState<Self>,
         path: &Path,
         expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
@@ -799,9 +816,14 @@ pub struct RenderPoint<'a> {
 }
 
 impl<'a> RenderPoint<'a> {
-    pub fn render<ES: EditorSpec + ?Sized>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
-        EditorState::render_point(
-            state,
+    pub fn render<ES: EditorSpec + ?Sized>(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        state: &mut EditorState<ES>,
+    ) {
+        state.render_point(
+            ctx,
             ui,
             self.interactive,
             &Point {
@@ -818,8 +840,13 @@ pub struct RenderExpr<'a> {
 }
 
 impl<'a> RenderExpr<'a> {
-    pub fn render<ES: EditorSpec + ?Sized>(&self, state: &mut EditorState<ES>, ui: &mut egui::Ui) {
-        EditorState::render_expr(state, ui, true, &self.path, self.expr)
+    pub fn render<ES: EditorSpec + ?Sized>(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        state: &mut EditorState<ES>,
+    ) {
+        EditorState::render_expr(state, ctx, ui, true, &self.path, self.expr)
     }
 }
 

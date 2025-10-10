@@ -1,7 +1,7 @@
 //! A simple egui app that demonstrates drag-and-drop interaction between labels.
 
 use eframe::egui;
-use egui::{Color32, Rect, RichText, Sense};
+use egui::{Color32, RichText, Sense};
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
