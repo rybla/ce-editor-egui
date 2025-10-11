@@ -57,17 +57,20 @@ impl EditorSpec for Ce {
                     Some(state)
                 },
             ),
-            EditMenuOption::new(EditMenuPattern::Static("copy".to_owned()), |_query, state| {
-                println!("copy");
-                state
-                    .expr
-                    .at_handle(&state.handle)
-                    .map(|frag| CoreEditorState {
-                        expr: state.expr.clone(),
-                        handle: state.handle.clone(),
-                        clipboard: Some(frag),
-                    })
-            }),
+            EditMenuOption::new(
+                EditMenuPattern::Static("copy".to_owned()),
+                |_query, state| {
+                    println!("copy");
+                    state
+                        .expr
+                        .at_handle(&state.handle)
+                        .map(|frag| CoreEditorState {
+                            expr: state.expr.clone(),
+                            handle: state.handle.clone(),
+                            clipboard: Some(frag),
+                        })
+                },
+            ),
         ]
     }
 
