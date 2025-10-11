@@ -1,7 +1,9 @@
 use std::{fmt::Display, mem};
 
 /// The function's purpose is to calculate `x mod n` where `x` is a signed 8-bit
-/// integer and `n` is a `usize`. A critical part of the logic is to ensure the
+/// integer and `n` is a `usize`
+///
+/// A critical part of the logic is to ensure the
 /// result is always non-negative, which aligns with the mathematical definition
 /// of a modulus, as opposed to a simple remainder operation which can produce
 /// negative results.
@@ -58,16 +60,16 @@ pub fn swap_default<A: Default>(x: &mut A) -> A {
 pub fn display_slice<T: Display>(xs: &[T]) -> String {
     // let xs = xs.iter().map(|x| format!("{x}"));
     let mut s = String::new();
-    s.push_str("[");
+    s.push('[');
     if !xs.is_empty() {
         let init = &xs[..xs.len() - 1];
-        for x in init.iter() {
+        for x in init {
             s.push_str(&format!("{x}, "));
         }
         if let Some(x) = xs.last() {
             s.push_str(&format!("{x}"));
         }
     }
-    s.push_str("]");
+    s.push(']');
     s
 }
