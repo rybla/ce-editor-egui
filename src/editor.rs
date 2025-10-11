@@ -211,14 +211,14 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     break;
                 }
 
-                if let Some(h) = self.core.handle.clone().drag(&self.core.expr, &target) {
-                    if ES::is_valid_handle(&h, &self.core.expr) {
-                        self.do_action(Action::SetHandle(SetHandle {
-                            handle: h,
-                            snapshot: false,
-                        }));
-                        break;
-                    }
+                if let Some(h) = self.core.handle.clone().drag(&self.core.expr, &target)
+                    && ES::is_valid_handle(&h, &self.core.expr)
+                {
+                    self.do_action(Action::SetHandle(SetHandle {
+                        handle: h,
+                        snapshot: false,
+                    }));
+                    break;
                 }
             }
         }
