@@ -56,7 +56,7 @@ fn main() {
                 web_options,
                 Box::new(|cc| {
                     Ok(Box::new(ce_editor_egui::App::<
-                        ce_editor_egui::example::ce::Ce,
+                        ce_editor_egui::example::fol::Fol,
                     >::new(cc)))
                 }),
             )

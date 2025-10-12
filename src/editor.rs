@@ -2,11 +2,11 @@ use crate::{ex, expr::*, span};
 use egui::{Frame, Layout, Sense};
 use lazy_static::lazy_static;
 use log::info;
-use nucleo;
+// use nucleo;
 use std::{
     fmt::{Debug, Display},
     marker::PhantomData,
-    sync::Arc,
+    // sync::Arc,
 };
 
 pub const WRAP_EXPR_AT_HEIGHT: bool = false;
@@ -108,9 +108,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     pub fn update(&mut self, ctx: &egui::Context) {
         info!(target: "editor.update", "update");
 
-        if let Some(menu) = &mut self.menu {
-            menu.nucleo.tick(10);
-        }
+        // if let Some(menu) = &mut self.menu {
+        //     menu.nucleo.tick(10);
+        // }
 
         if self.drag_origin.is_some() && ctx.input(|i| i.pointer.primary_released()) {
             info!(target: "editor.drag", "end drag; h = {}", self.core.handle);
@@ -383,7 +383,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                     // options
 
-                    let snapshot = menu.nucleo.snapshot();
+                    // let snapshot = menu.nucleo.snapshot();
 
                     if menu.query.is_empty() {
                         if menu.all_options.is_empty() {
@@ -430,8 +430,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                 EditMenuPattern::Dynamic(_, f) => Some((f(&menu.query)?, item)),
                             })
                             .collect::<Vec<_>>();
-                        let matched_items_count =
-                            snapshot.item_count() + matched_dynamic_items.len() as u32;
+                        // let matched_items_count =
+                        //     snapshot.item_count() + matched_dynamic_items.len() as u32;
+                        let matched_items_count: u32 = 0;
                         let focus_index = if matched_items_count == 0 {
                             None
                         } else {
@@ -439,12 +440,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         };
 
                         if let Some(focus_index) = focus_index {
-                            let matched_static_items = menu
-                                .nucleo
-                                .snapshot()
-                                .matched_items(..)
-                                .map(|item| (item.data.pattern.label(), item.data))
-                                .collect::<Vec<_>>();
+                            // let matched_static_items = menu
+                            //     .nucleo
+                            //     .snapshot()
+                            //     .matched_items(..)
+                            //     .map(|item| (item.data.pattern.label(), item.data))
+                            //     .collect::<Vec<_>>();
+                            let matched_static_items = [];
                             // include dynamic before static
                             let matched_items = matched_dynamic_items
                                 .iter()
@@ -634,31 +636,31 @@ pub struct EditMenu {
     pub query: String,
     pub all_options: Vec<EditMenuOption>,
     pub index: i8,
-    pub nucleo: nucleo::Nucleo<EditMenuOption>,
+    // pub nucleo: nucleo::Nucleo<EditMenuOption>,
 }
 
 impl EditMenu {
     fn new(all_options: Vec<EditMenuOption>) -> Self {
-        let nucleo = nucleo::Nucleo::new(
-            nucleo::Config::DEFAULT,
-            Arc::new(|| {
-                // TODO: not sure what this could be useful for
-                info!(target: "nucleo", "notify");
-            }),
-            Some(1),
-            1,
-        );
-        let injector = nucleo.injector();
-        for option in &all_options {
-            match option.pattern {
-                EditMenuPattern::Static(_) => {
-                    injector.push(option.clone(), |x, cols| cols[0] = x.pattern.label().into());
-                }
-                EditMenuPattern::Dynamic(_, _) => {}
-            };
-        }
+        // let nucleo = nucleo::Nucleo::new(
+        //     nucleo::Config::DEFAULT,
+        //     Arc::new(|| {
+        //         // TODO: not sure what this could be useful for
+        //         info!(target: "nucleo", "notify");
+        //     }),
+        //     Some(1),
+        //     1,
+        // );
+        // let injector = nucleo.injector();
+        // for option in &all_options {
+        //     match option.pattern {
+        //         EditMenuPattern::Static(_) => {
+        //             injector.push(option.clone(), |x, cols| cols[0] = x.pattern.label().into());
+        //         }
+        //         EditMenuPattern::Dynamic(_, _) => {}
+        //     };
+        // }
         Self {
-            nucleo,
+            // nucleo,
             query: Default::default(),
             all_options,
             index: 0,
@@ -675,12 +677,14 @@ impl EditMenu {
             })
             .collect::<Vec<_>>();
 
-        let matched_static_items: Vec<(Option<String>, &EditMenuOption)> = self
-            .nucleo
-            .snapshot()
-            .matched_items(..)
-            .map(|x| (None, x.data))
-            .collect::<Vec<_>>();
+        // let matched_static_items: Vec<(Option<String>, &EditMenuOption)> = self
+        //     .nucleo
+        //     .snapshot()
+        //     .matched_items(..)
+        //     .map(|x| (None, x.data))
+        //     .collect::<Vec<_>>();
+
+        let matched_static_items: Vec<(Option<String>, &EditMenuOption)> = vec![];
 
         [matched_dynamic_items, matched_static_items].concat()
     }
@@ -699,16 +703,16 @@ impl EditMenu {
 
     pub fn update(&mut self) {
         info!(target: "editor.edit", "update; self.query = {}", self.query);
-        self.nucleo.pattern.reparse(
-            0,
-            &self.query,
-            nucleo::pattern::CaseMatching::Smart,
-            nucleo::pattern::Normalization::Smart,
-            // TODO: I could store the previous search query somewhere and then
-            // check if it's a prefix of the new search query if I want to make
-            // this `true` sometimes for optimization. But it's not necessary.
-            false,
-        );
+        // self.nucleo.pattern.reparse(
+        //     0,
+        //     &self.query,
+        //     nucleo::pattern::CaseMatching::Smart,
+        //     nucleo::pattern::Normalization::Smart,
+        //     // TODO: I could store the previous search query somewhere and then
+        //     // check if it's a prefix of the new search query if I want to make
+        //     // this `true` sometimes for optimization. But it's not necessary.
+        //     false,
+        // );
     }
 }
 
