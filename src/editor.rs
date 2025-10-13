@@ -268,10 +268,18 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
                     |ui| {
                         ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                        let text_height = ui.text_style_height(&egui::TextStyle::Body);
-                        ui.set_row_height(text_height);
+                        ui.set_row_height(ui.text_style_height(&egui::TextStyle::Body));
 
-                        self.render_expr(ctx, ui, true, &Path::empty(), &self.core.expr.clone());
+                        self.render_expr(
+                            ctx,
+                            ui,
+                            &RenderContext {
+                                interactive: true,
+                                indent_level: 0,
+                            },
+                            &Path::empty(),
+                            &self.core.expr.clone(),
+                        );
                     },
                 )
             })
@@ -282,7 +290,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         &mut self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        interactive: bool,
+        ren_ctx: &RenderContext,
         p: &Point,
     ) {
         let color_scheme = Self::color_scheme(ui);
@@ -321,7 +329,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     .sense(egui::Sense::click_and_drag()),
             );
 
-            if interactive {
+            if ren_ctx.interactive {
                 if label.clicked() {
                     info!(target: "editor", "click at point: p = {p}");
                     let h = Handle::Point(p.clone());
@@ -353,25 +361,34 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
 
             if is_handle && let Some(menu) = &mut self.menu {
-                const MENU_WIDTH: f32 = 100f32;
+                let menu_width = 100f32;
+                let menu_query_height = ui.text_style_height(&egui::TextStyle::Body);
+                let menu_options_height = 80f32;
+                let menu_height = menu_query_height + menu_options_height;
 
                 // render edit menu stuff
                 egui::Frame::new()
                     .fill(color_scheme.normal_background)
+                    .outer_margin(egui::Margin {
+                        left: 0i8,
+                        right: 5i8,
+                        top: 0i8,
+                        bottom: 5i8,
+                    })
                     .show(ui, |ui| {
-                        ui.with_layout(
-                            egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
-                            |ui| {
-                                ui.set_width(MENU_WIDTH);
-                                ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                                // ui.set_row_height(ui.text_style_height(&egui::TextStyle::Body));
+                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::TOP), |ui| {
+                            ui.set_width(menu_width);
+                            ui.set_height(menu_height);
+                            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
 
-                                // query
+                            // query
+                            egui::Frame::new().show(ui, |ui| {
+                                ui.set_height(menu_query_height);
 
                                 // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
                                 let textedit = egui::TextEdit::singleline(&mut menu.query)
                                     .hint_text("query edit menu")
-                                    .desired_width(MENU_WIDTH) // 100f32 is a fine width for now
+                                    .desired_width(menu_width) // 100f32 is a fine width for now
                                     .cursor_at_end(true);
                                 let textedit_response = ui.add(textedit);
                                 // on change, update menu
@@ -382,10 +399,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                 if !textedit_response.has_focus() {
                                     textedit_response.request_focus();
                                 }
+                            });
 
-                                ui.end_row();
+                            ui.end_row();
 
-                                // options
+                            // options
+                            egui::Frame::new().show(ui, |ui| {
+                                ui.set_height(menu_options_height);
 
                                 let menu_index = menu.index;
                                 let matched_items = menu.matched_items();
@@ -418,7 +438,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                                 let focused = Some(i) == focus_index;
 
                                                 let frame = egui::Frame::new().show(ui, |ui| {
-                                                    ui.set_width(MENU_WIDTH);
+                                                    ui.set_width(menu_width);
                                                     ui.with_layout(
                                                         egui::Layout::left_to_right(
                                                             egui::Align::TOP,
@@ -477,8 +497,8 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                         },
                                     );
                                 });
-                            },
-                        );
+                            })
+                        });
                     });
             }
         });
@@ -488,18 +508,18 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         &mut self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        interactive: bool,
+        ren_ctx: &RenderContext,
         path: &Path,
         expr: &EditorExpr,
     ) {
-        self.render_expr_contents(ctx, ui, interactive, path, expr);
+        self.render_expr_contents(ctx, ui, ren_ctx, path, expr);
     }
 
     pub fn render_expr_contents(
         &mut self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        interactive: bool,
+        ren_ctx: &RenderContext,
         path: &Path,
         expr: &EditorExpr,
     ) {
@@ -510,7 +530,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 RenderPoint {
                     path,
                     i: s.left_index(),
-                    interactive,
                 },
                 Some(RenderExpr {
                     expr: e,
@@ -523,7 +542,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             RenderPoint {
                 path,
                 i: expr.kids.rightmost_index(),
-                interactive,
             },
             None,
         ));
@@ -532,6 +550,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             Constructor::Literal(literal) => ES::assemble_rendered_expr(
                 ctx,
                 ui,
+                ren_ctx,
                 self,
                 path,
                 expr,
@@ -540,14 +559,17 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             ),
             Constructor::Root => {
                 for (step, kid) in &render_steps_and_kids {
-                    step.render(ctx, ui, self);
+                    step.render(ctx, ui, ren_ctx, self);
                     if let Some(kid) = kid {
-                        kid.render(ctx, ui, self);
+                        kid.render(ctx, ui, ren_ctx, self);
                     }
                 }
             }
             Constructor::Newline => {
                 ui.end_row();
+                egui::Frame::new().show(ui, |ui| {
+                    ui.set_width(path.0.len() as f32 * 20f32);
+                });
             }
         }
     }
@@ -769,6 +791,13 @@ impl Display for Diagnostic {
     }
 }
 
+pub struct RenderContext {
+    pub interactive: bool,
+    pub indent_level: u8,
+}
+
+pub struct AssembleRenderExprArgs {}
+
 pub trait EditorSpec: 'static {
     fn name() -> String;
 
@@ -780,9 +809,11 @@ pub trait EditorSpec: 'static {
 
     fn is_valid_handle(handle: &Handle, expr: &EditorExpr) -> bool;
 
+    #[expect(clippy::too_many_arguments)]
     fn assemble_rendered_expr(
         ctx: &egui::Context,
         ui: &mut egui::Ui,
+        ren_ctx: &RenderContext,
         state: &mut EditorState<Self>,
         path: &Path,
         expr: &EditorExpr,
@@ -816,7 +847,6 @@ pub fn match_input_cycle_dir(ctx: &egui::Context) -> Option<CycleDir> {
 pub struct RenderPoint<'a> {
     pub path: &'a Path,
     pub i: Index,
-    pub interactive: bool,
 }
 
 impl<'a> RenderPoint<'a> {
@@ -824,12 +854,13 @@ impl<'a> RenderPoint<'a> {
         &self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
+        ren_ctx: &RenderContext,
         state: &mut EditorState<ES>,
     ) {
         state.render_point(
             ctx,
             ui,
-            self.interactive,
+            ren_ctx,
             &Point {
                 path: self.path.clone(),
                 i: self.i,
@@ -848,9 +879,10 @@ impl<'a> RenderExpr<'a> {
         &self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
+        ren_ctx: &RenderContext,
         state: &mut EditorState<ES>,
     ) {
-        EditorState::render_expr(state, ctx, ui, true, &self.path, self.expr);
+        EditorState::render_expr(state, ctx, ui, ren_ctx, &self.path, self.expr);
     }
 }
 

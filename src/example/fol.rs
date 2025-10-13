@@ -139,6 +139,7 @@ impl EditorSpec for Fol {
     fn assemble_rendered_expr(
         ctx: &egui::Context,
         ui: &mut egui::Ui,
+        ren_ctx: &RenderContext,
         state: &mut EditorState<Self>,
         path: &Path,
         _expr: &EditorExpr,
@@ -167,9 +168,9 @@ impl EditorSpec for Fol {
         });
 
         for (step, kid) in &render_steps_and_kids {
-            step.render(ctx, ui, state);
+            step.render(ctx, ui, ren_ctx, state);
             if let Some(kid) = kid {
-                kid.render(ctx, ui, state);
+                kid.render(ctx, ui, ren_ctx, state);
             }
         }
 

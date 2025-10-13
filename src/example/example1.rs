@@ -90,6 +90,7 @@ impl EditorSpec for Example1 {
     fn assemble_rendered_expr(
         _ctx: &egui::Context,
         _ui: &mut egui::Ui,
+        _ren_ctx: &RenderContext,
         _state: &mut EditorState<Self>,
         _path: &Path,
         _expr: &EditorExpr,
