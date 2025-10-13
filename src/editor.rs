@@ -8,8 +8,7 @@ use std::{
     marker::PhantomData,
 };
 
-pub const WRAP_EXPR_AT_HEIGHT: bool = false;
-pub const MAX_EXPR_HEIGHT_FOR_HORIZONTAL: u32 = 2;
+pub const INDENT_WIDTH_EM: f32 = 1.0;
 
 #[derive(Clone)]
 pub struct ColorScheme {
@@ -568,7 +567,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             Constructor::Newline => {
                 ui.end_row();
                 egui::Frame::new().show(ui, |ui| {
-                    ui.set_width(path.0.len() as f32 * 20f32);
+                    ui.set_width(
+                        (std::cmp::max(path.0.len(), 1) - 1) as f32
+                            * INDENT_WIDTH_EM
+                            * ui.text_style_height(&egui::TextStyle::Body),
+                    );
                 });
             }
         }
