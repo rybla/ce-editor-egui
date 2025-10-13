@@ -640,7 +640,13 @@ impl EditMenu {
                 nucleo_matcher::pattern::CaseMatching::Smart,
                 nucleo_matcher::pattern::Normalization::Smart,
             )
-            .match_list(self.all_options.iter(), &mut self.matcher)
+            .match_list(
+                self.all_options.iter().filter(|item| match item.pattern {
+                    EditMenuPattern::Static(_) => true,
+                    EditMenuPattern::Dynamic(_, _) => false,
+                }),
+                &mut self.matcher,
+            )
             .iter()
             .map(|item| (Some(item.0.pattern.label().to_owned()), item.0))
             .collect();
