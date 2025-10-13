@@ -374,43 +374,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                     // options
 
-                    if menu.query.is_empty() {
-                        if menu.all_options.is_empty() {
-                            let rich_text =
-                                egui::RichText::new("no edit options available here!".to_owned());
-                            ui.label(
-                                rich_text
-                                    .color(Self::color_scheme(ui).active_text)
-                                    .background_color(Self::color_scheme(ui).active_background),
-                            );
-                        } else {
-                            let focus_index =
-                                menu.index.rem_euclid(menu.all_options.len() as i8) as usize;
-                            for (item_index, option) in menu.all_options.iter().enumerate() {
-                                let label = option.pattern.label();
-                                let rich_text = egui::RichText::new(label);
-                                if item_index == focus_index {
-                                    ui.label(
-                                        rich_text
-                                            .color(Self::color_scheme(ui).active_text)
-                                            .background_color(
-                                                Self::color_scheme(ui).active_background,
-                                            ),
-                                    );
-                                } else {
-                                    ui.label(
-                                        rich_text
-                                            .color(Self::color_scheme(ui).normal_text)
-                                            .background_color(
-                                                Self::color_scheme(ui).normal_background,
-                                            ),
-                                    );
-                                }
-                            }
-                        }
+                    if menu.all_options.is_empty() {
+                        let rich_text =
+                            egui::RichText::new("no edit options available here!".to_owned());
+                        ui.label(
+                            rich_text
+                                .color(Self::color_scheme(ui).active_text)
+                                .background_color(Self::color_scheme(ui).active_background),
+                        );
                     } else {
-                        // TODO: refactor this to use menu.matched_items
-
                         let menu_index = menu.index;
                         let matched_items = menu.matched_items();
                         let matched_items_count = matched_items.len();
