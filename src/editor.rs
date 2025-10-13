@@ -321,10 +321,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     .sense(Sense::click_and_drag()),
             );
 
-            // if label.is_pointer_button_down_on() {
-            //     info!(target:"editor.drag", "is_pointer_button_down_on {p}");
-            // }
-
             if interactive {
                 if label.clicked() {
                     info!(target: "editor", "click at point: p = {p}");
