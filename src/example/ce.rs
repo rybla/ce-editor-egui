@@ -2,6 +2,7 @@ use crate::{
     editor::{self, *},
     expr::*,
 };
+use log::trace;
 
 pub struct Ce {}
 
@@ -32,7 +33,7 @@ impl EditorSpec for Ce {
                     Some(format!("{query} (constructor)"))
                 }),
                 |query, state| {
-                    println!("insert_node: {query}");
+                    trace!(target: "ce", "insert_node: {query}");
 
                     let mut state = state;
 
@@ -78,27 +79,33 @@ impl EditorSpec for Ce {
         Default::default()
     }
 
-    fn is_valid_handle(_h: &Handle, _e: &EditorExpr) -> bool {
-        // TODO: there's a bug in movement that enters infinite loop
-        // match h {
-        //     Handle::Point(p) => {
-        //         let e = e.at_path(&p.path);
-        //         e.label.constructor != Constructor::Newline
-        //     }
-        //     Handle::Span(h) => {
-        //         let e = e.at_path(&h.path);
-        //         e.label.constructor != Constructor::Newline
-        //     }
-        //     Handle::Zipper(h) => {
-        //         let e = e.at_path(&h.path_o);
-        //         if !(e.label.constructor != Constructor::Newline) {
-        //             return false;
-        //         }
-        //         let e = e.at_path(&h.path_i());
-        //         e.label.constructor != Constructor::Newline
-        //     }
-        // }
-        true
+    fn is_valid_handle(h: &Handle, e: &EditorExpr) -> bool {
+        trace!(target: "is_valid_handle", "h = {h}");
+        trace!(target: "is_valid_handle", "e = {e}");
+
+        match h {
+            Handle::Point(p) => {
+                let e = e.at_path(&p.path);
+                e.label.constructor != Constructor::Newline
+            }
+            Handle::Span(h) => {
+                let e = e.at_path(&h.path);
+                e.label.constructor != Constructor::Newline
+            }
+            Handle::Zipper(h) => {
+                // These are closures so that the final conjunction is evaluated
+                // in a short-circuited fashion.
+                let b1 = || {
+                    let e = e.at_path(&h.path_o);
+                    e.label.constructor != Constructor::Newline
+                };
+                let b2 = || {
+                    let e = e.at_path(&h.path_i());
+                    e.label.constructor != Constructor::Newline
+                };
+                b1() && b2()
+            }
+        }
     }
 
     fn assemble_rendered_expr(
@@ -142,5 +149,14 @@ impl EditorSpec for Ce {
         egui::Frame::new().fill(fill_color).show(ui, |ui| {
             ui.add(egui::Label::new(egui::RichText::new(")").color(text_color)).selectable(false));
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_move1() {
+        todo!()
     }
 }

@@ -1,7 +1,7 @@
 use crate::{ex, expr::*, span};
 use egui;
 use lazy_static::lazy_static;
-use log::info;
+use log::trace;
 use nucleo_matcher::Matcher;
 use std::{
     fmt::{Debug, Display},
@@ -99,15 +99,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.core
                 .handle
                 .escape()
-                .unwrap_or_else(|e| info!(target: "editor.move", "escape failed: {e:?}"));
+                .unwrap_or_else(|e| trace!(target: "editor.move", "escape failed: {e:?}"));
         }
     }
 
     pub fn update(&mut self, ctx: &egui::Context) {
-        info!(target: "editor.update", "update");
+        trace!(target: "editor.update", "update");
 
         if self.drag_origin.is_some() && ctx.input(|i| i.pointer.primary_released()) {
-            info!(target: "editor.drag", "end drag; h = {}", self.core.handle);
+            trace!(target: "editor.drag", "end drag; h = {}", self.core.handle);
             self.drag_origin = None;
         }
 
@@ -131,10 +131,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     if let Some(core) = (option.edit)(&menu.query, self.core.clone()) {
                         self.do_action(Action::SetCore(core));
                     } else {
-                        info!(target: "editor.edit", "edit failed");
+                        trace!(target: "editor.edit", "edit failed");
                     }
                 } else {
-                    info!(target: "editor.edit", "there are no edit options available");
+                    trace!(target: "editor.edit", "there are no edit options available");
                 }
             }
             // move menu option
@@ -148,7 +148,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // open edit menu
         else if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
-            info!(target: "editor.edit", "open EditMenu");
+            trace!(target: "editor.edit", "open EditMenu");
             let menu = ES::get_edits(self);
             self.menu = Some(EditMenu::new(menu));
         }
@@ -202,7 +202,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             loop {
                 let move_status = target.move_dir(&self.core.expr, &dir);
                 if move_status.is_err() {
-                    info!(target: "editor.move", "select bailed since a move failed");
+                    trace!(target: "editor.move", "select bailed since a move failed");
                     break;
                 }
 
@@ -219,37 +219,46 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         }
         // move
         else if let Some(dir) = match_input_move_dir(ctx) {
-            let origin = self.core.handle.clone();
+            let mut origin = self.core.handle.clone();
+            #[expect(unused_assignments)]
+            let mut move_status = Ok(());
             loop {
-                let move_status = self.core.handle.move_dir(&self.core.expr, &dir);
+                move_status = origin.move_dir(&self.core.expr, &dir);
+                if let Err(err) = &move_status {
+                    trace!(target: "editor.move", "move bailed since a move failed: {err:?}");
+                    break;
+                }
+
+                if ES::is_valid_handle(&origin, &self.core.expr) {
+                    break;
+                }
+            }
+            if move_status.is_ok() {
+                trace!(target: "editor.move", "move succeeded: {origin}");
+                self.do_action(Action::SetHandle(SetHandle {
+                    handle: origin.clone(),
+                    snapshot: false,
+                }));
+            }
+        }
+        // move up
+        else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            let mut origin = self.core.handle.clone();
+            loop {
+                let move_status = origin.move_up(&self.core.expr);
                 if move_status.is_err() {
-                    info!(target: "editor.move", "move bailed since a move failed");
+                    trace!(target: "editor.move", "move bailed since a move failed");
                     break;
                 }
 
                 if ES::is_valid_handle(&self.core.handle, &self.core.expr) {
                     break;
-                } else {
-                    self.do_action(Action::SetHandle(SetHandle {
-                        handle: origin.clone(),
-                        snapshot: false,
-                    }));
                 }
             }
-        }
-        // move up
-        else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            // TODO: unify this into Action enumeration
-
-            let mut result = self.core.handle.move_up(&self.core.expr);
-
-            while result.is_ok() && !ES::is_valid_handle(&self.core.handle, &self.core.expr) {
-                result = self.core.handle.move_up(&self.core.expr);
-            }
-
-            if let Err(err) = result {
-                info!(target: "editor.move", "Failed to move up: {err:?}");
-            }
+            self.do_action(Action::SetHandle(SetHandle {
+                handle: origin.clone(),
+                snapshot: false,
+            }));
         }
     }
 
@@ -330,7 +339,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
             if ren_ctx.interactive {
                 if label.clicked() {
-                    info!(target: "editor", "click at point: p = {p}");
+                    trace!(target: "editor", "click at point: p = {p}");
                     let h = Handle::Point(p.clone());
                     self.do_action(Action::SetHandle(SetHandle {
                         handle: h,
@@ -339,7 +348,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
 
                 if label.drag_started_by(egui::PointerButton::Primary) {
-                    info!(target: "editor.drag", "drag start at point: p = {p}");
+                    trace!(target: "editor.drag", "drag start at point: p = {p}");
                     self.do_action(Action::SetHandle(SetHandle {
                         handle: Handle::Point(p.clone()),
                         snapshot: false,
@@ -349,7 +358,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     && let Some(pointer_pos) = ctx.pointer_latest_pos()
                     && label.rect.contains(pointer_pos)
                 {
-                    info!(target: "editor.drag", "drag hover at point: p = {p}");
+                    trace!(target: "editor.drag", "drag hover at point: p = {p}");
                     if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
                         self.do_action(Action::SetHandle(SetHandle {
                             handle: h.clone(),
@@ -628,13 +637,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
             }
             Action::SetHandle(args) => {
-                if ES::is_valid_handle(&args.handle, &self.core.expr) {
-                    if args.snapshot {
-                        self.snapshot();
-                    }
-                    self.menu = None;
-                    self.core.handle = args.handle;
+                if args.snapshot {
+                    self.snapshot();
                 }
+                self.menu = None;
+                self.core.handle = args.handle;
             }
             Action::SetCore(core) => {
                 self.snapshot();
@@ -726,7 +733,7 @@ impl EditMenu {
     }
 
     pub fn update(&mut self, reset_index: bool) {
-        info!(target: "editor.edit", "update; self.query = {}", self.query);
+        trace!(target: "editor.edit", "update; self.query = {}", self.query);
         self.requested_scroll_to_option = true;
         if reset_index {
             self.index = 0;
