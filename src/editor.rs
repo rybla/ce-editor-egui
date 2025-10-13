@@ -2,11 +2,10 @@ use crate::{ex, expr::*, span};
 use egui::{Frame, Layout, Sense};
 use lazy_static::lazy_static;
 use log::info;
-// use nucleo;
+use nucleo_matcher::Matcher;
 use std::{
     fmt::{Debug, Display},
     marker::PhantomData,
-    // sync::Arc,
 };
 
 pub const WRAP_EXPR_AT_HEIGHT: bool = false;
@@ -107,10 +106,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
     pub fn update(&mut self, ctx: &egui::Context) {
         info!(target: "editor.update", "update");
-
-        // if let Some(menu) = &mut self.menu {
-        //     menu.nucleo.tick(10);
-        // }
 
         if self.drag_origin.is_some() && ctx.input(|i| i.pointer.primary_released()) {
             info!(target: "editor.drag", "end drag; h = {}", self.core.handle);
@@ -383,8 +378,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
                     // options
 
-                    // let snapshot = menu.nucleo.snapshot();
-
                     if menu.query.is_empty() {
                         if menu.all_options.is_empty() {
                             let rich_text =
@@ -399,7 +392,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                 menu.index.rem_euclid(menu.all_options.len() as i8) as usize;
                             for (item_index, option) in menu.all_options.iter().enumerate() {
                                 let label = option.pattern.label();
-                                let rich_text = egui::RichText::new(label.clone());
+                                let rich_text = egui::RichText::new(label);
                                 if item_index == focus_index {
                                     ui.label(
                                         rich_text
@@ -422,38 +415,24 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     } else {
                         // TODO: refactor this to use menu.matched_items
 
-                        let matched_dynamic_items = menu
-                            .all_options
-                            .iter()
-                            .filter_map(|item| match item.pattern {
-                                EditMenuPattern::Static(_) => None,
-                                EditMenuPattern::Dynamic(_, f) => Some((f(&menu.query)?, item)),
-                            })
-                            .collect::<Vec<_>>();
-                        // let matched_items_count =
-                        //     snapshot.item_count() + matched_dynamic_items.len() as u32;
-                        let matched_items_count: u32 = 0;
+                        let menu_index = menu.index;
+                        let matched_items = menu.matched_items();
+                        let matched_items_count = matched_items.len();
+
                         let focus_index = if matched_items_count == 0 {
                             None
                         } else {
-                            Some(menu.index.rem_euclid(matched_items_count as i8) as usize)
+                            Some(menu_index.rem_euclid(matched_items_count as i8) as usize)
                         };
 
                         if let Some(focus_index) = focus_index {
-                            // let matched_static_items = menu
-                            //     .nucleo
-                            //     .snapshot()
-                            //     .matched_items(..)
-                            //     .map(|item| (item.data.pattern.label(), item.data))
-                            //     .collect::<Vec<_>>();
-                            let matched_static_items = [];
-                            // include dynamic before static
-                            let matched_items = matched_dynamic_items
-                                .iter()
-                                .chain(matched_static_items.iter());
-                            for (item_index, (label, _item)) in matched_items.enumerate() {
-                                let rich_text =
-                                    egui::RichText::new(format!("[{item_index}] {label}"));
+                            for (item_index, (label, _item)) in matched_items.iter().enumerate() {
+                                let rich_text = match label {
+                                    Some(label) => {
+                                        egui::RichText::new(format!("[{item_index}] {label}"))
+                                    }
+                                    None => egui::RichText::new(format!("[{item_index}] ...")),
+                                };
                                 if item_index == focus_index {
                                     ui.label(
                                         rich_text
@@ -636,38 +615,20 @@ pub struct EditMenu {
     pub query: String,
     pub all_options: Vec<EditMenuOption>,
     pub index: i8,
-    // pub nucleo: nucleo::Nucleo<EditMenuOption>,
+    pub matcher: nucleo_matcher::Matcher,
 }
 
 impl EditMenu {
     fn new(all_options: Vec<EditMenuOption>) -> Self {
-        // let nucleo = nucleo::Nucleo::new(
-        //     nucleo::Config::DEFAULT,
-        //     Arc::new(|| {
-        //         // TODO: not sure what this could be useful for
-        //         info!(target: "nucleo", "notify");
-        //     }),
-        //     Some(1),
-        //     1,
-        // );
-        // let injector = nucleo.injector();
-        // for option in &all_options {
-        //     match option.pattern {
-        //         EditMenuPattern::Static(_) => {
-        //             injector.push(option.clone(), |x, cols| cols[0] = x.pattern.label().into());
-        //         }
-        //         EditMenuPattern::Dynamic(_, _) => {}
-        //     };
-        // }
         Self {
-            // nucleo,
             query: Default::default(),
             all_options,
             index: 0,
+            matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
         }
     }
 
-    pub fn matched_items(&self) -> Vec<(Option<String>, &EditMenuOption)> {
+    pub fn matched_items(&mut self) -> Vec<(Option<String>, &EditMenuOption)> {
         let matched_dynamic_items: Vec<(Option<String>, &EditMenuOption)> = self
             .all_options
             .iter()
@@ -677,42 +638,36 @@ impl EditMenu {
             })
             .collect::<Vec<_>>();
 
-        // let matched_static_items: Vec<(Option<String>, &EditMenuOption)> = self
-        //     .nucleo
-        //     .snapshot()
-        //     .matched_items(..)
-        //     .map(|x| (None, x.data))
-        //     .collect::<Vec<_>>();
+        let matched_static_items: Vec<(Option<String>, &EditMenuOption)> =
+            nucleo_matcher::pattern::Pattern::parse(
+                &self.query,
+                nucleo_matcher::pattern::CaseMatching::Smart,
+                nucleo_matcher::pattern::Normalization::Smart,
+            )
+            .match_list(self.all_options.iter(), &mut self.matcher)
+            .iter()
+            .map(|item| (Some(item.0.pattern.label().to_owned()), item.0))
+            .collect();
 
-        let matched_static_items: Vec<(Option<String>, &EditMenuOption)> = vec![];
-
+        // include dynamic before static
         [matched_dynamic_items, matched_static_items].concat()
     }
 
-    pub fn focus_option(&self) -> Option<&EditMenuOption> {
+    pub fn focus_option(&mut self) -> Option<&EditMenuOption> {
+        let index = self.index;
         let matched_items = self.matched_items();
 
         if matched_items.is_empty() {
             return None;
         }
 
-        let index = self.index.rem_euclid(matched_items.len() as i8);
+        let index = index.rem_euclid(matched_items.len() as i8);
         let item = matched_items.get(index as usize)?;
         Some(item.1)
     }
 
     pub fn update(&mut self) {
         info!(target: "editor.edit", "update; self.query = {}", self.query);
-        // self.nucleo.pattern.reparse(
-        //     0,
-        //     &self.query,
-        //     nucleo::pattern::CaseMatching::Smart,
-        //     nucleo::pattern::Normalization::Smart,
-        //     // TODO: I could store the previous search query somewhere and then
-        //     // check if it's a prefix of the new search query if I want to make
-        //     // this `true` sometimes for optimization. But it's not necessary.
-        //     false,
-        // );
     }
 }
 
@@ -720,6 +675,12 @@ impl EditMenu {
 pub struct EditMenuOption {
     pub pattern: EditMenuPattern,
     pub edit: Edit,
+}
+
+impl AsRef<str> for EditMenuOption {
+    fn as_ref(&self) -> &str {
+        self.pattern.label()
+    }
 }
 
 impl EditMenuOption {
@@ -735,10 +696,9 @@ pub enum EditMenuPattern {
 }
 
 impl EditMenuPattern {
-    pub fn label(&self) -> String {
+    pub fn label(&self) -> &str {
         match self {
-            Self::Static(s) => s.clone(),
-            Self::Dynamic(s, _f) => s.clone(), // TODO: instead of just this tring, have dynamic patterns also have a static laberl that's shown in this situation
+            Self::Static(s) | Self::Dynamic(s, _) => s,
         }
     }
 }
