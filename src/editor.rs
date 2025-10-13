@@ -1,5 +1,5 @@
 use crate::{ex, expr::*, span};
-use egui::{Frame, Layout, Sense};
+use egui;
 use lazy_static::lazy_static;
 use log::info;
 use nucleo_matcher::Matcher;
@@ -144,6 +144,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     CycleDir::Prev => menu.index -= 1,
                     CycleDir::Next => menu.index += 1,
                 }
+                menu.update(false);
             }
         }
         // open edit menu
@@ -261,10 +262,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 
     pub fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        Frame::new().show(ui, |ui| {
+        egui::Frame::new().show(ui, |ui| {
             egui::ScrollArea::both().show(ui, |ui| {
                 ui.with_layout(
-                    Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
+                    egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
                     |ui| {
                         ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                         let text_height = ui.text_style_height(&egui::TextStyle::Body);
@@ -317,8 +318,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let label = ui.add(
                 egui::Label::new(egui::RichText::new("•".to_owned()).color(text_color))
                     .selectable(false)
-                    // .sense(Sense::click().union(Sense::hover())),
-                    .sense(Sense::click_and_drag()),
+                    .sense(egui::Sense::click_and_drag()),
             );
 
             if interactive {
@@ -353,75 +353,133 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
 
             if is_handle && let Some(menu) = &mut self.menu {
+                const MENU_WIDTH: f32 = 100f32;
+
                 // render edit menu stuff
-                ui.vertical(|ui| {
-                    // query
+                egui::Frame::new()
+                    .fill(color_scheme.normal_background)
+                    .show(ui, |ui| {
+                        ui.with_layout(
+                            egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
+                            |ui| {
+                                ui.set_width(MENU_WIDTH);
+                                ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                                // ui.set_row_height(ui.text_style_height(&egui::TextStyle::Body));
 
-                    // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
-                    let textedit = egui::TextEdit::singleline(&mut menu.query)
-                        .hint_text("query edit menu")
-                        .desired_width(100f32) // 100f32 is a fine width for now
-                        .cursor_at_end(true);
-                    let response = ui.add(textedit);
-                    // on change, update menu
-                    if response.changed() {
-                        menu.update();
-                    }
-                    // when the menu is open, the query should always have focus
-                    if !response.has_focus() {
-                        response.request_focus();
-                    }
+                                // query
 
-                    // options
-
-                    if menu.all_options.is_empty() {
-                        let rich_text =
-                            egui::RichText::new("no edit options available here!".to_owned());
-                        ui.label(
-                            rich_text
-                                .color(Self::color_scheme(ui).active_text)
-                                .background_color(Self::color_scheme(ui).active_background),
-                        );
-                    } else {
-                        let menu_index = menu.index;
-                        let matched_items = menu.matched_items();
-                        let matched_items_count = matched_items.len();
-
-                        let focus_index = if matched_items_count == 0 {
-                            None
-                        } else {
-                            Some(menu_index.rem_euclid(matched_items_count as i8) as usize)
-                        };
-
-                        if let Some(focus_index) = focus_index {
-                            for (item_index, (label, _item)) in matched_items.iter().enumerate() {
-                                let rich_text = match label {
-                                    Some(label) => {
-                                        egui::RichText::new(format!("[{item_index}] {label}"))
-                                    }
-                                    None => egui::RichText::new(format!("[{item_index}] ...")),
-                                };
-                                if item_index == focus_index {
-                                    ui.label(
-                                        rich_text
-                                            .color(Self::color_scheme(ui).active_text)
-                                            .background_color(
-                                                Self::color_scheme(ui).active_background,
-                                            ),
-                                    );
-                                } else {
-                                    ui.label(
-                                        rich_text
-                                            .color(Self::color_scheme(ui).normal_text)
-                                            .background_color(
-                                                Self::color_scheme(ui).normal_background,
-                                            ),
-                                    );
+                                // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
+                                let textedit = egui::TextEdit::singleline(&mut menu.query)
+                                    .hint_text("query edit menu")
+                                    .desired_width(MENU_WIDTH) // 100f32 is a fine width for now
+                                    .cursor_at_end(true);
+                                let textedit_response = ui.add(textedit);
+                                // on change, update menu
+                                if textedit_response.changed() {
+                                    menu.update(true);
                                 }
-                            }
-                        }
-                    }
-                });
+                                // when the menu is open, the query should always have focus
+                                if !textedit_response.has_focus() {
+                                    textedit_response.request_focus();
+                                }
+
+                                ui.end_row();
+
+                                // options
+
+                                let menu_index = menu.index;
+                                let matched_items = menu.matched_items();
+                                let matched_items_count = matched_items.len();
+                                let focus_index = if matched_items_count == 0 {
+                                    None
+                                } else {
+                                    Some(menu_index.rem_euclid(matched_items_count as i8) as usize)
+                                };
+                                let requested_scroll_to_option = menu.requested_scroll_to_option;
+
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::TOP)
+                                            .with_main_wrap(true),
+                                        |ui| {
+                                            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                                            ui.set_row_height(
+                                                ui.text_style_height(&egui::TextStyle::Body),
+                                            );
+
+                                            let matched_items = menu.matched_items();
+
+                                            // let mut responses = vec![];
+                                            let mut focus_response = None;
+
+                                            for (i, (label, _item)) in
+                                                matched_items.iter().enumerate()
+                                            {
+                                                let focused = Some(i) == focus_index;
+
+                                                let frame = egui::Frame::new().show(ui, |ui| {
+                                                    ui.set_width(MENU_WIDTH);
+                                                    ui.with_layout(
+                                                        egui::Layout::left_to_right(
+                                                            egui::Align::TOP,
+                                                        )
+                                                        .with_main_wrap(true),
+                                                        |ui| {
+                                                            ui.spacing_mut().item_spacing =
+                                                                egui::Vec2::ZERO;
+                                                            ui.set_row_height(
+                                                                ui.text_style_height(
+                                                                    &egui::TextStyle::Body,
+                                                                ),
+                                                            );
+
+                                                            egui::Frame::new().show(ui, |ui| {
+                                                                ui.set_width(10.0f32);
+                                                                ui.vertical_centered(|ui| {
+                                                                    if focused {
+                                                                        ui.add(
+                                                                            egui::Label::new(
+                                                                                egui::RichText::new(
+                                                                                    "•".to_owned(),
+                                                                                ),
+                                                                            )
+                                                                            .selectable(false),
+                                                                        );
+                                                                    }
+                                                                });
+                                                            });
+
+                                                            egui::Frame::new().show(ui, |ui| {
+                                                                ui.add(
+                                                                    egui::Label::new(
+                                                                        egui::RichText::new(
+                                                                            label.clone(),
+                                                                        ),
+                                                                    )
+                                                                    .selectable(false),
+                                                                );
+                                                            })
+                                                        },
+                                                    );
+                                                });
+
+                                                if requested_scroll_to_option && focused {
+                                                    focus_response = Some(frame.response);
+                                                }
+
+                                                ui.end_row();
+                                            }
+
+                                            if let Some(focus_response) = focus_response {
+                                                focus_response.scroll_to_me(Some(egui::Align::TOP));
+                                            }
+                                            menu.requested_scroll_to_option = false;
+                                        },
+                                    );
+                                });
+                            },
+                        );
+                    });
             }
         });
     }
@@ -584,6 +642,7 @@ pub struct EditMenu {
     pub all_options: Vec<EditMenuOption>,
     pub index: i8,
     pub matcher: nucleo_matcher::Matcher,
+    pub requested_scroll_to_option: bool,
 }
 
 impl EditMenu {
@@ -593,20 +652,21 @@ impl EditMenu {
             all_options,
             index: 0,
             matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
+            requested_scroll_to_option: true,
         }
     }
 
-    pub fn matched_items(&mut self) -> Vec<(Option<String>, &EditMenuOption)> {
-        let matched_dynamic_items: Vec<(Option<String>, &EditMenuOption)> = self
+    pub fn matched_items(&mut self) -> Vec<(String, &EditMenuOption)> {
+        let matched_dynamic_items: Vec<(String, &EditMenuOption)> = self
             .all_options
             .iter()
             .filter_map(|item| match item.pattern {
                 EditMenuPattern::Static(_) => None,
-                EditMenuPattern::Dynamic(_, f) => Some((Some(f(&self.query)?), item)),
+                EditMenuPattern::Dynamic(_, f) => Some((f(&self.query)?, item)),
             })
             .collect::<Vec<_>>();
 
-        let matched_static_items: Vec<(Option<String>, &EditMenuOption)> =
+        let matched_static_items: Vec<(String, &EditMenuOption)> =
             nucleo_matcher::pattern::Pattern::parse(
                 &self.query,
                 nucleo_matcher::pattern::CaseMatching::Smart,
@@ -620,7 +680,7 @@ impl EditMenu {
                 &mut self.matcher,
             )
             .iter()
-            .map(|item| (Some(item.0.pattern.label().to_owned()), item.0))
+            .map(|item| (item.0.pattern.label().to_owned(), item.0))
             .collect();
 
         // include dynamic before static
@@ -640,8 +700,12 @@ impl EditMenu {
         Some(item.1)
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, reset_index: bool) {
         info!(target: "editor.edit", "update; self.query = {}", self.query);
+        self.requested_scroll_to_option = true;
+        if reset_index {
+            self.index = 0;
+        }
     }
 }
 
