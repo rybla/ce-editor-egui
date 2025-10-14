@@ -2,12 +2,29 @@
 
 use lazy_static::lazy_static;
 use map_macro::hash_map;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 #[derive(Debug, Clone)]
 struct Expr {
     label: String,
     kids: Vec<Expr>,
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.kids.is_empty() {
+            write!(f, "ex!(\"{}\")", self.label)
+        } else {
+            write!(f, "ex!(\"{}\", [", self.label)?;
+            for (i, kid) in self.kids.iter().enumerate() {
+                write!(f, "{kid}")?;
+                if i < self.kids.len() - 1 {
+                    write!(f, ", ")?;
+                }
+            }
+            write!(f, "])")
+        }
+    }
 }
 
 impl Expr {
@@ -40,6 +57,15 @@ struct Rule {
     pub kids: Vec<Sort>,
 }
 
+macro_rules! rule {
+    ( $sort: expr ) => {
+        Rule { sort: $sort, kids: vec![] }
+    };
+    ( $sort: expr, [ $( $kid: expr ),* ] ) => {
+        Rule { sort: $sort, kids: vec![$( $kid ),*] }
+    }
+}
+
 impl Rule {
     pub fn new(sort: Sort, kids: Vec<Sort>) -> Self {
         Self { sort, kids }
@@ -49,32 +75,32 @@ impl Rule {
 lazy_static! {
     static ref GRAMMAR: HashMap<String, Rule> = hash_map! {
         // Prop
-        "true".to_owned() => Rule::new(Prop, vec![]),
-        "false".to_owned() => Rule::new(Prop, vec![]),
-        "<".to_owned() => Rule::new(Prop, vec![Num, Num]),
-        ">".to_owned() => Rule::new(Prop, vec![Num, Num]),
-        ">=".to_owned() => Rule::new(Prop, vec![Num, Num]),
-        "<=".to_owned() => Rule::new(Prop, vec![Num, Num]),
-        "=".to_owned() => Rule::new(Prop, vec![Num, Num]),
-        "and".to_owned() => Rule::new(Prop, vec![Prop, Prop]),
-        "or".to_owned() => Rule::new(Prop, vec![Prop, Prop]),
-        "=>".to_owned() => Rule::new(Prop, vec![Prop, Prop]),
-        "not".to_owned() => Rule::new(Prop, vec![Prop]),
-        "forall".to_owned() => Rule::new(Prop, vec![Var, Prop]),
-        "exists".to_owned() => Rule::new(Prop, vec![Var, Prop]),
+        "true".to_owned() => rule!(Prop),
+        "false".to_owned() => rule!(Prop),
+        "<".to_owned() => rule!(Prop, [Num, Num]),
+        ">".to_owned() => rule!(Prop, [Num, Num]),
+        ">=".to_owned() => rule!(Prop, [Num, Num]),
+        "<=".to_owned() => rule!(Prop, [Num, Num]),
+        "=".to_owned() => rule!(Prop, [Num, Num]),
+        "and".to_owned() => rule!(Prop, [Prop, Prop]),
+        "or".to_owned() => rule!(Prop, [Prop, Prop]),
+        "=>".to_owned() => rule!(Prop, [Prop, Prop]),
+        "not".to_owned() => rule!(Prop, [Prop]),
+        "forall".to_owned() => rule!(Prop, [Var, Prop]),
+        "exists".to_owned() => rule!(Prop, [Var, Prop]),
         // Num
-        "+".to_owned() => Rule::new(Num, vec![Num, Num]),
-        "-".to_owned() => Rule::new(Num, vec![Num, Num]),
-        "*".to_owned() => Rule::new(Num, vec![Num, Num]),
-        "/".to_owned() => Rule::new(Num, vec![Num, Num]),
+        "+".to_owned() => rule!(Num, [Num, Num]),
+        "-".to_owned() => rule!(Num, [Num, Num]),
+        "*".to_owned() => rule!(Num, [Num, Num]),
+        "/".to_owned() => rule!(Num, [Num, Num]),
         // TODO: but how can we add number literals if the labels are strings?
         // maybe we'll add these too:
-        "abs".to_owned() => Rule::new(Num, vec![Num]),
-        "ceil".to_owned() => Rule::new(Num, vec![Num]),
-        "floor".to_owned() => Rule::new(Num, vec![Num]),
+        "abs".to_owned() => rule!(Num, [Num]),
+        "ceil".to_owned() => rule!(Num, [Num]),
+        "floor".to_owned() => rule!(Num, [Num]),
         // proof forms
-        "and_intro".to_owned() => Rule::new(Proof, vec![Proof, Proof]),
-        "true_intro".to_owned() => Rule::new(Proof, vec![]),
+        "and_intro".to_owned() => rule!(Proof, [Proof, Proof]),
+        "true_intro".to_owned() => rule!(Proof),
     };
 }
 
@@ -130,7 +156,7 @@ enum Type {
 }
 
 /// Checks that a proof is valid with respect to an expected [`Prop`].
-/// - Assuems that all the [`Type`]s in the context have been sort-checked.
+/// - Assumes that all the [`Type`]s in the context have been sort-checked.
 /// - Assumes that [`expected_prop`] has been sort-checked.
 fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: &Expr) -> bool {
     // sort-check
@@ -155,13 +181,30 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: &Expr) -
     }
 }
 
+fn test(ctx: &HashMap<String, Type>, expected_prop: &Expr, proof: &Expr) {
+    let result = check_proof(ctx.clone(), expected_prop, proof);
+    println!("{ctx:?} |- {expected_prop} : {proof} ; {result}");
+}
+
 pub fn main() {
-    println!(
-        "{}",
-        check_proof(
-            HashMap::new(),
-            &ex!("and", [ex!("true"), ex!("true")]),
-            &ex!("and_intro", [ex!("true_intro"), ex!("true_intro")]),
-        )
+    test(
+        &hash_map! {},
+        &ex!("and", [ex!("true"), ex!("true")]),
+        &ex!("and_intro", [ex!("true_intro"), ex!("true_intro")]),
+    );
+    test(
+        &hash_map! {},
+        &ex!("and", [ex!("true"), ex!("false")]),
+        &ex!("and_intro", [ex!("true_intro"), ex!("true_intro")]),
+    );
+    test(
+        &hash_map! {},
+        &ex!("and", [ex!("false"), ex!("true")]),
+        &ex!("and_intro", [ex!("true_intro"), ex!("true_intro")]),
+    );
+    test(
+        &hash_map! {},
+        &ex!("and", [ex!("false"), ex!("false")]),
+        &ex!("and_intro", [ex!("true_intro"), ex!("true_intro")]),
     );
 }
