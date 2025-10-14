@@ -14,6 +14,8 @@ pub const INDENT_WIDTH_EM: f32 = 1.0;
 pub struct ColorScheme {
     pub normal_border: egui::Color32,
     pub normal_text: egui::Color32,
+    pub ghost_text: egui::Color32,
+    pub keyword_text: egui::Color32,
     pub accent_text: egui::Color32,
     pub normal_background: egui::Color32,
     pub active_text: egui::Color32,
@@ -26,7 +28,9 @@ pub struct ColorScheme {
 lazy_static! {
     pub static ref dark_color_scheme: ColorScheme = ColorScheme {
         accent_text: egui::Color32::RED,
+        keyword_text: egui::Color32::BLUE,
         normal_text: egui::Color32::WHITE,
+        ghost_text: egui::Color32::GRAY,
         normal_background: egui::Color32::BLACK,
         normal_border: egui::Color32::WHITE,
         active_text: egui::Color32::WHITE,
@@ -37,7 +41,9 @@ lazy_static! {
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
         accent_text: egui::Color32::RED,
+        keyword_text: egui::Color32::BLUE,
         normal_text: egui::Color32::BLACK,
+        ghost_text: egui::Color32::GRAY,
         normal_background: egui::Color32::WHITE,
         normal_border: egui::Color32::BLACK,
         active_text: egui::Color32::WHITE,
@@ -210,7 +216,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
 
                 if let Some(h) = self.core.handle.clone().drag(&self.core.expr, &target)
-                    && ES::is_valid_handle_specialized(&h, &self.core.expr)
+                    && ES::is_valid_handle(&h, &self.core.expr)
                 {
                     self.do_action(Action::SetHandle(SetHandle {
                         handle: h,
@@ -232,7 +238,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     break;
                 }
 
-                if ES::is_valid_handle_specialized(&origin, &self.core.expr) {
+                if ES::is_valid_handle(&origin, &self.core.expr) {
                     break;
                 }
             }
@@ -335,13 +341,13 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 color_scheme.normal_background
             };
 
-            let text_color = color_scheme.normal_text;
-
             egui::Frame::new().fill(fill_color).show(ui, |ui| {
                 let label = ui.add(
-                    egui::Label::new(egui::RichText::new("•".to_owned()).color(text_color))
-                        .selectable(false)
-                        .sense(egui::Sense::click_and_drag()),
+                    egui::Label::new(
+                        egui::RichText::new("•".to_owned()).color(color_scheme.ghost_text),
+                    )
+                    .selectable(false)
+                    .sense(egui::Sense::click_and_drag()),
                 );
 
                 if ren_ctx.interactive {
@@ -549,7 +555,16 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         path: &Path,
         expr: &EditorExpr,
     ) {
-        let mut render_steps_and_kids = vec![];
+        let color_scheme = Self::color_scheme(ui);
+
+        let selected = self.core.handle.contains_path(path);
+        let fill_color = if selected {
+            color_scheme.highlight_background
+        } else {
+            color_scheme.normal_background
+        };
+
+        let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)> = vec![];
 
         for (s, e) in expr.kids.steps_and_kids() {
             render_steps_and_kids.push((
@@ -571,6 +586,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             },
             None,
         ));
+
+        let literal_kids_count = render_steps_and_kids
+            .iter()
+            .filter(|(_, o_re)| match o_re {
+                Some(re) => matches!(re.expr.label.constructor, Constructor::Literal(_)),
+                None => false,
+            })
+            .collect::<Vec<_>>()
+            .len();
 
         match &expr.label.constructor {
             Constructor::Literal(literal) => ES::assemble_rendered_expr(
@@ -601,81 +625,35 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     );
                 });
             }
+            Constructor::PosArg if literal_kids_count == 1 => {
+                for (step, kid) in &render_steps_and_kids {
+                    step.render(ctx, ui, ren_ctx, self);
+                    if let Some(kid) = kid {
+                        kid.render(ctx, ui, ren_ctx, self);
+                    }
+                }
+            }
             Constructor::PosArg => {
-                let color_scheme = Self::color_scheme(ui);
-
-                let selected = self.core.handle.contains_path(path);
-                let fill_color = if selected {
-                    color_scheme.highlight_background
-                } else {
-                    color_scheme.normal_background
-                };
-
-                let render_steps_and_kids_len = render_steps_and_kids.len();
-                // 2 = one element for index and kid, one for last index
-                if render_steps_and_kids_len == 2 {
-                    for (step, kid) in &render_steps_and_kids {
-                        step.render(ctx, ui, ren_ctx, self);
-                        if let Some(kid) = kid {
-                            kid.render(ctx, ui, ren_ctx, self);
-                        }
-                    }
-                } else {
-                    egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new("[").color(color_scheme.accent_text),
-                            )
+                egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new("[").color(color_scheme.accent_text))
                             .selectable(false),
-                        );
-                    });
+                    );
+                });
 
-                    for (step, kid) in &render_steps_and_kids {
-                        step.render(ctx, ui, ren_ctx, self);
-                        if let Some(kid) = kid {
-                            kid.render(ctx, ui, ren_ctx, self);
-                        }
+                for (step, kid) in &render_steps_and_kids {
+                    step.render(ctx, ui, ren_ctx, self);
+                    if let Some(kid) = kid {
+                        kid.render(ctx, ui, ren_ctx, self);
                     }
-
-                    egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new("]").color(color_scheme.accent_text),
-                            )
-                            .selectable(false),
-                        );
-                    });
                 }
 
-                // egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                //     ui.add(
-                //         egui::Label::new(egui::RichText::new("(").color(text_color))
-                //             .selectable(false),
-                //     );
-                // });
-
-                // egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                //     ui.add(
-                //         egui::Label::new(
-                //             egui::RichText::new("pos_arg".to_owned()).color(text_color),
-                //         )
-                //         .selectable(false),
-                //     );
-                // });
-
-                // for (step, kid) in &render_steps_and_kids {
-                //     step.render(ctx, ui, ren_ctx, self);
-                //     if let Some(kid) = kid {
-                //         kid.render(ctx, ui, ren_ctx, self);
-                //     }
-                // }
-
-                // egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                //     ui.add(
-                //         egui::Label::new(egui::RichText::new(")").color(text_color))
-                //             .selectable(false),
-                //     );
-                // });
+                egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new("]").color(color_scheme.accent_text))
+                            .selectable(false),
+                    );
+                });
             }
         }
     }
@@ -716,16 +694,16 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
             }
             Action::Cut => {
+                self.snapshot();
                 if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
-                    self.snapshot();
                     self.menu = None;
                     self.core.clipboard = Some(frag);
                     self.core.handle = h;
                 }
             }
             Action::Delete => {
+                self.snapshot();
                 if let Some((_frag, h)) = self.core.expr.cut(&self.core.handle) {
-                    self.snapshot();
                     self.menu = None;
                     self.core.handle = h;
                 }

@@ -73,3 +73,11 @@ pub fn display_slice<T: Display>(xs: &[T]) -> String {
     s.push(']');
     s
 }
+
+pub fn pop_front<T>(xs: &mut Vec<T>) -> Option<T> {
+    if xs.is_empty() {
+        None
+    } else {
+        Some(xs.remove(0))
+    }
+}

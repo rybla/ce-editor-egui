@@ -1330,14 +1330,13 @@ impl<L: Debug + Display + Clone> Expr<L> {
         (ctx, e)
     }
 
-    #[expect(clippy::wrong_self_convention)]
-    fn into_context_from_point(&self, p: &Point) -> Context<L> {
+    pub fn into_context_from_point(&self, p: &Point) -> Context<L> {
         let (mut ctx, e) = self.into_context_from_path(&p.path);
         ctx.0.push(e.tooth_at_index(&p.i));
         ctx
     }
 
-    fn tooth_at_index(&self, i: &Index) -> Tooth<L> {
+    pub fn tooth_at_index(&self, i: &Index) -> Tooth<L> {
         Tooth {
             label: self.label.clone(),
             span_l: Span(

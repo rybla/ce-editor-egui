@@ -2,6 +2,7 @@ use crate::{
     editor::{self, *},
     ex,
     expr::*,
+    utility::pop_front,
 };
 use lazy_static::lazy_static;
 use map_macro::hash_map;
@@ -25,6 +26,14 @@ struct Rule {
 enum RuleKids {
     FixedArity(&'static [Sort]),
     FreeArity(Sort),
+}
+impl RuleKids {
+    fn is_empty(&self) -> bool {
+        match self {
+            FixedArity(sorts) => sorts.is_empty(),
+            FreeArity(_) => false,
+        }
+    }
 }
 
 use RuleKids::{FixedArity, FreeArity};
@@ -87,11 +96,17 @@ lazy_static! {
         // others
         "list".to_owned() => rule![Num, free-arity[Num]],
     };
+
+    static ref DEFAULT_LITERAL_RULE: Rule = Rule {
+        sort: Var,
+        kids: FixedArity(&[]),
+        infix: false
+    };
 }
 
 fn get_rule(c: &Constructor) -> Option<&Rule> {
     match c {
-        Constructor::Literal(lit) => GRAMMAR.get(lit),
+        Constructor::Literal(lit) => Some(GRAMMAR.get(lit).unwrap_or(&DEFAULT_LITERAL_RULE)),
         _ => None,
     }
 }
@@ -115,7 +130,7 @@ macro_rules! make_simple_edit_menu_option {
 
                 let rule = GRAMMAR
                     .get($name)
-                    .unwrap_or_else(|| panic!("rule for symbol {} not found", $name));
+                    .unwrap_or_else(|| panic!("no rule for {}", $name));
 
                 let mut kids: Vec<Expr<ExprLabel>> = vec![];
                 match &rule.kids {
@@ -127,16 +142,34 @@ macro_rules! make_simple_edit_menu_option {
                     FreeArity(_sort) => {}
                 }
 
+                let tooth_into_first_kid = pop_front(&mut kids).map(|e| e.tooth_at_index(&Index(0)));
+
                 let handle = state.expr.insert(
                     state.handle,
                     Fragment::Zipper(Zipper {
                         span_ol: Span::empty(),
                         span_or: Span::empty(),
-                        middle: Context(vec![Tooth {
-                            label: ExprLabel::new(Constructor::Literal($name.to_owned()), vec![]),
-                            span_l: Span::empty(),
-                            span_r: Span(kids),
-                        }]),
+                        middle: Context(match tooth_into_first_kid {
+                            None => vec![Tooth {
+                                label: ExprLabel::new(
+                                    Constructor::Literal($name.to_owned()),
+                                    vec![],
+                                ),
+                                span_l: Span::empty(),
+                                span_r: Span(kids),
+                            }],
+                            Some(tooth_into_first_kid) => vec![
+                                Tooth {
+                                    label: ExprLabel::new(
+                                        Constructor::Literal($name.to_owned()),
+                                        vec![],
+                                    ),
+                                    span_l: Span::empty(),
+                                    span_r: Span(kids),
+                                },
+                                tooth_into_first_kid,
+                            ],
+                        }),
                     }),
                 );
 
@@ -226,9 +259,8 @@ impl EditorSpec for Fol {
                 let e = root.at_path(&p.path);
                 match &e.label.constructor {
                     Constructor::Literal(_) => {
-                        let sort = get_rule(&e.label.constructor).unwrap_or_else(|| {
-                            panic!("sort of {} to be defined", e.label.constructor)
-                        });
+                        let sort = get_rule(&e.label.constructor)
+                            .unwrap_or_else(|| panic!("no rule for {} ", e.label.constructor));
                         matches!(&sort.kids, FreeArity(_))
                     }
                     Constructor::Newline => false,
@@ -294,7 +326,7 @@ impl EditorSpec for Fol {
     ) {
         let color_scheme = editor::EditorState::<Self>::color_scheme(ui);
         let rule = get_rule(&expr.label.constructor)
-            .unwrap_or_else(|| panic!("rule not defined for symbol {}", expr.label.constructor));
+            .unwrap_or_else(|| panic!("no rule for {}", expr.label.constructor));
 
         let selected = state.core.handle.contains_path(path);
         let fill_color = if selected {
@@ -302,17 +334,38 @@ impl EditorSpec for Fol {
         } else {
             color_scheme.normal_background
         };
-        let text_color = color_scheme.normal_text;
 
-        egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            ui.add(egui::Label::new(egui::RichText::new("(").color(text_color)).selectable(false));
-        });
+        if !rule.kids.is_empty() {
+            egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new("(")
+                            .color(color_scheme.normal_text)
+                            .text_style(egui::TextStyle::Monospace),
+                    )
+                    .selectable(false),
+                );
+            });
+        }
 
         let render_label = |ui: &mut egui::Ui| {
             egui::Frame::new().fill(fill_color).show(ui, |ui| {
                 ui.add(
-                    egui::Label::new(egui::RichText::new(label.to_owned()).color(text_color))
-                        .selectable(false),
+                    egui::Label::new(
+                        egui::RichText::new(label.to_owned())
+                            .color(if rule.kids.is_empty() {
+                                color_scheme.normal_text
+                            } else {
+                                color_scheme.keyword_text
+                            })
+                            .text_style(if rule.kids.is_empty() {
+                                egui::TextStyle::Body
+                            } else {
+                                egui::TextStyle::Monospace
+                            })
+                            .strong(),
+                    )
+                    .selectable(false),
                 );
             });
         };
@@ -331,8 +384,17 @@ impl EditorSpec for Fol {
             }
         }
 
-        egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            ui.add(egui::Label::new(egui::RichText::new(")").color(text_color)).selectable(false));
-        });
+        if !rule.kids.is_empty() {
+            egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(")")
+                            .color(color_scheme.normal_text)
+                            .text_style(egui::TextStyle::Monospace),
+                    )
+                    .selectable(false),
+                );
+            });
+        }
     }
 }
