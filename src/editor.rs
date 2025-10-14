@@ -120,11 +120,29 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.drag_origin = None;
         }
 
+        let mut key_and_mods: Option<(egui::Key, egui::Modifiers)> = None;
+        ctx.input(|i| {
+            for e in &i.events {
+                if let egui::Event::Key {
+                    key,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } = e
+                {
+                    key_and_mods = Some((*key, *modifiers));
+                }
+            }
+        });
+
         if false {
             // this is just a placeholder so the subsequent branches can all use `else if` syntax
         }
         // escape
-        else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        else if key_and_mods
+            .map(|(k, m)| k == egui::Key::Escape && !m.command)
+            .unwrap_or(false)
+        {
             self.escape();
         }
         // when edit menu is open
@@ -132,8 +150,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             if false {
             }
             // submit menu option
-            else if ctx
-                .input(|i| i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::Enter))
+            else if key_and_mods
+                .map(|(k, m)| {
+                    !m.command && !m.shift && (k == egui::Key::Tab || k == egui::Key::Enter)
+                })
+                .unwrap_or(false)
             {
                 if let Some(option) = menu.focus_option() {
                     // TODO: this still seems problematic that we are cloning the entire core state for every single update
@@ -156,39 +177,63 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
         }
         // open edit menu
-        else if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+        else if key_and_mods
+            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Space)
+            .unwrap_or(false)
+        {
             trace!(target: "editor.edit", "open EditMenu");
             let menu = ES::get_edits(self);
             self.menu = Some(EditMenu::new(menu));
         }
         // undo
-        else if ctx.input(|i| i.key_pressed(egui::Key::Z)) {
+        else if key_and_mods
+            .map(|(k, m)| m.command && !m.shift && k == egui::Key::Z)
+            .unwrap_or(false)
+        {
             self.do_action(Action::Undo);
         }
         // redo
-        else if ctx.input(|i| i.key_pressed(egui::Key::R)) {
+        else if key_and_mods
+            .map(|(k, m)| m.command && m.shift && k == egui::Key::Z)
+            .unwrap_or(false)
+        {
             self.do_action(Action::Redo);
         }
         // delete
-        else if ctx
-            .input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
+        else if key_and_mods
+            .map(|(k, m)| {
+                m.command && !m.shift && (k == egui::Key::Delete || k == egui::Key::Backspace)
+            })
+            .unwrap_or(false)
         {
             self.do_action(Action::Delete);
         }
         // cut
-        else if ctx.input(|i| i.key_pressed(egui::Key::X)) {
+        else if key_and_mods
+            .map(|(k, m)| m.command && !m.shift && k == egui::Key::X)
+            .unwrap_or(false)
+        {
             self.do_action(Action::Cut);
         }
         // copy
-        else if ctx.input(|i| i.key_pressed(egui::Key::C)) {
+        else if key_and_mods
+            .map(|(k, m)| m.command && !m.shift && k == egui::Key::C)
+            .unwrap_or(false)
+        {
             self.do_action(Action::Copy);
         }
         // paste
-        else if ctx.input(|i| i.key_pressed(egui::Key::V)) {
+        else if key_and_mods
+            .map(|(k, m)| m.command && !m.shift && k == egui::Key::V)
+            .unwrap_or(false)
+        {
             self.do_action(Action::Paste);
         }
         // newline
-        else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+        else if key_and_mods
+            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Enter)
+            .unwrap_or(false)
+        {
             let mut core = self.core.clone();
             let h = core.expr.insert(
                 core.handle,
@@ -198,13 +243,15 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             self.do_action(Action::SetCore(core));
         }
         // rotate focus
-        else if ctx.input(|i| i.modifiers.command_only())
+        else if key_and_mods.map(|(_, m)| m.command).unwrap_or(false)
             && let Some(dir) = match_input_move_dir(ctx)
         {
             self.core.handle.rotate_focus_dir(&dir);
         }
         // select
-        else if ctx.input(|i| i.modifiers.shift)
+        else if key_and_mods
+            .map(|(_, m)| !m.command && m.shift)
+            .unwrap_or(false)
             && let Some(dir) = match_input_move_dir(ctx)
         {
             let mut target = self.core.handle.focus_point();
@@ -227,7 +274,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
         }
         // move
-        else if let Some(dir) = match_input_move_dir(ctx) {
+        else if key_and_mods
+            .map(|(_, m)| !m.command && !m.shift)
+            .unwrap_or(false)
+            && let Some(dir) = match_input_move_dir(ctx)
+        {
             let mut origin = self.core.handle.clone();
             #[expect(unused_assignments)]
             let mut move_status = Ok(());
@@ -251,7 +302,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             }
         }
         // move up
-        else if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+        else if key_and_mods
+            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::ArrowUp)
+            .unwrap_or(false)
+        {
             let mut origin = self.core.handle.clone();
             loop {
                 let move_status = origin.move_up(&self.core.expr);
