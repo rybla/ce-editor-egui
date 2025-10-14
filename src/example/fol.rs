@@ -142,7 +142,8 @@ macro_rules! make_simple_edit_menu_option {
                     FreeArity(_sort) => {}
                 }
 
-                let tooth_into_first_kid = pop_front(&mut kids).map(|e| e.tooth_at_index(&Index(0)));
+                let tooth_into_first_kid =
+                    pop_front(&mut kids).map(|e| e.tooth_at_index(&Index(0)));
 
                 let handle = state.expr.insert(
                     state.handle,
@@ -207,7 +208,7 @@ impl EditorSpec for Fol {
         vec![
             EditMenuOption {
                 pattern: EditMenuPattern::Dynamic("variable".to_owned(), |query| {
-                    if GRAMMAR.keys().any(|x| x == query) {
+                    if query.is_empty() || GRAMMAR.keys().any(|x| x == query) {
                         return None;
                     }
                     Some(query.clone())
@@ -306,13 +307,17 @@ impl EditorSpec for Fol {
                 // at each end of the zipper has the same sort.
                 let e_o = root.at_path(&h.path_o);
                 let sort_o = match e_o.pat2() {
-                    (Constructor::PosArg, [k]) => get_rule(&k.label.constructor).map(|r| r.sort.clone()),
-                    _ => None
+                    (Constructor::PosArg, [k]) => {
+                        get_rule(&k.label.constructor).map(|r| r.sort.clone())
+                    }
+                    _ => None,
                 };
                 let e_i = root.at_path(&h.path_i());
                 let sort_i = match e_i.pat2() {
-                    (Constructor::PosArg, [k]) => get_rule(&k.label.constructor).map(|r| r.sort.clone()),
-                    _ => None
+                    (Constructor::PosArg, [k]) => {
+                        get_rule(&k.label.constructor).map(|r| r.sort.clone())
+                    }
+                    _ => None,
                 };
                 sort_o == sort_i
             }
