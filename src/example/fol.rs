@@ -19,6 +19,7 @@ use Sort::{Num, Prop, Var};
 struct Rule {
     pub sort: Sort,
     pub kids: RuleKids,
+    pub infix: bool,
 }
 
 enum RuleKids {
@@ -29,40 +30,62 @@ enum RuleKids {
 use RuleKids::{FixedArity, FreeArity};
 
 macro_rules! rule {
-    ( $sort: expr, [ $( $kid: expr ),* ] ) => {
-        Rule { sort: $sort, kids: FixedArity(&[ $( $kid ),* ]) }
+    ( $sort: expr, fixed-arity [ $( $kid: expr ),* ] ) => {
+        Rule {
+            sort: $sort,
+            kids: FixedArity(&[ $( $kid ),* ]),
+            infix: false
+        }
     };
-    ( $sort: expr, $kid: expr ) => {
-        Rule { sort: $sort, kids: FreeArity($kid) }
-    }
+    ( $sort: expr, fixed-arity [ $( $kid: expr ),* ], infix ) => {
+        Rule {
+            sort: $sort,
+            kids: FixedArity(&[ $( $kid ),* ]),
+            infix: true
+        }
+    };
+    ( $sort: expr, free-arity [ $kid: expr ] ) => {
+        Rule {
+            sort: $sort,
+            kids: FreeArity($kid),
+            infix: false
+        }
+    };
+    ( $sort: expr, free-arity [ $kid: expr ], infix ) => {
+        Rule {
+            sort: $sort,
+            kids: FreeArity($kid),
+            infix: true
+        }
+    };
 }
 
 lazy_static! {
     static ref GRAMMAR: HashMap<String, Rule> = hash_map! {
         // Prop
-        "<".to_owned() => rule![Prop, [Num, Num]],
-        ">".to_owned() => rule![Prop, [Num, Num]],
-        ">=".to_owned() => rule![Prop, [Num, Num]],
-        ">=".to_owned() => rule![Prop, [Num, Num]],
-        "=".to_owned() => rule![Prop, [Num, Num]],
-            "and".to_owned() => rule![Prop, [Prop, Prop]],
-        "or".to_owned() => rule![Prop, [Prop, Prop]],
-        "arrow".to_owned() => rule![Prop, [Prop, Prop]],
-        "not".to_owned() => rule![Prop, [Prop]],
-        "forall".to_owned() => rule![Prop, [Var, Prop]],
-        "exists".to_owned() => rule![Prop, [Var, Prop]],
+        "<".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
+        ">".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
+        ">=".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
+        "<=".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
+        "=".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
+            "and".to_owned() => rule![Prop, fixed-arity[Prop, Prop], infix],
+        "or".to_owned() => rule![Prop, fixed-arity[Prop, Prop], infix],
+        "=>".to_owned() => rule![Prop, fixed-arity[Prop, Prop], infix],
+        "not".to_owned() => rule![Prop, fixed-arity[Prop]],
+        "forall".to_owned() => rule![Prop, fixed-arity[Var, Prop]],
+        "exists".to_owned() => rule![Prop, fixed-arity[Var, Prop]],
         // Num
-        "+".to_owned() => rule![Num, [Num, Num]],
-        "-".to_owned() => rule![Num, [Num, Num]],
-        "*".to_owned() => rule![Num, [Num, Num]],
-        "/".to_owned() => rule![Num, [Num, Num]],
+        "+".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
+        "-".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
+        "*".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
+        "/".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
         // TODO: but how can we add number literals if the labels are strings?
         // maybe we'll add these too:
-        "abs".to_owned() => rule![Num, [Num]],
-        "ceil".to_owned() => rule![Num, [Num]],
-        "floor".to_owned() => rule![Num, [Num]],
+        "abs".to_owned() => rule![Num, fixed-arity[Num]],
+        "ceil".to_owned() => rule![Num, fixed-arity[Num]],
+        "floor".to_owned() => rule![Num, fixed-arity[Num]],
         // others
-        "list".to_owned() => rule![Num, Num],
+        "list".to_owned() => rule![Num, free-arity[Num]],
     };
 }
 
@@ -90,7 +113,9 @@ macro_rules! make_simple_edit_menu_option {
             |_query, state| {
                 let mut state = state;
 
-                let rule = GRAMMAR.get($name).unwrap();
+                let rule = GRAMMAR
+                    .get($name)
+                    .unwrap_or_else(|| panic!("rule for symbol {} not found", $name));
 
                 let mut kids: Vec<Expr<ExprLabel>> = vec![];
                 match &rule.kids {
@@ -176,7 +201,7 @@ impl EditorSpec for Fol {
             make_simple_edit_menu_option!["="],
             make_simple_edit_menu_option!["and"],
             make_simple_edit_menu_option!["or"],
-            make_simple_edit_menu_option!["arrow"],
+            make_simple_edit_menu_option!["=>"],
             make_simple_edit_menu_option!["not"],
             make_simple_edit_menu_option!["forall"],
             make_simple_edit_menu_option!["exists"],
@@ -263,11 +288,13 @@ impl EditorSpec for Fol {
         ren_ctx: &RenderContext,
         state: &mut EditorState<Self>,
         path: &Path,
-        _expr: &EditorExpr,
+        expr: &EditorExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
         label: &str,
     ) {
         let color_scheme = editor::EditorState::<Self>::color_scheme(ui);
+        let rule = get_rule(&expr.label.constructor)
+            .unwrap_or_else(|| panic!("rule not defined for symbol {}", expr.label.constructor));
 
         let selected = state.core.handle.contains_path(path);
         let fill_color = if selected {
@@ -281,17 +308,26 @@ impl EditorSpec for Fol {
             ui.add(egui::Label::new(egui::RichText::new("(").color(text_color)).selectable(false));
         });
 
-        egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            ui.add(
-                egui::Label::new(egui::RichText::new(label.to_owned()).color(text_color))
-                    .selectable(false),
-            );
-        });
+        let render_label = |ui: &mut egui::Ui| {
+            egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                ui.add(
+                    egui::Label::new(egui::RichText::new(label.to_owned()).color(text_color))
+                        .selectable(false),
+                );
+            });
+        };
 
-        for (step, kid) in &render_steps_and_kids {
+        if !rule.infix {
+            render_label(ui);
+        }
+
+        for (i, (step, kid)) in render_steps_and_kids.iter().enumerate() {
             step.render(ctx, ui, ren_ctx, state);
             if let Some(kid) = kid {
                 kid.render(ctx, ui, ren_ctx, state);
+            }
+            if rule.infix && i == 0 {
+                render_label(ui);
             }
         }
 
