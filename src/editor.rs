@@ -1,4 +1,4 @@
-use crate::{ex, expr::*, span};
+use crate::{ex, expr::*, span, utility::is_single_char};
 use egui;
 use lazy_static::lazy_static;
 use log::trace;
@@ -152,7 +152,9 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             // submit menu option
             else if key_and_mods
                 .map(|(k, m)| {
-                    !m.command && !m.shift && (k == egui::Key::Tab || k == egui::Key::Enter)
+                    !m.command
+                        && !m.shift
+                        && (k == egui::Key::Tab || k == egui::Key::Enter || k == egui::Key::Space)
                 })
                 .unwrap_or(false)
             {
@@ -175,15 +177,6 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
                 menu.update(false);
             }
-        }
-        // open edit menu
-        else if key_and_mods
-            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Space)
-            .unwrap_or(false)
-        {
-            trace!(target: "editor.edit", "open EditMenu");
-            let menu = ES::get_edits(self);
-            self.menu = Some(EditMenu::new(menu));
         }
         // undo
         else if key_and_mods
@@ -322,6 +315,30 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 handle: origin.clone(),
                 snapshot: false,
             }));
+        }
+        // open edit menu (without query)
+        else if key_and_mods
+            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Space)
+            .unwrap_or(false)
+        {
+            trace!(target: "editor.edit", "open EditMenu");
+            let menu = ES::get_edits(self);
+            self.menu = Some(EditMenu::new(menu));
+        }
+        // open edit menu (with query)
+        else if let Some((k, m)) = key_and_mods
+            && !m.command
+        // && is_single_char(k.name())
+        {
+            trace!(target: "editor.edit", "open EditMenu");
+            let menu = ES::get_edits(self);
+            let mut s = k.symbol_or_name().to_owned();
+            if m.shift {
+                s = s.to_uppercase();
+            } else {
+                s = s.to_lowercase();
+            }
+            self.menu = Some(EditMenu::new_with_query(menu, s));
         }
     }
 
@@ -804,9 +821,19 @@ pub struct EditMenu {
 }
 
 impl EditMenu {
-    fn new(all_options: Vec<EditMenuOption>) -> Self {
+    pub fn new(all_options: Vec<EditMenuOption>) -> Self {
         Self {
             query: Default::default(),
+            all_options,
+            index: 0,
+            matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
+            requested_scroll_to_option: true,
+        }
+    }
+
+    pub fn new_with_query(all_options: Vec<EditMenuOption>, query: String) -> Self {
+        Self {
+            query,
             all_options,
             index: 0,
             matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),

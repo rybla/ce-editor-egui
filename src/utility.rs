@@ -81,3 +81,8 @@ pub fn pop_front<T>(xs: &mut Vec<T>) -> Option<T> {
         Some(xs.remove(0))
     }
 }
+
+pub fn is_single_char(s: &'static str) -> bool {
+    let mut chars = s.chars();
+    chars.next().is_some() && chars.next().is_none()
+}
