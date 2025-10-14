@@ -79,33 +79,8 @@ impl EditorSpec for Ce {
         Default::default()
     }
 
-    fn is_valid_handle(h: &Handle, e: &EditorExpr) -> bool {
-        trace!(target: "is_valid_handle", "h = {h}");
-        trace!(target: "is_valid_handle", "e = {e}");
-
-        match h {
-            Handle::Point(p) => {
-                let e = e.at_path(&p.path);
-                e.label.constructor != Constructor::Newline
-            }
-            Handle::Span(h) => {
-                let e = e.at_path(&h.path);
-                e.label.constructor != Constructor::Newline
-            }
-            Handle::Zipper(h) => {
-                // These are closures so that the final conjunction is evaluated
-                // in a short-circuited fashion.
-                let b1 = || {
-                    let e = e.at_path(&h.path_o);
-                    e.label.constructor != Constructor::Newline
-                };
-                let b2 = || {
-                    let e = e.at_path(&h.path_i());
-                    e.label.constructor != Constructor::Newline
-                };
-                b1() && b2()
-            }
-        }
+    fn is_valid_handle_specialized(_h: &Handle, _e: &EditorExpr) -> bool {
+        true
     }
 
     fn assemble_rendered_expr(

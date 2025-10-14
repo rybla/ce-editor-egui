@@ -77,7 +77,7 @@ impl EditorSpec for Example1 {
         vec![Diagnostic("this is an example diagnostic".to_owned())]
     }
 
-    fn is_valid_handle(handle: &Handle, expr: &Expr<ExprLabel>) -> bool {
+    fn is_valid_handle_specialized(handle: &Handle, expr: &Expr<ExprLabel>) -> bool {
         match handle {
             Handle::Point(handle) => !expr.at_path(&handle.path).kids.0.is_empty(),
             Handle::Span(handle) => !expr.at_path(&handle.path).kids.0.is_empty(),

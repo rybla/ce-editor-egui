@@ -4,15 +4,21 @@ use crate::{
     expr::*,
 };
 use lazy_static::lazy_static;
-use log::trace;
 use map_macro::hash_map;
 use std::collections::HashMap;
 
-pub type Str = &'static str;
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
+enum Sort {
+    Prop,
+    Num,
+    Var,
+}
 
-pub struct Rule {
-    pub sort: Str,
-    pub kids: &'static [Str],
+use Sort::{Num, Prop, Var};
+
+struct Rule {
+    pub sort: Sort,
+    pub kids: &'static [Sort],
 }
 
 macro_rules! rule {
@@ -22,64 +28,85 @@ macro_rules! rule {
 }
 
 lazy_static! {
-    static ref GRAMMAR: HashMap<Str, Rule> = hash_map! {
+    static ref GRAMMAR: HashMap<String, Rule> = hash_map! {
         // Prop
-        "<" => rule!["Prop", ["Num", "Num"]],
-        ">" => rule!["Prop", ["Num", "Num"]],
-        ">=" => rule!["Prop", ["Num", "Num"]],
-        ">=" => rule!["Prop", ["Num", "Num"]],
-        "=" => rule!["Prop", ["Num", "Num"]],
-        "and" => rule!["Prop", ["Prop", "Prop"]],
-        "or" => rule!["Prop", ["Prop", "Prop"]],
-        "arrow" => rule!["Prop", ["Prop", "Prop"]],
-        "not" => rule!["Prop", ["Prop"]],
-        "forall" => rule!["Prop", ["Var", "Prop"]],
-        "exists" => rule!["Prop", ["Var", "Prop"]],
+        "<".to_owned() => rule![Prop, [Num, Num]],
+        ">".to_owned() => rule![Prop, [Num, Num]],
+        ">=".to_owned() => rule![Prop, [Num, Num]],
+        ">=".to_owned() => rule![Prop, [Num, Num]],
+        "=".to_owned() => rule![Prop, [Num, Num]],
+            "and".to_owned() => rule![Prop, [Prop, Prop]],
+        "or".to_owned() => rule![Prop, [Prop, Prop]],
+        "arrow".to_owned() => rule![Prop, [Prop, Prop]],
+        "not".to_owned() => rule![Prop, [Prop]],
+        "forall".to_owned() => rule![Prop, [Var, Prop]],
+        "exists".to_owned() => rule![Prop, [Var, Prop]],
         // Num
-        "+" => rule!["Num", ["Num", "Num"]],
-        "-" => rule!["Num", ["Num", "Num"]],
-        "*" => rule!["Num", ["Num", "Num"]],
-        "/" => rule!["Num", ["Num", "Num"]],
+        "+".to_owned() => rule![Num, [Num, Num]],
+        "-".to_owned() => rule![Num, [Num, Num]],
+        "*".to_owned() => rule![Num, [Num, Num]],
+        "/".to_owned() => rule![Num, [Num, Num]],
         // TODO: but how can we add number literals if the labels are strings?
         // maybe we'll add these too:
-        "abs" => rule!["Num", ["Num"]],
-        "ceil" => rule!["Num", ["Num"]],
-        "floor" => rule!["Num", ["Num"]],
+        "abs".to_owned() => rule![Num, [Num]],
+        "ceil".to_owned() => rule![Num, [Num]],
+        "floor".to_owned() => rule![Num, [Num]],
     };
 }
 
-macro_rules! simple_edit {
+fn get_rule(c: &Constructor) -> Option<&Rule> {
+    match c {
+        Constructor::Literal(lit) => Some(
+            GRAMMAR
+                .get(lit)
+                .expect("symbol literal to be defined in grammar"),
+        ),
+        _ => None,
+    }
+}
+
+#[expect(dead_code)]
+fn get_sorts(span: &Span<ExprLabel>) -> Vec<Option<&Sort>> {
+    span.0
+        .iter()
+        .map(|e| get_rule(&e.label.constructor).map(|r| &r.sort))
+        .collect()
+}
+
+// This has to be a macro rather than a definition because as a function it
+// would return a closure that captures the name dynamically.
+macro_rules! make_simple_edit_menu_option {
     ( $name: expr ) => {
-        EditMenuOption::new(EditMenuPattern::Static(format!($name)), |_query, state| {
-            let mut state = state;
+        EditMenuOption::new(
+            EditMenuPattern::Static($name.to_owned()),
+            |_query, state| {
+                let mut state = state;
 
-            let info = GRAMMAR.get($name).unwrap();
+                let rule = GRAMMAR.get($name).unwrap();
 
-            let mut kids: Vec<Expr<ExprLabel>> = vec![];
-            for _ in 0..info.kids.len() {
-                kids.push(ex![
-                    ExprLabel::new(Constructor::Literal(format!("arg")), vec![]),
-                    []
-                ]);
-            }
+                let mut kids: Vec<Expr<ExprLabel>> = vec![];
+                for _ in 0..rule.kids.len() {
+                    kids.push(ex![ExprLabel::new(Constructor::PosArg, vec![]), []]);
+                }
 
-            let handle = state.expr.insert(
-                state.handle,
-                Fragment::Zipper(Zipper {
-                    span_ol: Span::empty(),
-                    span_or: Span::empty(),
-                    middle: Context(vec![Tooth {
-                        label: ExprLabel::new(Constructor::Literal(format!($name)), vec![]),
-                        span_l: Span::empty(),
-                        span_r: Span(kids),
-                    }]),
-                }),
-            );
+                let handle = state.expr.insert(
+                    state.handle,
+                    Fragment::Zipper(Zipper {
+                        span_ol: Span::empty(),
+                        span_or: Span::empty(),
+                        middle: Context(vec![Tooth {
+                            label: ExprLabel::new(Constructor::Literal($name.to_owned()), vec![]),
+                            span_l: Span::empty(),
+                            span_r: Span(kids),
+                        }]),
+                    }),
+                );
 
-            state.handle = handle;
+                state.handle = handle;
 
-            Some(state)
-        })
+                Some(state)
+            },
+        )
     };
 }
 
@@ -107,24 +134,24 @@ impl EditorSpec for Fol {
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
         vec![
-            simple_edit!["<"],
-            simple_edit![">"],
-            simple_edit![">="],
-            simple_edit!["<="],
-            simple_edit!["="],
-            simple_edit!["and"],
-            simple_edit!["or"],
-            simple_edit!["arrow"],
-            simple_edit!["not"],
-            simple_edit!["forall"],
-            simple_edit!["exists"],
-            simple_edit!["+"],
-            simple_edit!["-"],
-            simple_edit!["*"],
-            simple_edit!["/"],
-            simple_edit!["abs"],
-            simple_edit!["ceil"],
-            simple_edit!["floor"],
+            make_simple_edit_menu_option!["<"],
+            make_simple_edit_menu_option![">"],
+            make_simple_edit_menu_option![">="],
+            make_simple_edit_menu_option!["<="],
+            make_simple_edit_menu_option!["="],
+            make_simple_edit_menu_option!["and"],
+            make_simple_edit_menu_option!["or"],
+            make_simple_edit_menu_option!["arrow"],
+            make_simple_edit_menu_option!["not"],
+            make_simple_edit_menu_option!["forall"],
+            make_simple_edit_menu_option!["exists"],
+            make_simple_edit_menu_option!["+"],
+            make_simple_edit_menu_option!["-"],
+            make_simple_edit_menu_option!["*"],
+            make_simple_edit_menu_option!["/"],
+            make_simple_edit_menu_option!["abs"],
+            make_simple_edit_menu_option!["ceil"],
+            make_simple_edit_menu_option!["floor"],
         ]
     }
 
@@ -132,31 +159,51 @@ impl EditorSpec for Fol {
         Default::default()
     }
 
-    fn is_valid_handle(h: &Handle, e: &EditorExpr) -> bool {
-        trace!(target: "is_valid_handle", "h = {h}");
-        trace!(target: "is_valid_handle", "e = {e}");
-
+    fn is_valid_handle_specialized(h: &Handle, root: &EditorExpr) -> bool {
         match h {
-            Handle::Point(p) => {
-                let e = e.at_path(&p.path);
-                e.label.constructor != Constructor::Newline
-            }
-            Handle::Span(h) => {
-                let e = e.at_path(&h.path);
-                e.label.constructor != Constructor::Newline
-            }
+            Handle::Point(_p) => true,
+            Handle::Span(_h) => true,
+            // Handle::Zipper(h) => {
+            //     // Try to extract a single sort at the outer [`SpanHandle`].
+            //     let span_o = root.at_span_handle(&h.handle_o());
+            //     let mut sorts_o: Vec<Sort> = get_sorts(&span_o)
+            //         .into_iter()
+            //         .filter_map(|o| o.map(|x| x.to_owned()))
+            //         .collect();
+            //     sorts_o.sort();
+            //     sorts_o.dedup();
+            //     let sort_o = match sorts_o.pop() {
+            //         Some(_) if !sorts_o.is_empty() => None,
+            //         Some(sort) => Some(sort),
+            //         None => None,
+            //     };
+            //
+            //     // Try to extract a single sort at the inner [`SpanHandle`].
+            //     let span_i = root.at_span_handle(&h.handle_i());
+            //     let mut sorts_i: Vec<Sort> = get_sorts(&span_i)
+            //         .into_iter()
+            //         .filter_map(|o| o.map(|x| x.to_owned()))
+            //         .collect();
+            //     sorts_i.sort();
+            //     sorts_i.dedup();
+            //     let sort_i = match sorts_i.pop() {
+            //         Some(_) if !sorts_i.is_empty() => None,
+            //         Some(sort) => Some(sort),
+            //         None => None,
+            //     };
+            //
+            //     // This isn't complete because it doesn't handle the differences
+            //     // between forms that do not have an assigned sort.
+            //     sort_o == sort_i
+            // }
             Handle::Zipper(h) => {
-                // These are closures so that the final conjunction is evaluated
-                // in a short-circuited fashion.
-                let b1 = || {
-                    let e = e.at_path(&h.path_o);
-                    e.label.constructor != Constructor::Newline
-                };
-                let b2 = || {
-                    let e = e.at_path(&h.path_i());
-                    e.label.constructor != Constructor::Newline
-                };
-                b1() && b2()
+                // As a simple first approach, just see if the parent expression
+                // at each end of the zipper has the same sort.
+                let e_o = root.at_path(&h.path_o);
+                let sort_o = get_rule(&e_o.label.constructor).map(|r| r.sort.clone());
+                let e_i = root.at_path(&h.path_i());
+                let sort_i = get_rule(&e_i.label.constructor).map(|r| r.sort.clone());
+                sort_o == sort_i
             }
         }
     }

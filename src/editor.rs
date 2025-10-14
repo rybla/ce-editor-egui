@@ -207,7 +207,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
 
                 if let Some(h) = self.core.handle.clone().drag(&self.core.expr, &target)
-                    && ES::is_valid_handle(&h, &self.core.expr)
+                    && ES::is_valid_handle_specialized(&h, &self.core.expr)
                 {
                     self.do_action(Action::SetHandle(SetHandle {
                         handle: h,
@@ -229,7 +229,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     break;
                 }
 
-                if ES::is_valid_handle(&origin, &self.core.expr) {
+                if ES::is_valid_handle_specialized(&origin, &self.core.expr) {
                     break;
                 }
             }
@@ -251,7 +251,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     break;
                 }
 
-                if ES::is_valid_handle(&self.core.handle, &self.core.expr) {
+                if ES::is_valid_handle_specialized(&self.core.handle, &self.core.expr) {
                     break;
                 }
             }
@@ -583,6 +583,47 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                     );
                 });
             }
+            Constructor::PosArg => {
+                let color_scheme = Self::color_scheme(ui);
+
+                let selected = self.core.handle.contains_path(path);
+                let fill_color = if selected {
+                    color_scheme.highlight_background
+                } else {
+                    color_scheme.normal_background
+                };
+                let text_color = color_scheme.normal_text;
+
+                egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new("(").color(text_color))
+                            .selectable(false),
+                    );
+                });
+
+                egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new("pos_arg".to_owned()).color(text_color),
+                        )
+                        .selectable(false),
+                    );
+                });
+
+                for (step, kid) in &render_steps_and_kids {
+                    step.render(ctx, ui, ren_ctx, self);
+                    if let Some(kid) = kid {
+                        kid.render(ctx, ui, ren_ctx, self);
+                    }
+                }
+
+                egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(")").color(text_color))
+                            .selectable(false),
+                    );
+                });
+            }
         }
     }
 
@@ -780,6 +821,8 @@ pub enum Constructor {
     Literal(String),
     Root,
     Newline,
+    /// Positional Argument
+    PosArg,
 }
 
 impl Display for Constructor {
@@ -788,6 +831,7 @@ impl Display for Constructor {
             Self::Literal(s) => write!(f, "{s}"),
             Self::Newline => write!(f, "<newline>"),
             Self::Root => write!(f, "<root>"),
+            Self::PosArg => write!(f, "<pos_arg>"),
         }
     }
 }
@@ -817,7 +861,56 @@ pub trait EditorSpec: 'static {
 
     fn get_diagnostics(state: EditorState<Self>) -> Vec<Diagnostic>;
 
-    fn is_valid_handle(handle: &Handle, expr: &EditorExpr) -> bool;
+    fn is_valid_handle_specialized(handle: &Handle, root: &EditorExpr) -> bool;
+
+    fn is_valid_handle(handle: &Handle, root: &EditorExpr) -> bool {
+        trace!(target: "is_valid_handle", "handle = {handle}");
+        trace!(target: "is_valid_handle", "root   = {root}");
+
+        let b_general = || match handle {
+            Handle::Point(p) => {
+                let e = root.at_path(&p.path);
+                #[expect(clippy::match_like_matches_macro)]
+                match e.label.constructor {
+                    Constructor::Newline => false,
+                    _ => true,
+                }
+            }
+            Handle::Span(h) => {
+                let e = root.at_path(&h.path);
+                #[expect(clippy::match_like_matches_macro)]
+                match e.label.constructor {
+                    Constructor::Newline => false,
+                    _ => true,
+                }
+            }
+            Handle::Zipper(h) => {
+                // These are closures so that the final conjunction is evaluated
+                // in a short-circuited fashion.
+                let b1 = || {
+                    let e = root.at_path(&h.path_o);
+                    #[expect(clippy::match_like_matches_macro)]
+                    match e.label.constructor {
+                        Constructor::Newline => false,
+                        _ => true,
+                    }
+                };
+                let b2 = || {
+                    let e = root.at_path(&h.path_i());
+                    #[expect(clippy::match_like_matches_macro)]
+                    match e.label.constructor {
+                        Constructor::Newline => false,
+                        _ => true,
+                    }
+                };
+                b1() && b2()
+            }
+        };
+
+        let b_specialized = || Self::is_valid_handle_specialized(handle, root);
+
+        b_general() && b_specialized()
+    }
 
     #[expect(clippy::too_many_arguments)]
     fn assemble_rendered_expr(
