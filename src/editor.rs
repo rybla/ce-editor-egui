@@ -14,6 +14,7 @@ pub const INDENT_WIDTH_EM: f32 = 1.0;
 pub struct ColorScheme {
     pub normal_border: egui::Color32,
     pub normal_text: egui::Color32,
+    pub accent_text: egui::Color32,
     pub normal_background: egui::Color32,
     pub active_text: egui::Color32,
     pub active_background: egui::Color32,
@@ -24,6 +25,7 @@ pub struct ColorScheme {
 
 lazy_static! {
     pub static ref dark_color_scheme: ColorScheme = ColorScheme {
+        accent_text: egui::Color32::RED,
         normal_text: egui::Color32::WHITE,
         normal_background: egui::Color32::BLACK,
         normal_border: egui::Color32::WHITE,
@@ -34,6 +36,7 @@ lazy_static! {
         highlight_background: egui::Color32::DARK_BLUE,
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
+        accent_text: egui::Color32::RED,
         normal_text: egui::Color32::BLACK,
         normal_background: egui::Color32::WHITE,
         normal_border: egui::Color32::BLACK,
@@ -301,153 +304,165 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         ren_ctx: &RenderContext,
         p: &Point,
     ) {
-        let color_scheme = Self::color_scheme(ui);
+        let handle_at_point = Handle::Point(p.clone());
+        let is_valid_handle = ES::is_valid_handle(&handle_at_point, &self.core.expr);
 
-        let is_handle = p == &self.core.handle.focus_point();
+        if is_valid_handle {
+            let color_scheme = Self::color_scheme(ui);
 
-        let is_at_handle = match &self.core.handle {
-            Handle::Point(handle) => p == handle,
-            Handle::Span(handle) => p == &handle.p_l() || p == &handle.p_r(),
-            Handle::Zipper(handle) => {
-                p == &handle.p_ol()
-                    || p == &handle.p_or()
-                    || p == &handle.p_il()
-                    || p == &handle.p_ir()
-            }
-        };
+            let is_handle = p == &self.core.handle.focus_point();
 
-        let is_in_handle = self.core.handle.contains_point(p);
-
-        let fill_color = if is_handle {
-            color_scheme.active_background
-        } else if is_at_handle {
-            color_scheme.inactive_background
-        } else if is_in_handle {
-            color_scheme.highlight_background
-        } else {
-            color_scheme.normal_background
-        };
-
-        let text_color = color_scheme.normal_text;
-
-        egui::Frame::new().fill(fill_color).show(ui, |ui| {
-            let label = ui.add(
-                egui::Label::new(egui::RichText::new("•".to_owned()).color(text_color))
-                    .selectable(false)
-                    .sense(egui::Sense::click_and_drag()),
-            );
-
-            if ren_ctx.interactive {
-                if label.clicked() {
-                    trace!(target: "editor", "click at point: p = {p}");
-                    let h = Handle::Point(p.clone());
-                    self.do_action(Action::SetHandle(SetHandle {
-                        handle: h,
-                        snapshot: false,
-                    }));
+            let is_at_handle = match &self.core.handle {
+                Handle::Point(handle) => p == handle,
+                Handle::Span(handle) => p == &handle.p_l() || p == &handle.p_r(),
+                Handle::Zipper(handle) => {
+                    p == &handle.p_ol()
+                        || p == &handle.p_or()
+                        || p == &handle.p_il()
+                        || p == &handle.p_ir()
                 }
+            };
 
-                if label.drag_started_by(egui::PointerButton::Primary) {
-                    trace!(target: "editor.drag", "drag start at point: p = {p}");
-                    self.do_action(Action::SetHandle(SetHandle {
-                        handle: Handle::Point(p.clone()),
-                        snapshot: false,
-                    }));
-                    self.drag_origin = Some(Handle::Point(p.clone()));
-                } else if let Some(drag_origin) = &self.drag_origin
-                    && let Some(pointer_pos) = ctx.pointer_latest_pos()
-                    && label.rect.contains(pointer_pos)
-                {
-                    trace!(target: "editor.drag", "drag hover at point: p = {p}");
-                    if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
+            let is_in_handle = self.core.handle.contains_point(p);
+
+            let fill_color = if is_handle {
+                color_scheme.active_background
+            } else if is_at_handle {
+                color_scheme.inactive_background
+            } else if is_in_handle {
+                color_scheme.highlight_background
+            } else {
+                color_scheme.normal_background
+            };
+
+            let text_color = color_scheme.normal_text;
+
+            egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                let label = ui.add(
+                    egui::Label::new(egui::RichText::new("•".to_owned()).color(text_color))
+                        .selectable(false)
+                        .sense(egui::Sense::click_and_drag()),
+                );
+
+                if ren_ctx.interactive {
+                    if label.clicked() {
+                        trace!(target: "editor", "click at point: p = {p}");
+                        let h = Handle::Point(p.clone());
                         self.do_action(Action::SetHandle(SetHandle {
-                            handle: h.clone(),
+                            handle: h,
                             snapshot: false,
                         }));
                     }
+
+                    if label.drag_started_by(egui::PointerButton::Primary) {
+                        trace!(target: "editor.drag", "drag start at point: p = {p}");
+                        self.do_action(Action::SetHandle(SetHandle {
+                            handle: Handle::Point(p.clone()),
+                            snapshot: false,
+                        }));
+                        self.drag_origin = Some(Handle::Point(p.clone()));
+                    } else if let Some(drag_origin) = &self.drag_origin
+                        && let Some(pointer_pos) = ctx.pointer_latest_pos()
+                        && label.rect.contains(pointer_pos)
+                    {
+                        trace!(target: "editor.drag", "drag hover at point: p = {p}");
+                        if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
+                            self.do_action(Action::SetHandle(SetHandle {
+                                handle: h.clone(),
+                                snapshot: false,
+                            }));
+                        }
+                    }
                 }
-            }
 
-            if is_handle && let Some(menu) = &mut self.menu {
-                let menu_width = 100f32;
-                let menu_query_height = ui.text_style_height(&egui::TextStyle::Body);
-                let menu_options_height = 80f32;
-                let menu_height = menu_query_height + menu_options_height;
+                if is_handle && let Some(menu) = &mut self.menu {
+                    let menu_width = 100f32;
+                    let menu_query_height = ui.text_style_height(&egui::TextStyle::Body);
+                    let menu_options_height = 80f32;
+                    let menu_height = menu_query_height + menu_options_height;
 
-                // render edit menu stuff
-                egui::Frame::new()
-                    .fill(color_scheme.normal_background)
-                    .outer_margin(egui::Margin {
-                        left: 0i8,
-                        right: 5i8,
-                        top: 0i8,
-                        bottom: 5i8,
-                    })
-                    .show(ui, |ui| {
-                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::TOP), |ui| {
-                            ui.set_width(menu_width);
-                            ui.set_height(menu_height);
-                            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                    // render edit menu stuff
+                    egui::Frame::new()
+                        .fill(color_scheme.normal_background)
+                        .outer_margin(egui::Margin {
+                            left: 0i8,
+                            right: 5i8,
+                            top: 0i8,
+                            bottom: 5i8,
+                        })
+                        .show(ui, |ui| {
+                            ui.with_layout(
+                                egui::Layout::top_down_justified(egui::Align::TOP),
+                                |ui| {
+                                    ui.set_width(menu_width);
+                                    ui.set_height(menu_height);
+                                    ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
 
-                            // query
-                            egui::Frame::new().show(ui, |ui| {
-                                ui.set_height(menu_query_height);
+                                    // query
+                                    egui::Frame::new().show(ui, |ui| {
+                                        ui.set_height(menu_query_height);
 
-                                // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
-                                let textedit = egui::TextEdit::singleline(&mut menu.query)
-                                    .hint_text("query edit menu")
-                                    .desired_width(menu_width) // 100f32 is a fine width for now
-                                    .cursor_at_end(true);
-                                let textedit_response = ui.add(textedit);
-                                // on change, update menu
-                                if textedit_response.changed() {
-                                    menu.update(true);
-                                }
-                                // when the menu is open, the query should always have focus
-                                if !textedit_response.has_focus() {
-                                    textedit_response.request_focus();
-                                }
-                            });
+                                        // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
+                                        let textedit = egui::TextEdit::singleline(&mut menu.query)
+                                            .hint_text("query edit menu")
+                                            .desired_width(menu_width) // 100f32 is a fine width for now
+                                            .cursor_at_end(true);
+                                        let textedit_response = ui.add(textedit);
+                                        // on change, update menu
+                                        if textedit_response.changed() {
+                                            menu.update(true);
+                                        }
+                                        // when the menu is open, the query should always have focus
+                                        if !textedit_response.has_focus() {
+                                            textedit_response.request_focus();
+                                        }
+                                    });
 
-                            ui.end_row();
+                                    ui.end_row();
 
-                            // options
-                            egui::Frame::new().show(ui, |ui| {
-                                ui.set_height(menu_options_height);
+                                    // options
+                                    egui::Frame::new().show(ui, |ui| {
+                                        ui.set_height(menu_options_height);
 
-                                let menu_index = menu.index;
-                                let matched_items = menu.matched_items();
-                                let matched_items_count = matched_items.len();
-                                let focus_index = if matched_items_count == 0 {
-                                    None
-                                } else {
-                                    Some(menu_index.rem_euclid(matched_items_count as i8) as usize)
-                                };
-                                let requested_scroll_to_option = menu.requested_scroll_to_option;
+                                        let menu_index = menu.index;
+                                        let matched_items = menu.matched_items();
+                                        let matched_items_count = matched_items.len();
+                                        let focus_index = if matched_items_count == 0 {
+                                            None
+                                        } else {
+                                            Some(menu_index.rem_euclid(matched_items_count as i8)
+                                                as usize)
+                                        };
+                                        let requested_scroll_to_option =
+                                            menu.requested_scroll_to_option;
 
-                                egui::ScrollArea::vertical().show(ui, |ui| {
-                                    ui.with_layout(
-                                        egui::Layout::left_to_right(egui::Align::TOP)
-                                            .with_main_wrap(true),
-                                        |ui| {
-                                            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                                            ui.set_row_height(
-                                                ui.text_style_height(&egui::TextStyle::Body),
-                                            );
+                                        egui::ScrollArea::vertical().show(ui, |ui| {
+                                            ui.with_layout(
+                                                egui::Layout::left_to_right(egui::Align::TOP)
+                                                    .with_main_wrap(true),
+                                                |ui| {
+                                                    ui.spacing_mut().item_spacing =
+                                                        egui::Vec2::ZERO;
+                                                    ui.set_row_height(
+                                                        ui.text_style_height(
+                                                            &egui::TextStyle::Body,
+                                                        ),
+                                                    );
 
-                                            let matched_items = menu.matched_items();
+                                                    let matched_items = menu.matched_items();
 
-                                            // let mut responses = vec![];
-                                            let mut focus_response = None;
+                                                    // let mut responses = vec![];
+                                                    let mut focus_response = None;
 
-                                            for (i, (label, _item)) in
-                                                matched_items.iter().enumerate()
-                                            {
-                                                let focused = Some(i) == focus_index;
+                                                    for (i, (label, _item)) in
+                                                        matched_items.iter().enumerate()
+                                                    {
+                                                        let focused = Some(i) == focus_index;
 
-                                                let frame = egui::Frame::new().show(ui, |ui| {
-                                                    ui.set_width(menu_width);
-                                                    ui.with_layout(
+                                                        let frame =
+                                                            egui::Frame::new().show(ui, |ui| {
+                                                                ui.set_width(menu_width);
+                                                                ui.with_layout(
                                                         egui::Layout::left_to_right(
                                                             egui::Align::TOP,
                                                         )
@@ -489,27 +504,30 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                                             })
                                                         },
                                                     );
-                                                });
+                                                            });
 
-                                                if requested_scroll_to_option && focused {
-                                                    focus_response = Some(frame.response);
-                                                }
+                                                        if requested_scroll_to_option && focused {
+                                                            focus_response = Some(frame.response);
+                                                        }
 
-                                                ui.end_row();
-                                            }
+                                                        ui.end_row();
+                                                    }
 
-                                            if let Some(focus_response) = focus_response {
-                                                focus_response.scroll_to_me(Some(egui::Align::TOP));
-                                            }
-                                            menu.requested_scroll_to_option = false;
-                                        },
-                                    );
-                                });
-                            })
+                                                    if let Some(focus_response) = focus_response {
+                                                        focus_response
+                                                            .scroll_to_me(Some(egui::Align::TOP));
+                                                    }
+                                                    menu.requested_scroll_to_option = false;
+                                                },
+                                            );
+                                        });
+                                    })
+                                },
+                            );
                         });
-                    });
-            }
-        });
+                }
+            });
+        }
     }
 
     pub fn render_expr(
@@ -592,37 +610,72 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 } else {
                     color_scheme.normal_background
                 };
-                let text_color = color_scheme.normal_text;
 
-                egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(egui::RichText::new("(").color(text_color))
-                            .selectable(false),
-                    );
-                });
-
-                egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new("pos_arg".to_owned()).color(text_color),
-                        )
-                        .selectable(false),
-                    );
-                });
-
-                for (step, kid) in &render_steps_and_kids {
-                    step.render(ctx, ui, ren_ctx, self);
-                    if let Some(kid) = kid {
-                        kid.render(ctx, ui, ren_ctx, self);
+                let render_steps_and_kids_len = render_steps_and_kids.len();
+                // 2 = one element for index and kid, one for last index
+                if render_steps_and_kids_len == 2 {
+                    for (step, kid) in &render_steps_and_kids {
+                        step.render(ctx, ui, ren_ctx, self);
+                        if let Some(kid) = kid {
+                            kid.render(ctx, ui, ren_ctx, self);
+                        }
                     }
+                } else {
+                    egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("[").color(color_scheme.accent_text),
+                            )
+                            .selectable(false),
+                        );
+                    });
+
+                    for (step, kid) in &render_steps_and_kids {
+                        step.render(ctx, ui, ren_ctx, self);
+                        if let Some(kid) = kid {
+                            kid.render(ctx, ui, ren_ctx, self);
+                        }
+                    }
+
+                    egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("]").color(color_scheme.accent_text),
+                            )
+                            .selectable(false),
+                        );
+                    });
                 }
 
-                egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(egui::RichText::new(")").color(text_color))
-                            .selectable(false),
-                    );
-                });
+                // egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                //     ui.add(
+                //         egui::Label::new(egui::RichText::new("(").color(text_color))
+                //             .selectable(false),
+                //     );
+                // });
+
+                // egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                //     ui.add(
+                //         egui::Label::new(
+                //             egui::RichText::new("pos_arg".to_owned()).color(text_color),
+                //         )
+                //         .selectable(false),
+                //     );
+                // });
+
+                // for (step, kid) in &render_steps_and_kids {
+                //     step.render(ctx, ui, ren_ctx, self);
+                //     if let Some(kid) = kid {
+                //         kid.render(ctx, ui, ren_ctx, self);
+                //     }
+                // }
+
+                // egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                //     ui.add(
+                //         egui::Label::new(egui::RichText::new(")").color(text_color))
+                //             .selectable(false),
+                //     );
+                // });
             }
         }
     }
@@ -821,7 +874,7 @@ pub enum Constructor {
     Literal(String),
     Root,
     Newline,
-    /// Positional Argument
+    /// positional argument
     PosArg,
 }
 

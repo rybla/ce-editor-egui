@@ -18,13 +18,23 @@ use Sort::{Num, Prop, Var};
 
 struct Rule {
     pub sort: Sort,
-    pub kids: &'static [Sort],
+    pub kids: RuleKids,
 }
+
+enum RuleKids {
+    FixedArity(&'static [Sort]),
+    FreeArity(Sort),
+}
+
+use RuleKids::{FixedArity, FreeArity};
 
 macro_rules! rule {
     ( $sort: expr, [ $( $kid: expr ),* ] ) => {
-        Rule { sort: $sort, kids: &[ $( $kid ),* ] }
+        Rule { sort: $sort, kids: FixedArity(&[ $( $kid ),* ]) }
     };
+    ( $sort: expr, $kid: expr ) => {
+        Rule { sort: $sort, kids: FreeArity($kid) }
+    }
 }
 
 lazy_static! {
@@ -51,16 +61,14 @@ lazy_static! {
         "abs".to_owned() => rule![Num, [Num]],
         "ceil".to_owned() => rule![Num, [Num]],
         "floor".to_owned() => rule![Num, [Num]],
+        // others
+        "list".to_owned() => rule![Num, Num],
     };
 }
 
 fn get_rule(c: &Constructor) -> Option<&Rule> {
     match c {
-        Constructor::Literal(lit) => Some(
-            GRAMMAR
-                .get(lit)
-                .expect("symbol literal to be defined in grammar"),
-        ),
+        Constructor::Literal(lit) => GRAMMAR.get(lit),
         _ => None,
     }
 }
@@ -85,8 +93,13 @@ macro_rules! make_simple_edit_menu_option {
                 let rule = GRAMMAR.get($name).unwrap();
 
                 let mut kids: Vec<Expr<ExprLabel>> = vec![];
-                for _ in 0..rule.kids.len() {
-                    kids.push(ex![ExprLabel::new(Constructor::PosArg, vec![]), []]);
+                match &rule.kids {
+                    FixedArity(sorts) => {
+                        for _ in 0..sorts.len() {
+                            kids.push(ex![ExprLabel::new(Constructor::PosArg, vec![]), []]);
+                        }
+                    }
+                    FreeArity(_sort) => {}
                 }
 
                 let handle = state.expr.insert(
@@ -134,6 +147,28 @@ impl EditorSpec for Fol {
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
         vec![
+            EditMenuOption {
+                pattern: EditMenuPattern::Dynamic("variable".to_owned(), |query| {
+                    if GRAMMAR.keys().any(|x| x == query) {
+                        return None;
+                    }
+                    Some(query.clone())
+                }),
+                edit: |query, state| {
+                    let mut state = state;
+                    let handle = state.expr.insert(
+                        state.handle,
+                        Fragment::Span(Span(vec![Expr {
+                            label: ExprLabel::new(Constructor::Literal(query.to_owned()), vec![]),
+                            kids: Span::empty(),
+                        }])),
+                    );
+
+                    state.handle = handle;
+
+                    Some(state)
+                },
+            },
             make_simple_edit_menu_option!["<"],
             make_simple_edit_menu_option![">"],
             make_simple_edit_menu_option![">="],
@@ -152,6 +187,7 @@ impl EditorSpec for Fol {
             make_simple_edit_menu_option!["abs"],
             make_simple_edit_menu_option!["ceil"],
             make_simple_edit_menu_option!["floor"],
+            make_simple_edit_menu_option!["list"],
         ]
     }
 
@@ -161,7 +197,19 @@ impl EditorSpec for Fol {
 
     fn is_valid_handle_specialized(h: &Handle, root: &EditorExpr) -> bool {
         match h {
-            Handle::Point(_p) => true,
+            Handle::Point(p) => {
+                let e = root.at_path(&p.path);
+                match &e.label.constructor {
+                    Constructor::Literal(_) => {
+                        let sort = get_rule(&e.label.constructor).unwrap_or_else(|| {
+                            panic!("sort of {} to be defined", e.label.constructor)
+                        });
+                        matches!(&sort.kids, FreeArity(_))
+                    }
+                    Constructor::Newline => false,
+                    Constructor::Root | Constructor::PosArg => true,
+                }
+            }
             Handle::Span(_h) => true,
             // Handle::Zipper(h) => {
             //     // Try to extract a single sort at the outer [`SpanHandle`].
