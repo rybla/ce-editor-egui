@@ -305,9 +305,15 @@ impl EditorSpec for Fol {
                 // As a simple first approach, just see if the parent expression
                 // at each end of the zipper has the same sort.
                 let e_o = root.at_path(&h.path_o);
-                let sort_o = get_rule(&e_o.label.constructor).map(|r| r.sort.clone());
+                let sort_o = match e_o.pat2() {
+                    (Constructor::PosArg, [k]) => get_rule(&k.label.constructor).map(|r| r.sort.clone()),
+                    _ => None
+                };
                 let e_i = root.at_path(&h.path_i());
-                let sort_i = get_rule(&e_i.label.constructor).map(|r| r.sort.clone());
+                let sort_i = match e_i.pat2() {
+                    (Constructor::PosArg, [k]) => get_rule(&k.label.constructor).map(|r| r.sort.clone()),
+                    _ => None
+                };
                 sort_o == sort_i
             }
         }

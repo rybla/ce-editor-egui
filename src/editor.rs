@@ -75,6 +75,12 @@ impl ExprLabel {
     }
 }
 
+impl Expr<ExprLabel> {
+    pub fn pat2(&self) -> (&Constructor, &[Self]) {
+        (&self.label.constructor, self.kids.0.as_slice())
+    }
+}
+
 pub type EditorExpr = Expr<ExprLabel>;
 
 pub struct EditorState<ES: EditorSpec + ?Sized> {
