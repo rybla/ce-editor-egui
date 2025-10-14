@@ -334,7 +334,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // open edit menu (with query)
         else if let Some((k, m)) = key_and_mods
             && !m.command
-        // && is_single_char(k.name())
+            && is_single_char(k.symbol_or_name())
         {
             trace!(target: "editor.edit", "open EditMenu");
             let menu = ES::get_edits(self);
