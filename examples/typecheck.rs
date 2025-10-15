@@ -172,11 +172,12 @@ fn from_vec_to_array<T, const N: usize>(xs: Vec<T>) -> Result<[T; N], Vec<T>> {
 }
 
 fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> Expr {
-    // check sort
+    // get the corresponding rule
     let Rule { sort, kids } = match GRAMMAR.get(&expr.label) {
         None => return expr.annotate("unknown expr label".to_owned()),
         Some(rule) => rule,
     };
+    // check sort
     if sort != expected_sort {
         return expr.annotate( format!(
             "this expr was expected to have sort {expected_sort} but actually has sort {sort}"
@@ -251,11 +252,12 @@ enum Type {
 /// - Assumes that all the [`Type`]s in the context have been sort-checked.
 /// - Assumes that [`expected_prop`] has been sort-checked.
 fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) -> Expr {
-    // check sort
+    // get the corresponding rule
     let Rule { sort, kids } = match GRAMMAR.get(&proof.label) {
         None => return proof.annotate("unknown expr label".to_owned()),
         Some(rule) => rule,
     };
+    // check sort
     if sort != &Proof {
         return proof.annotate(format!(
             "expected expr to have sort Proof, but actually has sort {sort}"
