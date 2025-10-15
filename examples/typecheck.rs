@@ -41,11 +41,9 @@ impl Expr {
     }
 
     pub fn annotate(self, msg: String) -> Self {
-        Self {
-            label: self.label,
-            annotation: Some(msg),
-            kids: self.kids,
-        }
+        let mut expr = self;
+        expr.annotation = Some(msg);
+        expr
     }
 }
 
