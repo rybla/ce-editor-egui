@@ -72,35 +72,43 @@ impl Rule {
     }
 }
 
+/// This macro is a wrapper for the [`hash_map`] macro which lets you omit using
+/// `to_owned` on each key when creating a [`HashMap`] with [`String`] keys.
+macro_rules! string_hash_map {
+    ( $( $key: literal => $val: expr ),* $(,)? ) => {
+        hash_map!( $( $key.to_owned() => $val ),* )
+    };
+}
+
 lazy_static! {
-    static ref GRAMMAR: HashMap<String, Rule> = hash_map! {
+    static ref GRAMMAR: HashMap<String, Rule> = string_hash_map! {
         // Prop
-        "true".to_owned() => rule!(Prop),
-        "false".to_owned() => rule!(Prop),
-        "<".to_owned() => rule!(Prop, [Num, Num]),
-        ">".to_owned() => rule!(Prop, [Num, Num]),
-        ">=".to_owned() => rule!(Prop, [Num, Num]),
-        "<=".to_owned() => rule!(Prop, [Num, Num]),
-        "=".to_owned() => rule!(Prop, [Num, Num]),
-        "and".to_owned() => rule!(Prop, [Prop, Prop]),
-        "or".to_owned() => rule!(Prop, [Prop, Prop]),
-        "=>".to_owned() => rule!(Prop, [Prop, Prop]),
-        "not".to_owned() => rule!(Prop, [Prop]),
-        "forall".to_owned() => rule!(Prop, [Var, Prop]),
-        "exists".to_owned() => rule!(Prop, [Var, Prop]),
+        "true" => rule!(Prop),
+        "false" => rule!(Prop),
+        "<" => rule!(Prop, [Num, Num]),
+        ">" => rule!(Prop, [Num, Num]),
+        ">=" => rule!(Prop, [Num, Num]),
+        "<=" => rule!(Prop, [Num, Num]),
+        "=" => rule!(Prop, [Num, Num]),
+        "and" => rule!(Prop, [Prop, Prop]),
+        "or" => rule!(Prop, [Prop, Prop]),
+        "=>" => rule!(Prop, [Prop, Prop]),
+        "not" => rule!(Prop, [Prop]),
+        "forall" => rule!(Prop, [Var, Prop]),
+        "exists" => rule!(Prop, [Var, Prop]),
         // Num
-        "+".to_owned() => rule!(Num, [Num, Num]),
-        "-".to_owned() => rule!(Num, [Num, Num]),
-        "*".to_owned() => rule!(Num, [Num, Num]),
-        "/".to_owned() => rule!(Num, [Num, Num]),
+        "+" => rule!(Num, [Num, Num]),
+        "-" => rule!(Num, [Num, Num]),
+        "*" => rule!(Num, [Num, Num]),
+        "/" => rule!(Num, [Num, Num]),
         // TODO: but how can we add number literals if the labels are strings?
         // maybe we'll add these too:
-        "abs".to_owned() => rule!(Num, [Num]),
-        "ceil".to_owned() => rule!(Num, [Num]),
-        "floor".to_owned() => rule!(Num, [Num]),
+        "abs" => rule!(Num, [Num]),
+        "ceil" => rule!(Num, [Num]),
+        "floor" => rule!(Num, [Num]),
         // proof forms
-        "and_intro".to_owned() => rule!(Proof, [Proof, Proof]),
-        "true_intro".to_owned() => rule!(Proof),
+        "and_intro" => rule!(Proof, [Proof, Proof]),
+        "true_intro" => rule!(Proof),
     };
 }
 
