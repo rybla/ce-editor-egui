@@ -174,13 +174,7 @@ fn from_vec_to_array<T, const N: usize>(xs: Vec<T>) -> Result<[T; N], Vec<T>> {
 fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> Expr {
     // check sort
     let Rule { sort, kids } = match GRAMMAR.get(&expr.label) {
-        None => {
-            return Expr {
-                label: expr.label,
-                annotation: Some("unknown expr label".to_owned()),
-                kids: expr.kids,
-            };
-        }
+        None => return expr.annotate("unknown expr label".to_owned()),
         Some(rule) => rule,
     };
     if sort != expected_sort {
@@ -259,13 +253,7 @@ enum Type {
 fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) -> Expr {
     // check sort
     let Rule { sort, kids } = match GRAMMAR.get(&proof.label) {
-        None => {
-            return Expr {
-                label: proof.label,
-                annotation: Some("unknown expr label".to_owned()),
-                kids: proof.kids,
-            };
-        }
+        None => return proof.annotate("unknown expr label".to_owned()),
         Some(rule) => rule,
     };
     if sort != &Proof {
