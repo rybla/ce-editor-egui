@@ -40,10 +40,11 @@ impl Expr {
         (self.label, self.kids.try_into().expect("impossible"))
     }
 
-    pub fn annotate(&self, msg : String) -> Self {
+    pub fn annotate(self, msg: String) -> Self {
         Self {
+            label: self.label,
             annotation: Some(msg),
-            ..self.clone()
+            kids: self.kids,
         }
     }
 }
@@ -179,24 +180,26 @@ fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> E
     };
     // check sort
     if sort != expected_sort {
-        return expr.annotate( format!(
+        return expr.annotate(format!(
             "this expr was expected to have sort {expected_sort} but actually has sort {sort}"
         ));
     }
 
     // check arity
     if expr.kids.len() != kids.len() {
+        let expr_kids_len = expr.kids.len();
         return expr.annotate(format!(
-                "this expr was expected to have {} kids but actually has {} kids",
-                kids.len(),
-                expr.kids.len()
-            ));
+            "this expr was expected to have {} kids but actually has {} kids",
+            kids.len(),
+            expr_kids_len
+        ));
     }
 
     // check kid sorts
     match expr.label.as_str() {
         "var" => {
-            let [x] = from_vec_to_array(expr.kids).expect("impossible since we already checked the arity of expr");
+            let [x] = from_vec_to_array(expr.kids)
+                .expect("impossible since we already checked the arity of expr");
             if !ctx.contains_key(&x.label) {
                 return Expr {
                     label: expr.label,
@@ -211,7 +214,8 @@ fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> E
             }
         }
         "forall" | "exists" => {
-            let [x, p] = from_vec_to_array(expr.kids).expect("impossible since we already checked the arity of expr");
+            let [x, p] = from_vec_to_array(expr.kids)
+                .expect("impossible since we already checked the arity of expr");
             let ctx = {
                 let mut ctx = ctx;
                 ctx.insert(x.label.clone(), Type::Num);
@@ -266,10 +270,11 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
 
     // check arity
     if proof.kids.len() != kids.len() {
+        let proof_kids_len = proof.kids.len();
         return proof.annotate(format!(
             "expected expr to have {} kids, but actually has {} kids",
             kids.len(),
-            proof.kids.len()
+            proof_kids_len
         ));
     }
 
