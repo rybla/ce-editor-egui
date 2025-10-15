@@ -39,6 +39,13 @@ impl Expr {
     pub fn pat_owned<const N: usize>(self) -> (String, [Self; N]) {
         (self.label, self.kids.try_into().expect("impossible"))
     }
+
+    pub fn annotate(&self, msg : String) -> Self {
+        Self {
+            annotation: Some(msg),
+            ..self.clone()
+        }
+    }
 }
 
 macro_rules! ex {
@@ -176,24 +183,16 @@ fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> E
         Some(rule) => rule,
     };
     if sort != expected_sort {
-        return Expr {
-            label: expr.label,
-            annotation: Some(format!(
-                "this expr was expected to have sort {expected_sort} but actually has sort {sort}"
-            )),
-            kids: expr.kids,
-        };
+        return expr.annotate( format!(
+            "this expr was expected to have sort {expected_sort} but actually has sort {sort}"
+        ));
     }
     if expr.kids.len() != kids.len() {
-        return Expr {
-            label: expr.label,
-            annotation: Some(format!(
+        return expr.annotate(format!(
                 "this expr was expected to have {} kids but actually has {} kids",
                 kids.len(),
                 expr.kids.len()
-            )),
-            kids: expr.kids,
-        };
+            ));
     }
 
     match expr.label.as_str() {
@@ -265,24 +264,16 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
         Some(rule) => rule,
     };
     if sort != &Proof {
-        return Expr {
-            label: proof.label,
-            annotation: Some(format!(
-                "expected expr to have sort Proof, but actually has sort {sort}"
-            )),
-            kids: proof.kids,
-        };
+        return proof.annotate(format!(
+            "expected expr to have sort Proof, but actually has sort {sort}"
+        ));
     }
     if proof.kids.len() != kids.len() {
-        return Expr {
-            label: proof.label,
-            annotation: Some(format!(
-                "expected expr to have {} kids, but actually has {} kids",
-                kids.len(),
-                proof.kids.len()
-            )),
-            kids: proof.kids,
-        };
+        return proof.annotate(format!(
+            "expected expr to have {} kids, but actually has {} kids",
+            kids.len(),
+            proof.kids.len()
+        ));
     }
 
     // proof-check
