@@ -165,6 +165,7 @@ fn from_vec_to_array<T, const N: usize>(xs: Vec<T>) -> Result<[T; N], Vec<T>> {
 }
 
 fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> Expr {
+    // check sort
     let Rule { sort, kids } = match GRAMMAR.get(&expr.label) {
         None => {
             return Expr {
@@ -184,6 +185,8 @@ fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> E
             kids: expr.kids,
         };
     }
+
+    // check arity
     if expr.kids.len() != kids.len() {
         return Expr {
             label: expr.label,
@@ -196,9 +199,10 @@ fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> E
         };
     }
 
+    // check kid sorts
     match expr.label.as_str() {
         "var" => {
-            let [x] = from_vec_to_array(expr.kids).expect("impossible");
+            let [x] = from_vec_to_array(expr.kids).expect("impossible since we already checked the arity of expr");
             if !ctx.contains_key(&x.label) {
                 return Expr {
                     label: expr.label,
@@ -213,7 +217,7 @@ fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> E
             }
         }
         "forall" | "exists" => {
-            let [x, p] = from_vec_to_array(expr.kids).expect("impossible");
+            let [x, p] = from_vec_to_array(expr.kids).expect("impossible since we already checked the arity of expr");
             let ctx = {
                 let mut ctx = ctx;
                 ctx.insert(x.label.clone(), Type::Num);
@@ -226,6 +230,7 @@ fn check_sort(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: Expr) -> E
                 kids: vec![x, p],
             }
         }
+        // default case that doesn't interact with environment
         _ => {
             let expr_label = expr.label;
             let expr_kids: Vec<Expr> = expr
@@ -253,7 +258,7 @@ enum Type {
 /// - Assumes that all the [`Type`]s in the context have been sort-checked.
 /// - Assumes that [`expected_prop`] has been sort-checked.
 fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) -> Expr {
-    // sort-check
+    // check sort
     let Rule { sort, kids } = match GRAMMAR.get(&proof.label) {
         None => {
             return Expr {
@@ -268,11 +273,13 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
         return Expr {
             label: proof.label,
             annotation: Some(format!(
-                "expected expr to have sort Proof, but actually has sort {sort}"
+                "expected expr to have sort {Proof}, but actually has sort {sort}"
             )),
             kids: proof.kids,
         };
     }
+
+    // check arity
     if proof.kids.len() != kids.len() {
         return Expr {
             label: proof.label,
@@ -285,10 +292,11 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
         };
     }
 
-    // proof-check
+    // check validity
     match (proof.label.as_str(), expected_prop.pat()) {
         ("intro_and", ("and", [p, q])) => {
-            let [a, b] = from_vec_to_array(proof.kids).expect("impossible");
+            let [a, b] = from_vec_to_array(proof.kids)
+                .expect("impossible since we already checked the arity of proof");
             let a = check_proof(ctx.clone(), p, a);
             let b = check_proof(ctx.clone(), q, b);
             Expr {
@@ -303,7 +311,8 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
             kids: vec![],
         },
         ("elim_bot", _) => {
-            let [a] = from_vec_to_array(proof.kids).expect("impossible");
+            let [a] = from_vec_to_array(proof.kids)
+                .expect("impossible since we already checked the arity of proof");
             let a = check_proof(ctx, &ex!["bot"], a);
             Expr {
                 label: proof.label,
