@@ -2,6 +2,7 @@
 
 use lazy_static::lazy_static;
 use map_macro::hash_map;
+use std::cell::Cell;
 use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display};
 
@@ -12,12 +13,12 @@ struct Expr<Ann> {
     kids: Vec<Expr<Ann>>,
 }
 
-/// annotated expr
-type AnnExpr<'a> = Expr<&'a mut Vec<String>>;
+/// annotated expr. The Cell type allows interior mutability, so that only the annotations can be mutated.
+type AnnExpr = Expr<Cell<Vec<String>>>;
 /// unannotated expr
 type PlainExpr = Expr<()>;
 
-impl<Ann> Display for Expr<Ann> {
+impl Display for AnnExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ex!({}", self.label)?;
         if !self.kids.is_empty() {
@@ -30,20 +31,40 @@ impl<Ann> Display for Expr<Ann> {
             }
             write!(f, "]")?;
         }
-        // if let Some(ann) = &self.annotation {
-        //     write!(f, ", {ann}")?;
-        // }
+        write!(f, ", {:?}", self.annotation.take())?;
         write!(f, ")")
     }
 }
 
-impl<Ann: Debug> Expr<Ann> {
+impl Display for PlainExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ex!({}", self.label)?;
+        if !self.kids.is_empty() {
+            write!(f, ", [")?;
+            for (i, kid) in self.kids.iter().enumerate() {
+                write!(f, "{kid}")?;
+                if i < self.kids.len() - 1 {
+                    write!(f, ", ")?;
+                }
+            }
+            write!(f, "]")?;
+        }
+        write!(f, ")")
+    }
+}
+
+impl<Ann> Expr<Ann> {
     pub fn pat(&self) -> (&str, &[Self]) {
         (self.label.as_str(), self.kids.as_slice())
     }
 
     pub fn pat_owned<const N: usize>(self) -> (String, [Self; N]) {
-        (self.label, self.kids.try_into().expect("impossible"))
+        (
+            self.label,
+            self.kids
+                .try_into()
+                .unwrap_or_else(|_| panic!("impossible")),
+        )
     }
 
     pub fn forget_ann(self) -> PlainExpr {
@@ -84,15 +105,15 @@ macro_rules! ex_ann {
     ( $label: expr ) => {
         Expr {
             label: $label.to_owned(),
-            annotation: &mut vec![],
+            annotation: Cell::new(vec![]),
             kids: vec![],
         }
     };
     ( $label: expr, [ $( $kid: expr ),* ] ) => {
         Expr {
             label: $label.to_owned(),
-            annotation: &mut vec![],
-            kids: vec![],
+            annotation: Cell::new(vec![]),
+            kids: vec![$( $kid ),*],
         }
     };
 }
@@ -233,10 +254,10 @@ fn from_expr_kids_to_array<T: Debug, const N: usize>(xs: Vec<T>) -> [T; N] {
 fn check_type<'a>(
     ctx: HashMap<String, Type<'a>>,
     expected_type: &Type<'a>,
-    expr: &AnnExpr<'a>,
+    expr: &AnnExpr,
 ) -> bool {
     let mut success = true;
-    check_type_helper(&mut success, ctx, &expected_type, expr);
+    check_type_helper(&mut success, ctx, expected_type, expr);
     success
 }
 
@@ -244,15 +265,21 @@ fn check_type_helper<'a>(
     success: &mut bool,
     ctx: HashMap<String, Type<'a>>,
     expected_type: &Type<'a>,
-    expr: &AnnExpr<'a>,
+    expr: &AnnExpr,
 ) {
     let expected_sort = expected_type.get_sort();
     // clean up the old annotation
-    expr.annotation.drain(..);
+    {
+        let mut annotation = expr.annotation.take();
+        annotation.clear();
+        expr.annotation.set(annotation);
+    }
 
     // call this function to add error annotation, also sets the success flag
     let mut add_error = |msg: String| {
-        expr.annotation.push(msg);
+        let mut annotation = expr.annotation.take();
+        annotation.push(msg);
+        expr.annotation.set(annotation);
         *success = false;
     };
 
@@ -300,7 +327,7 @@ fn check_type_helper<'a>(
                 ctx.insert(x.label.clone(), Type::Num);
                 ctx
             };
-            check_type_helper(success, ctx, &rule_kids[1].to_type(), &p);
+            check_type_helper(success, ctx, &rule_kids[1].to_type(), p);
         }
         // The proof step cases are handled here
         ((label, _), Type::Proof(prop)) => match ((label, expr.kids.as_slice()), prop.pat()) {
@@ -320,16 +347,16 @@ fn check_type_helper<'a>(
         // default case that doesn't interact with environment, and uses simple sorts
         _ => {
             for (kid, expected_kid_sort) in expr.kids.iter().zip(rule_kids.iter()) {
-                check_type_helper(success, ctx.clone(), &expected_kid_sort.to_type(), &kid);
+                check_type_helper(success, ctx.clone(), &expected_kid_sort.to_type(), kid);
             }
         }
     }
 }
 
-fn test<'a>(ctx: &HashMap<String, Type<'a>>, expected_prop: AnnExpr<'a>, proof: AnnExpr<'a>) {
+fn test<'a>(ctx: &HashMap<String, Type<'a>>, expected_prop: AnnExpr, proof: &AnnExpr) {
     let prop_well_typed = check_type(ctx.clone(), &Type::Prop, &expected_prop);
     let expected_prop = expected_prop.forget_ann();
-    let term_well_typed = check_type(ctx.clone(), &Type::Proof(&expected_prop), &proof);
+    let term_well_typed = check_type(ctx.clone(), &Type::Proof(&expected_prop), proof);
     println!("");
     println!("{ctx:?} |-");
     println!("     {proof}");
@@ -341,27 +368,27 @@ pub fn main() {
     test(
         &hash_map! {},
         ex_ann!(and, [ex_ann!(top), ex_ann!(top)]),
-        ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
+        &ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
     );
     test(
         &hash_map! {},
         ex_ann!(and, [ex_ann!(top), ex_ann!(bot)]),
-        ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
+        &ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
     );
     test(
         &hash_map! {},
         ex_ann!(and, [ex_ann!(bot), ex_ann!(top)]),
-        ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
+        &ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
     );
     test(
         &hash_map! {},
         ex_ann!(and, [ex_ann!(bot), ex_ann!(bot)]),
-        ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
+        &ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
     );
     test(
         &hash_map! {},
         ex_ann!("and", [ex_ann!(top), ex_ann!(top)]),
-        ex_ann!(
+        &ex_ann!(
             intro_and,
             [
                 ex_ann!(intro_and, [ex_ann!(intro_top), ex_ann!(intro_top)]),
