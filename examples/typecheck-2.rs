@@ -322,47 +322,47 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
     }
 }
 
-fn test(ctx: &HashMap<String, Type>, expected_prop: Expr, proof: Expr) {
-    let expected_prop = check_sort_helper(ctx.clone(), &Prop, expected_prop);
-    let proof = check_sort_helper(ctx.clone(), &Proof, proof);
-    let result = check_proof(ctx.clone(), &expected_prop, proof.clone());
-    println!("");
-    println!("{ctx:?} |-");
-    println!("     {proof}");
-    println!("        : {expected_prop}");
-    println!(" ==> {result}");
-}
+// fn test(ctx: &HashMap<String, Type>, expected_prop: Expr, proof: Expr) {
+//     let expected_prop = check_sort_helper(ctx.clone(), &Prop, expected_prop);
+//     let proof = check_sort_helper(ctx.clone(), &Proof, proof);
+//     let result = check_proof(ctx.clone(), &expected_prop, proof.clone());
+//     println!("");
+//     println!("{ctx:?} |-");
+//     println!("     {proof}");
+//     println!("        : {expected_prop}");
+//     println!(" ==> {result}");
+// }
 
-pub fn main() {
-    test(
-        &hash_map! {},
-        ex!(and, [ex!(top), ex!(top)]),
-        ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
-    );
-    test(
-        &hash_map! {},
-        ex!(and, [ex!(top), ex!(bot)]),
-        ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
-    );
-    test(
-        &hash_map! {},
-        ex!(and, [ex!(bot), ex!(top)]),
-        ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
-    );
-    test(
-        &hash_map! {},
-        ex!(and, [ex!(bot), ex!(bot)]),
-        ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
-    );
-    test(
-        &hash_map! {},
-        ex!("and", [ex!(top), ex!(top)]),
-        ex!(
-            intro_and,
-            [
-                ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
-                ex!(intro_top)
-            ]
-        ),
-    );
-}
+// pub fn main() {
+//     test(
+//         &hash_map! {},
+//         ex!(and, [ex!(top), ex!(top)]),
+//         ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
+//     );
+//     test(
+//         &hash_map! {},
+//         ex!(and, [ex!(top), ex!(bot)]),
+//         ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
+//     );
+//     test(
+//         &hash_map! {},
+//         ex!(and, [ex!(bot), ex!(top)]),
+//         ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
+//     );
+//     test(
+//         &hash_map! {},
+//         ex!(and, [ex!(bot), ex!(bot)]),
+//         ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
+//     );
+//     test(
+//         &hash_map! {},
+//         ex!("and", [ex!(top), ex!(top)]),
+//         ex!(
+//             intro_and,
+//             [
+//                 ex!(intro_and, [ex!(intro_top), ex!(intro_top)]),
+//                 ex!(intro_top)
+//             ]
+//         ),
+//     );
+// }
