@@ -240,7 +240,7 @@ fn check_type<'a>(
     success
 }
 
-fn check_type_helper<'e, 'a>(
+fn check_type_helper<'a>(
     success: &mut bool,
     ctx: HashMap<String, Type<'a>>,
     expected_type: &Type<'a>,
