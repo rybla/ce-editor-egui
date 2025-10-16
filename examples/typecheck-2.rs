@@ -172,8 +172,9 @@ lazy_static! {
 //   - [ ] apply
 //   - [ ] rewrite
 
-fn from_vec_to_array<T, const N: usize>(xs: Vec<T>) -> Result<[T; N], Vec<T>> {
+fn from_expr_kids_to_array<T: Debug, const N: usize>(xs: Vec<T>) -> [T; N] {
     xs.try_into()
+        .expect("impossible since we already checked the arity of expr")
 }
 
 fn check_sort<'a>(ctx: HashMap<String, Type>, expected_sort: &Sort, expr: AnnExpr<'a>) -> bool {
@@ -191,7 +192,8 @@ fn check_sort_helper<'a>(
     // clean up the old annotation
     expr.annotation.drain(..);
 
-    let add_anotation = |msg: String| {
+    // call this function to add error annotation, also sets the success flag
+    let mut add_error = |msg: String| {
         expr.annotation.push(msg);
         *success = false
     };
@@ -199,7 +201,7 @@ fn check_sort_helper<'a>(
     // get the corresponding rule
     let Rule { sort, kids } = match GRAMMAR.get(&expr.label) {
         None => {
-            expr.annotation.push("unknown expr label".to_owned());
+            add_error("unknown expr label".to_owned());
             return ();
         }
         Some(rule) => rule,
@@ -207,7 +209,7 @@ fn check_sort_helper<'a>(
 
     // check sort
     if sort != expected_sort {
-        expr.annotation.push(format!(
+        add_error(format!(
             "this expr was expected to have sort {expected_sort} but actually has sort {sort}"
         ));
     }
@@ -215,26 +217,25 @@ fn check_sort_helper<'a>(
     // check arity
     if expr.kids.len() != kids.len() {
         let expr_kids_len = expr.kids.len();
-        expr.annotation.push(format!(
+        add_error(format!(
             "this expr was expected to have {} kids but actually has {} kids",
             kids.len(),
             expr_kids_len
         ));
     }
 
+    // TODO: write a function (instead of from_expr_kids_to_array) that takes the number of expected kids, the actual kids, and returns an array of exprs of the expected number of kids len, buffered by some extra dummy kids, and all extra kids are just given an annotation error that indicates they're out of place
+
     // check kid sorts
     match expr.label.as_str() {
         "var" => {
-            let [x] = from_vec_to_array(expr.kids)
-                .expect("impossible since we already checked the arity of expr");
+            let [x] = from_expr_kids_to_array(expr.kids);
             if !ctx.contains_key(&x.label) {
-                expr.annotation
-                    .push("this var expr is out-of-scope".to_owned());
+                add_error("this var expr is out-of-scope".to_owned());
             }
         }
         "forall" | "exists" => {
-            let [x, p] = from_vec_to_array(expr.kids)
-                .expect("impossible since we already checked the arity of expr");
+            let [x, p] = from_expr_kids_to_array(expr.kids);
             let ctx = {
                 let mut ctx = ctx;
                 ctx.insert(x.label.clone(), Type::Num);
@@ -286,7 +287,7 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
     // check validity
     match (proof.label.as_str(), expected_prop.pat()) {
         ("intro_and", ("and", [p, q])) => {
-            let [a, b] = from_vec_to_array(proof.kids)
+            let [a, b] = from_expr_kids_to_array(proof.kids)
                 .expect("impossible since we already checked the arity of proof");
             let a = check_proof(ctx.clone(), p, a);
             let b = check_proof(ctx.clone(), q, b);
@@ -302,7 +303,7 @@ fn check_proof(ctx: HashMap<String, Type>, expected_prop: &Expr, proof: Expr) ->
             kids: vec![],
         },
         ("elim_bot", _) => {
-            let [a] = from_vec_to_array(proof.kids)
+            let [a] = from_expr_kids_to_array(proof.kids)
                 .expect("impossible since we already checked the arity of proof");
             let a = check_proof(ctx, &ex!["bot"], a);
             Expr {
