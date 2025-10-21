@@ -56,7 +56,7 @@ lazy_static! {
 }
 
 #[derive(Default)]
-pub struct Diagnostics(Cell<Vec<Diagnostic>>);
+pub struct Diagnostics(pub Cell<Vec<Diagnostic>>);
 
 impl Debug for Diagnostics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,10 +71,13 @@ impl Clone for Diagnostics {
 }
 
 #[derive(Debug, Clone)]
-pub struct EditorLabel {
+pub struct GenEditorLabel<D> {
     pub constructor: Constructor,
-    pub diagnostics: Diagnostics,
+    pub diagnostics: D,
 }
+
+pub type EditorLabel = GenEditorLabel<Diagnostics>;
+pub type PlainEditorLabel = GenEditorLabel<()>;
 
 impl Display for EditorLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -82,11 +85,11 @@ impl Display for EditorLabel {
     }
 }
 
-impl EditorLabel {
-    pub fn new(constructor: Constructor, diagnostic: Vec<Diagnostic>) -> Self {
+impl<D> GenEditorLabel<D> {
+    pub fn new(constructor: Constructor, diagnostics: D) -> Self {
         Self {
             constructor,
-            diagnostics: Diagnostics(Cell::new(diagnostic)),
+            diagnostics,
         }
     }
 }
@@ -97,9 +100,27 @@ impl Expr<EditorLabel> {
     }
 }
 
-pub type EditorExpr = Expr<EditorLabel>;
+// A GenEditorExpr is expected to always conform to the following grammar:
+// e = (constructor [PosArg [d]])
+// d = newline | e
+pub type GenEditorExpr<D> = Expr<GenEditorLabel<D>>;
+pub type EditorExpr = GenEditorExpr<Diagnostics>;
+pub type PlainExpr = GenEditorExpr<()>;
 
-pub type PlainExpr = Expr<Constructor>;
+impl<D> GenEditorExpr<D> {
+    // this pat function assumes that the program is stored as a particular kind of structure
+    // where each node has a list of positional arguments, each of which has a list of expressions
+    // this returns the list of spots.
+    pub fn pat_pos<'a>(&'a self) -> (&'a str, Vec<&'a [Self]>) {
+        (
+            match &self.label.constructor {
+                Constructor::Literal(s) => s.as_str(),
+                _ => panic!("invalid expr"),
+            },
+            self.kids.0.iter().map(|e| e.kids.0.as_slice()).collect(),
+        )
+    }
+}
 
 impl EditorExpr {
     pub fn to_plain(self) -> PlainExpr {
@@ -108,7 +129,10 @@ impl EditorExpr {
             kids,
         } = self;
         Expr {
-            label: constructor.clone(),
+            label: GenEditorLabel {
+                constructor: constructor.clone(),
+                diagnostics: (),
+            },
             kids: Span(kids.0.into_iter().map(|x| x.to_plain()).collect()),
         }
     }
@@ -288,7 +312,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let h = core.expr.insert(
                 core.handle,
                 Fragment::Span(span![ex![
-                    EditorLabel::new(Constructor::Newline, vec![]),
+                    EditorLabel::new(Constructor::Newline, Diagnostics(Cell::new(vec![]))),
                     []
                 ]]),
             );
