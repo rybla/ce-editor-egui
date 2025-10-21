@@ -201,7 +201,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         // delete
         else if key_and_mods
             .map(|(k, m)| {
-                m.command && !m.shift && (k == egui::Key::Delete || k == egui::Key::Backspace)
+                !m.command && !m.shift && (k == egui::Key::Delete || k == egui::Key::Backspace)
             })
             .unwrap_or(false)
         {
