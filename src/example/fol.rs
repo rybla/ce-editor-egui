@@ -39,28 +39,28 @@ impl RuleKids {
 use RuleKids::{FixedArity, FreeArity};
 
 macro_rules! rule {
-    ( $sort: expr, fixed-arity [ $( $kid: expr ),* ] ) => {
+    ( $sort: expr, [ $( $kid: expr ),* ] ) => {
         Rule {
             sort: $sort,
             kids: FixedArity(&[ $( $kid ),* ]),
             infix: false
         }
     };
-    ( $sort: expr, fixed-arity [ $( $kid: expr ),* ], infix ) => {
+    ( $sort: expr, [ $( $kid: expr ),* ], infix ) => {
         Rule {
             sort: $sort,
             kids: FixedArity(&[ $( $kid ),* ]),
             infix: true
         }
     };
-    ( $sort: expr, free-arity [ $kid: expr ] ) => {
+    ( $sort: expr, LIST $kid: expr ) => {
         Rule {
             sort: $sort,
             kids: FreeArity($kid),
             infix: false
         }
     };
-    ( $sort: expr, free-arity [ $kid: expr ], infix ) => {
+    ( $sort: expr, LIST $kid: expr, infix ) => {
         Rule {
             sort: $sort,
             kids: FreeArity($kid),
@@ -69,32 +69,40 @@ macro_rules! rule {
     };
 }
 
+/// This macro is a wrapper for the [`hash_map`] macro which lets you omit using
+/// `to_owned` on each key when creating a [`HashMap`] with [`String`] keys.
+macro_rules! string_hash_map {
+    ( $( $key: literal => $val: expr ),* $(,)? ) => {
+        hash_map!( $( $key.to_owned() => $val ),* )
+    };
+}
+
 lazy_static! {
-    static ref GRAMMAR: HashMap<String, Rule> = hash_map! {
+    static ref GRAMMAR: HashMap<String, Rule> = string_hash_map! {
         // Prop
-        "<".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
-        ">".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
-        ">=".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
-        "<=".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
-        "=".to_owned() => rule![Prop, fixed-arity[Num, Num], infix],
-            "and".to_owned() => rule![Prop, fixed-arity[Prop, Prop], infix],
-        "or".to_owned() => rule![Prop, fixed-arity[Prop, Prop], infix],
-        "=>".to_owned() => rule![Prop, fixed-arity[Prop, Prop], infix],
-        "not".to_owned() => rule![Prop, fixed-arity[Prop]],
-        "forall".to_owned() => rule![Prop, fixed-arity[Var, Prop]],
-        "exists".to_owned() => rule![Prop, fixed-arity[Var, Prop]],
+        "<" => rule![Prop, [Num, Num], infix],
+        ">" => rule![Prop, [Num, Num], infix],
+        ">=" => rule![Prop, [Num, Num], infix],
+        "<=" => rule![Prop, [Num, Num], infix],
+        "=" => rule![Prop, [Num, Num], infix],
+        "and" => rule![Prop, [Prop, Prop], infix],
+        "or" => rule![Prop, [Prop, Prop], infix],
+        "=>" => rule![Prop, [Prop, Prop], infix],
+        "not" => rule![Prop, [Prop]],
+        "forall" => rule![Prop, [Var, Prop]],
+        "exists" => rule![Prop, [Var, Prop]],
         // Num
-        "+".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
-        "-".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
-        "*".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
-        "/".to_owned() => rule![Num, fixed-arity[Num, Num], infix],
+        "+" => rule![Num, [Num, Num], infix],
+        "-" => rule![Num, [Num, Num], infix],
+        "*" => rule![Num, [Num, Num], infix],
+        "/" => rule![Num, [Num, Num], infix],
         // TODO: but how can we add number literals if the labels are strings?
         // maybe we'll add these too:
-        "abs".to_owned() => rule![Num, fixed-arity[Num]],
-        "ceil".to_owned() => rule![Num, fixed-arity[Num]],
-        "floor".to_owned() => rule![Num, fixed-arity[Num]],
+        "abs" => rule![Num, [Num]],
+        "ceil" => rule![Num, [Num]],
+        "floor" => rule![Num, [Num]],
         // others
-        "list".to_owned() => rule![Num, free-arity[Num]],
+        "list" => rule![Num, LIST Num],
     };
 
     static ref DEFAULT_LITERAL_RULE: Rule = Rule {
