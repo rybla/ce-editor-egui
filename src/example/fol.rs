@@ -268,7 +268,10 @@ impl EditorSpec for Fol {
                     Constructor::Root | Constructor::PosArg => true,
                 }
             }
-            Handle::Span(_h) => true,
+            Handle::Span(h) => {
+                Self::is_valid_handle(&Handle::Point(h.p_l()), root)
+                    && Self::is_valid_handle(&Handle::Point(h.p_r()), root)
+            }
             // Handle::Zipper(h) => {
             //     // Try to extract a single sort at the outer [`SpanHandle`].
             //     let span_o = root.at_span_handle(&h.handle_o());
@@ -303,23 +306,26 @@ impl EditorSpec for Fol {
             //     sort_o == sort_i
             // }
             Handle::Zipper(h) => {
-                // As a simple first approach, just see if the parent expression
-                // at each end of the zipper has the same sort.
-                let e_o = root.at_path(&h.path_o);
-                let sort_o = match e_o.pat2() {
-                    (Constructor::PosArg, [k]) => {
-                        get_rule(&k.label.constructor).map(|r| r.sort.clone())
-                    }
-                    _ => None,
-                };
-                let e_i = root.at_path(&h.path_i());
-                let sort_i = match e_i.pat2() {
-                    (Constructor::PosArg, [k]) => {
-                        get_rule(&k.label.constructor).map(|r| r.sort.clone())
-                    }
-                    _ => None,
-                };
-                sort_o == sort_i
+                // // As a simple first approach, just see if the parent expression
+                // // at each end of the zipper has the same sort.
+                // let e_o = root.at_path(&h.path_o);
+                // let sort_o = match e_o.pat2() {
+                //     (Constructor::PosArg, [k]) => {
+                //         get_rule(&k.label.constructor).map(|r| r.sort.clone())
+                //     }
+                //     _ => None,
+                // };
+                // let e_i = root.at_path(&h.path_i());
+                // let sort_i = match e_i.pat2() {
+                //     (Constructor::PosArg, [k]) => {
+                //         get_rule(&k.label.constructor).map(|r| r.sort.clone())
+                //     }
+                //     _ => None,
+                // };
+                // sort_o == sort_i
+
+                Self::is_valid_handle(&Handle::Span(h.handle_o()), root)
+                    && Self::is_valid_handle(&Handle::Span(h.handle_i()), root)
             }
         }
     }
