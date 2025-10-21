@@ -20,7 +20,7 @@ enum Sort {
     Var,
 }
 
-use Sort::*;
+use Sort::{Num, Proof, Prop, Var};
 
 impl Sort {
     pub fn to_type(&self) -> Type<'_> {
@@ -77,13 +77,6 @@ impl RuleKids {
         match self {
             FixedArity(sorts) => Some(sorts.len()),
             FreeArity(_) => None,
-        }
-    }
-
-    pub fn get(&self, i: usize) -> std::option::Option<&Sort> {
-        match self {
-            FixedArity(sorts) => sorts.get(i),
-            FreeArity(sort) => Some(sort),
         }
     }
 }
@@ -257,15 +250,17 @@ macro_rules! make_simple_edit_menu_option {
     };
 }
 
-/// THE TYPECHECKER
+// -----------------------------------------------------------------------------
+// begin the type-checker
+// -----------------------------------------------------------------------------
 
-// inputs a PosArg that is supposed to have one child with a given expected type
-// ignores newlines.
-// if not one, it places an error message. if so, it typechecks that.
-fn check_pos_arg<'a>(
+/// inputs a [`Constructor::PosArg`] that is supposed to have one child with a
+/// given expected type ignores newlines. if not one, it places an error
+/// message. if so, it typechecks that.
+fn check_pos_arg(
     success: &mut bool,
-    ctx: HashMap<String, Type<'a>>,
-    expected_type: &Type<'a>,
+    ctx: HashMap<String, Type<'_>>,
+    expected_type: &Type<'_>,
     pos_arg: &EditorExpr,
 ) {
     pos_arg.clear_diagnostics();
@@ -286,6 +281,17 @@ fn check_pos_arg<'a>(
             pos_arg.add_diagnostic(Diagnostic("too many expressions".to_owned()));
             *success = false;
         }
+    }
+}
+
+fn check_free_args(
+    success: &mut bool,
+    ctx: &HashMap<String, Type<'_>>,
+    expected_type: &Type<'_>,
+    args: &[EditorExpr],
+) {
+    for arg in args {
+        check_type_helper(success, ctx.clone(), expected_type, arg);
     }
 }
 
@@ -374,9 +380,13 @@ fn check_type_helper<'a>(
                 let x = match x.pat_pos_arg() {
                     [x] => match x.pat_literal() {
                         (x, []) => x,
-                        _ => panic!("first arg of forall or exists should be a literal wrapped in a pos arg")
+                        _ => panic!(
+                            "first arg of forall or exists should be a literal wrapped in a pos arg"
+                        ),
                     },
-                    _ => panic!("the first child of forall and exist should be a literal wrapped ina pos arg"),
+                    _ => panic!(
+                        "the first child of forall and exist should be a literal wrapped ina pos arg"
+                    ),
                 };
                 ctx.insert(x.to_owned(), Type::Num);
                 ctx
@@ -407,15 +417,15 @@ fn check_type_helper<'a>(
                 }
             }
             FreeArity(expected_kid_sort) => {
-                for kid in &expr.kids.0 {
-                    check_pos_arg(success, ctx.clone(), &expected_kid_sort.to_type(), kid);
-                }
+                check_free_args(success, &ctx, &expected_kid_sort.to_type(), &expr.kids.0);
             }
         },
     }
 }
 
-/// END OF THE TYPECHECKER
+// -----------------------------------------------------------------------------
+// end type-checker
+// -----------------------------------------------------------------------------
 
 pub struct Fol {}
 
