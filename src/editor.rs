@@ -76,14 +76,14 @@ pub struct GenEditorLabel<D> {
     pub diagnostics: D,
 }
 
-pub type EditorLabel = GenEditorLabel<Diagnostics>;
-pub type PlainEditorLabel = GenEditorLabel<()>;
-
-impl Display for EditorLabel {
+impl<D> Display for GenEditorLabel<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.constructor)
     }
 }
+
+pub type EditorLabel = GenEditorLabel<Diagnostics>;
+pub type PlainEditorLabel = GenEditorLabel<()>;
 
 impl<D> GenEditorLabel<D> {
     pub fn new(constructor: Constructor, diagnostics: D) -> Self {
@@ -107,17 +107,34 @@ pub type GenEditorExpr<D> = Expr<GenEditorLabel<D>>;
 pub type EditorExpr = GenEditorExpr<Diagnostics>;
 pub type PlainExpr = GenEditorExpr<()>;
 
+#[macro_export]
+macro_rules! editor_ex {
+    ( $label:expr, [ $( $e:expr ),* ] ) => {
+        Expr {
+            label: GenEditorLabel { constructor: Constructor::Literal($label.to_owned()), diagnostics: () },
+            kids: Span(vec![ $( $e ),* ]),
+        }
+    };
+}
+
 impl<D> GenEditorExpr<D> {
+    pub fn pat_pos_arg(&self) -> &[Self] {
+        match self.label.constructor {
+            Constructor::PosArg => self.kids.0.as_slice(),
+            _ => panic!("expected a PostArg expr"),
+        }
+    }
+
     // this pat function assumes that the program is stored as a particular kind of structure
     // where each node has a list of positional arguments, each of which has a list of expressions
     // this returns the list of spots.
-    pub fn pat_pos<'a>(&'a self) -> (&'a str, Vec<&'a [Self]>) {
+    pub fn pat_literal(&self) -> (&str, &[Self]) {
         (
             match &self.label.constructor {
                 Constructor::Literal(s) => s.as_str(),
-                _ => panic!("invalid expr"),
+                c => panic!("invalid expr: {c:?}"),
             },
-            self.kids.0.iter().map(|e| e.kids.0.as_slice()).collect(),
+            self.kids.0.as_slice(),
         )
     }
 }
@@ -155,6 +172,19 @@ impl EditorExpr {
                     .collect(),
             ),
         }
+    }
+
+    pub fn clear_diagnostics(&self) {
+        let mut annotation = self.label.diagnostics.0.take();
+        annotation.clear();
+        self.label.diagnostics.0.set(annotation);
+    }
+
+    pub fn add_diagnostic(&self, d: Diagnostic) {
+        println!("add_diagnostic: {d:?}");
+        let mut annotation = self.label.diagnostics.0.take();
+        annotation.push(d);
+        self.label.diagnostics.0.set(annotation);
     }
 }
 
@@ -1012,7 +1042,7 @@ impl EditMenuPattern {
 
 pub type Edit = fn(&String, CoreEditorState) -> Option<CoreEditorState>;
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum Constructor {
     Literal(String),
     Root,

@@ -1,21 +1,58 @@
+#![allow(clippy::manual_let_else)]
+
 use crate::{
     editor::{self, *},
-    ex,
+    editor_ex, ex,
     expr::*,
     utility::pop_front,
 };
 use lazy_static::lazy_static;
 use map_macro::hash_map;
+use std::cell::Cell;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
+// this is like Type but with less information
 enum Sort {
+    Proof,
     Prop,
     Num,
     Var,
 }
 
-use Sort::{Num, Prop, Var};
+use Sort::*;
+
+impl Sort {
+    pub fn to_type(&self) -> Type<'_> {
+        match self {
+            Proof => {
+                panic!("this shouldn't be able to happen, can't recover details of sort to type")
+            }
+            Prop => Type::Prop,
+            Num => Type::Num,
+            Var => Type::Var,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Type<'a> {
+    Prop,
+    Num,
+    Var,
+    Proof(&'a PlainExpr),
+}
+
+impl<'a> Type<'a> {
+    pub fn get_sort(&self) -> Sort {
+        match self {
+            Type::Prop => Prop,
+            Type::Num => Num,
+            Type::Var => Var,
+            Type::Proof(_) => Proof,
+        }
+    }
+}
 
 struct Rule {
     pub sort: Sort,
@@ -27,11 +64,26 @@ enum RuleKids {
     FixedArity(&'static [Sort]),
     FreeArity(Sort),
 }
+
 impl RuleKids {
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         match self {
             FixedArity(sorts) => sorts.is_empty(),
             FreeArity(_) => false,
+        }
+    }
+
+    pub fn len(&self) -> Option<usize> {
+        match self {
+            FixedArity(sorts) => Some(sorts.len()),
+            FreeArity(_) => None,
+        }
+    }
+
+    pub fn get(&self, i: usize) -> std::option::Option<&Sort> {
+        match self {
+            FixedArity(sorts) => sorts.get(i),
+            FreeArity(sort) => Some(sort),
         }
     }
 }
@@ -103,6 +155,10 @@ lazy_static! {
         "floor" => rule![Num, [Num]],
         // others
         "list" => rule![Num, LIST Num],
+        // proof forms
+        "intro_and" => rule![Proof, [Proof, Proof]],
+        "intro_top" => rule![Proof, []],
+        "elim_bot" => rule![Proof, [Proof]],
     };
 
     static ref DEFAULT_LITERAL_RULE: Rule = Rule {
@@ -144,7 +200,13 @@ macro_rules! make_simple_edit_menu_option {
                 match &rule.kids {
                     FixedArity(sorts) => {
                         for _ in 0..sorts.len() {
-                            kids.push(ex![EditorLabel::new(Constructor::PosArg, vec![]), []]);
+                            kids.push(ex![
+                                GenEditorLabel::new(
+                                    Constructor::PosArg,
+                                    Diagnostics(Cell::new(vec![]))
+                                ),
+                                []
+                            ]);
                         }
                     }
                     FreeArity(_sort) => {}
@@ -162,7 +224,7 @@ macro_rules! make_simple_edit_menu_option {
                             None => vec![Tooth {
                                 label: EditorLabel::new(
                                     Constructor::Literal($name.to_owned()),
-                                    vec![],
+                                    Diagnostics(Cell::new(vec![])),
                                 ),
                                 span_l: Span::empty(),
                                 span_r: Span(kids),
@@ -171,7 +233,7 @@ macro_rules! make_simple_edit_menu_option {
                                 Tooth {
                                     label: EditorLabel::new(
                                         Constructor::Literal($name.to_owned()),
-                                        vec![],
+                                        Diagnostics(Cell::new(vec![])),
                                     ),
                                     span_l: Span::empty(),
                                     span_r: Span(kids),
@@ -184,11 +246,176 @@ macro_rules! make_simple_edit_menu_option {
 
                 state.handle = handle;
 
+                for kid in &state.expr.kids.0 {
+                    println!("check_type");
+                    let _success = check_type(hash_map! {}, &Type::Prop, kid);
+                }
+
                 Some(state)
             },
         )
     };
 }
+
+/// THE TYPECHECKER
+
+// inputs a PosArg that is supposed to have one child with a given expected type
+// ignores newlines.
+// if not one, it places an error message. if so, it typechecks that.
+fn check_pos_arg<'a>(
+    success: &mut bool,
+    ctx: HashMap<String, Type<'a>>,
+    expected_type: &Type<'a>,
+    pos_arg: &EditorExpr,
+) {
+    pos_arg.clear_diagnostics();
+    // todo!("this needs to filter out newlines");
+    let without_newlines = pos_arg
+        .pat_pos_arg()
+        .iter()
+        .filter(|x| !matches!(x.label.constructor, Constructor::Newline))
+        .collect::<Vec<_>>();
+    match without_newlines.as_slice() {
+        [] => {
+            pos_arg.add_diagnostic(Diagnostic("this expression is a hole fyi".to_owned()));
+        }
+        [kid] => {
+            check_type_helper(success, ctx, expected_type, kid);
+        }
+        _kids => {
+            pos_arg.add_diagnostic(Diagnostic("too many expressions".to_owned()));
+            *success = false;
+        }
+    }
+}
+
+fn check_type<'a>(
+    ctx: HashMap<String, Type<'a>>,
+    expected_type: &Type<'a>,
+    expr: &EditorExpr,
+) -> bool {
+    let mut success = true;
+    check_type_helper(&mut success, ctx, expected_type, expr);
+    success
+}
+
+// clears old diagnostics on the expr, typechecks it, and places new diagnostics
+// corresponding to the new type errors.
+fn check_type_helper<'a>(
+    success: &mut bool,
+    ctx: HashMap<String, Type<'a>>,
+    expected_type: &Type<'a>,
+    expr: &EditorExpr,
+) {
+    let expected_sort = expected_type.get_sort();
+    // clean up the old annotation
+    expr.clear_diagnostics();
+
+    let lit = match &expr.label.constructor {
+        Constructor::Literal(lit) => lit,
+        _ => panic!("check_type_helper should only every be called on Literal constructors"),
+    };
+
+    // call this function to add error annotation, also sets the success flag
+    let mut add_error = |d: Diagnostic| {
+        expr.add_diagnostic(d);
+        *success = false;
+    };
+
+    // get the corresponding rule
+    let Rule {
+        sort: rule_sort,
+        kids: rule_kids,
+        ..
+    } = match GRAMMAR.get(lit) {
+        None => {
+            add_error(Diagnostic("unknown expr label".to_owned()));
+            return;
+        }
+        Some(rule) => rule,
+    };
+
+    // check sort
+    if rule_sort != &expected_sort {
+        add_error(Diagnostic(format!(
+            "this expr was expected to have sort {expected_sort:?} but actually has sort {rule_sort:?}"
+        )));
+    }
+
+    // check arity
+    match rule_kids.len() {
+        Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
+            let expr_kids_len = expr.kids.0.len();
+            add_error(Diagnostic(format!(
+                "this expr was expected to have {} kids but actually has {} kids",
+                rule_kids
+                    .len()
+                    .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
+                expr_kids_len
+            )));
+        }
+        _ => {}
+    }
+
+    // check kid sorts
+    match (expr.pat_literal(), expected_type) {
+        (("var", [x]), _) => {
+            let x = match x.pat_literal() {
+                (x, []) => x,
+                _ => panic!("the first child of var should be a literal"),
+            };
+            if !ctx.contains_key(x) {
+                add_error(Diagnostic("this var expr is out-of-scope".to_owned()));
+            }
+        }
+        (("forall" | "exists", [x, p]), _) => {
+            let ctx = {
+                let mut ctx = ctx;
+                let x = match x.pat_pos_arg() {
+                    [x] => match x.pat_literal() {
+                        (x, []) => x,
+                        _ => panic!("first arg of forall or exists should be a literal wrapped in a pos arg")
+                    },
+                    _ => panic!("the first child of forall and exist should be a literal wrapped ina pos arg"),
+                };
+                ctx.insert(x.to_owned(), Type::Num);
+                ctx
+            };
+            check_pos_arg(success, ctx, &Type::Prop, p);
+        }
+        // The proof step cases are handled here
+        ((label, _), Type::Proof(prop)) => {
+            match ((label, expr.kids.0.as_slice()), prop.pat_literal()) {
+                (("intro_and", [a, b]), ("and", [p, q])) => {
+                    check_pos_arg(success, ctx.clone(), &Type::Proof(p), a);
+                    check_pos_arg(success, ctx.clone(), &Type::Proof(q), b);
+                }
+                (("intro_top", []), ("top", [])) => {}
+                (("elim_bot", [a]), _) => {
+                    check_pos_arg(success, ctx, &Type::Proof(&editor_ex!("bot", [])), a);
+                }
+                _ => {
+                    add_error(Diagnostic("invalid proof".to_owned()));
+                }
+            }
+        }
+        // default case that doesn't interact with environment, and uses simple sorts
+        _ => match rule_kids {
+            FixedArity(rule_kids) => {
+                for (kid, expected_kid_sort) in expr.kids.0.iter().zip(rule_kids.iter()) {
+                    check_pos_arg(success, ctx.clone(), &expected_kid_sort.to_type(), kid);
+                }
+            }
+            FreeArity(expected_kid_sort) => {
+                for kid in &expr.kids.0 {
+                    check_pos_arg(success, ctx.clone(), &expected_kid_sort.to_type(), kid);
+                }
+            }
+        },
+    }
+}
+
+/// END OF THE TYPECHECKER
 
 pub struct Fol {}
 
@@ -226,7 +453,10 @@ impl EditorSpec for Fol {
                     let handle = state.expr.insert(
                         state.handle,
                         Fragment::Span(Span(vec![Expr {
-                            label: EditorLabel::new(Constructor::Literal(query.to_owned()), vec![]),
+                            label: EditorLabel::new(
+                                Constructor::Literal(query.to_owned()),
+                                Diagnostics(Cell::new(vec![])),
+                            ),
                             kids: Span::empty(),
                         }])),
                     );
@@ -255,6 +485,9 @@ impl EditorSpec for Fol {
             make_simple_edit_menu_option!["ceil"],
             make_simple_edit_menu_option!["floor"],
             make_simple_edit_menu_option!["list"],
+            make_simple_edit_menu_option!["intro_and"],
+            make_simple_edit_menu_option!["intro_top"],
+            make_simple_edit_menu_option!["elim_bot"],
         ]
     }
 
@@ -359,6 +592,25 @@ impl EditorSpec for Fol {
         } else {
             color_scheme.normal_background
         };
+
+        {
+            let ds = expr.label.diagnostics.0.take();
+
+            for d in &ds {
+                egui::Frame::new().show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(d.0.clone())
+                                .color(color_scheme.normal_text)
+                                .text_style(egui::TextStyle::Monospace),
+                        )
+                        .selectable(false),
+                    );
+                });
+            }
+
+            expr.label.diagnostics.0.set(ds);
+        }
 
         if !rule.kids.is_empty() {
             egui::Frame::new().fill(fill_color).show(ui, |ui| {
