@@ -1049,6 +1049,16 @@ impl<L: Debug + Display + Clone> Expr<L> {
         (&self.label, self.kids.0.as_slice())
     }
 
+    pub fn pat_owned<const N: usize>(self) -> (L, [Self; N]) {
+        (
+            self.label,
+            self.kids
+                .0
+                .try_into()
+                .unwrap_or_else(|_| panic!("impossible")),
+        )
+    }
+
     pub fn new(label: L, kids: Span<L>) -> Self {
         Self { label, kids }
     }

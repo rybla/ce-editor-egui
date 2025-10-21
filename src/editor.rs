@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use log::trace;
 use nucleo_matcher::Matcher;
 use std::{
+    cell::Cell,
     fmt::{Debug, Display},
     marker::PhantomData,
 };
@@ -54,34 +55,84 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct ExprLabel {
-    pub constructor: Constructor,
-    pub diagnostic: Vec<Diagnostic>,
+#[derive(Default)]
+pub struct Diagnostics(Cell<Vec<Diagnostic>>);
+
+impl Debug for Diagnostics {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Diagnostics").field(&self.0.take()).finish()
+    }
 }
 
-impl Display for ExprLabel {
+impl Clone for Diagnostics {
+    fn clone(&self) -> Self {
+        Self(Cell::new(vec![]))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EditorLabel {
+    pub constructor: Constructor,
+    pub diagnostics: Diagnostics,
+}
+
+impl Display for EditorLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.constructor)
     }
 }
 
-impl ExprLabel {
+impl EditorLabel {
     pub fn new(constructor: Constructor, diagnostic: Vec<Diagnostic>) -> Self {
         Self {
             constructor,
-            diagnostic,
+            diagnostics: Diagnostics(Cell::new(diagnostic)),
         }
     }
 }
 
-impl Expr<ExprLabel> {
+impl Expr<EditorLabel> {
     pub fn pat2(&self) -> (&Constructor, &[Self]) {
         (&self.label.constructor, self.kids.0.as_slice())
     }
 }
 
-pub type EditorExpr = Expr<ExprLabel>;
+pub type EditorExpr = Expr<EditorLabel>;
+
+pub type PlainExpr = Expr<Constructor>;
+
+impl EditorExpr {
+    pub fn to_plain(self) -> PlainExpr {
+        let Self {
+            label: EditorLabel { constructor, .. },
+            kids,
+        } = self;
+        Expr {
+            label: constructor.clone(),
+            kids: Span(kids.0.into_iter().map(|x| x.to_plain()).collect()),
+        }
+    }
+
+    // clones but without cloning Cells, and just makes new Cells
+    pub fn clone_without_diagnostics(&self) -> Self {
+        let Self {
+            label: EditorLabel { constructor, .. },
+            kids,
+        } = self;
+        Self {
+            label: EditorLabel {
+                constructor: constructor.clone(),
+                diagnostics: Diagnostics(Cell::new(vec![])),
+            },
+            kids: Span(
+                kids.0
+                    .iter()
+                    .map(|x| x.clone_without_diagnostics())
+                    .collect(),
+            ),
+        }
+    }
+}
 
 pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub spec: PhantomData<ES>,
@@ -236,7 +287,10 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let mut core = self.core.clone();
             let h = core.expr.insert(
                 core.handle,
-                Fragment::Span(span![ex![ExprLabel::new(Constructor::Newline, vec![]), []]]),
+                Fragment::Span(span![ex![
+                    EditorLabel::new(Constructor::Newline, vec![]),
+                    []
+                ]]),
             );
             core.handle = h;
             self.do_action(Action::SetCore(core));
@@ -801,11 +855,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct CoreEditorState {
     pub expr: EditorExpr,
     pub handle: Handle,
-    pub clipboard: Option<Fragment<ExprLabel>>,
+    pub clipboard: Option<Fragment<EditorLabel>>,
 }
 
 impl CoreEditorState {

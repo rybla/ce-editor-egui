@@ -112,7 +112,7 @@ fn get_rule(c: &Constructor) -> Option<&Rule> {
 }
 
 #[expect(dead_code)]
-fn get_sorts(span: &Span<ExprLabel>) -> Vec<Option<&Sort>> {
+fn get_sorts(span: &Span<EditorLabel>) -> Vec<Option<&Sort>> {
     span.0
         .iter()
         .map(|e| get_rule(&e.label.constructor).map(|r| &r.sort))
@@ -132,11 +132,11 @@ macro_rules! make_simple_edit_menu_option {
                     .get($name)
                     .unwrap_or_else(|| panic!("no rule for {}", $name));
 
-                let mut kids: Vec<Expr<ExprLabel>> = vec![];
+                let mut kids: Vec<Expr<EditorLabel>> = vec![];
                 match &rule.kids {
                     FixedArity(sorts) => {
                         for _ in 0..sorts.len() {
-                            kids.push(ex![ExprLabel::new(Constructor::PosArg, vec![]), []]);
+                            kids.push(ex![EditorLabel::new(Constructor::PosArg, vec![]), []]);
                         }
                     }
                     FreeArity(_sort) => {}
@@ -152,7 +152,7 @@ macro_rules! make_simple_edit_menu_option {
                         span_or: Span::empty(),
                         middle: Context(match tooth_into_first_kid {
                             None => vec![Tooth {
-                                label: ExprLabel::new(
+                                label: EditorLabel::new(
                                     Constructor::Literal($name.to_owned()),
                                     vec![],
                                 ),
@@ -161,7 +161,7 @@ macro_rules! make_simple_edit_menu_option {
                             }],
                             Some(tooth_into_first_kid) => vec![
                                 Tooth {
-                                    label: ExprLabel::new(
+                                    label: EditorLabel::new(
                                         Constructor::Literal($name.to_owned()),
                                         vec![],
                                     ),
@@ -194,9 +194,9 @@ impl EditorSpec for Fol {
     fn initial_state() -> CoreEditorState {
         CoreEditorState::new(
             Expr::new(
-                ExprLabel {
+                EditorLabel {
                     constructor: Constructor::Root,
-                    diagnostic: Default::default(),
+                    diagnostics: Default::default(),
                 },
                 Span::empty(),
             ),
@@ -218,7 +218,7 @@ impl EditorSpec for Fol {
                     let handle = state.expr.insert(
                         state.handle,
                         Fragment::Span(Span(vec![Expr {
-                            label: ExprLabel::new(Constructor::Literal(query.to_owned()), vec![]),
+                            label: EditorLabel::new(Constructor::Literal(query.to_owned()), vec![]),
                             kids: Span::empty(),
                         }])),
                     );
