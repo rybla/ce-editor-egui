@@ -63,13 +63,14 @@ struct Rule {
 enum RuleKids {
     FixedArity(&'static [Sort]),
     FreeArity(Sort),
+    LiteralKid,
 }
 
 impl RuleKids {
     pub fn is_empty(&self) -> bool {
         match self {
             FixedArity(sorts) => sorts.is_empty(),
-            FreeArity(_) => false,
+            _ => false,
         }
     }
 
@@ -77,11 +78,12 @@ impl RuleKids {
         match self {
             FixedArity(sorts) => Some(sorts.len()),
             FreeArity(_) => None,
+            _ => None,
         }
     }
 }
 
-use RuleKids::{FixedArity, FreeArity};
+use RuleKids::{FixedArity, FreeArity, LiteralKid};
 
 macro_rules! rule {
     ( $sort: expr, [ $( $kid: expr ),* ] ) => {
@@ -96,6 +98,13 @@ macro_rules! rule {
             sort: $sort,
             kids: FixedArity(&[ $( $kid ),* ]),
             infix: true
+        }
+    };
+    ( $sort: expr, LIT ) => {
+        Rule {
+            sort: $sort,
+            kids: LiteralKid,
+            infix: false
         }
     };
     ( $sort: expr, LIST $kid: expr ) => {
@@ -125,6 +134,7 @@ macro_rules! string_hash_map {
 lazy_static! {
     static ref GRAMMAR: HashMap<String, Rule> = string_hash_map! {
         // Prop
+        "var" => rule![Prop, LIT], // this one is wierd
         "<" => rule![Prop, [Num, Num], infix],
         ">" => rule![Prop, [Num, Num], infix],
         ">=" => rule![Prop, [Num, Num], infix],
@@ -203,6 +213,7 @@ macro_rules! make_simple_edit_menu_option {
                         }
                     }
                     FreeArity(_sort) => {}
+                    LiteralKid => {} // TODO: put some diagnostic if not 1 kid
                 }
 
                 let tooth_into_first_kid =
@@ -243,6 +254,8 @@ macro_rules! make_simple_edit_menu_option {
                     println!("check_type");
                     let _success = check_type(hash_map! {}, &Type::Prop, kid);
                 }
+
+                println!("resulting expr: {:?}", state.expr.kids);
 
                 Some(state)
             },
@@ -419,6 +432,7 @@ fn check_type_helper<'a>(
             FreeArity(expected_kid_sort) => {
                 check_free_args(success, &ctx, &expected_kid_sort.to_type(), &expr.kids.0);
             }
+            LiteralKid => {}
         },
     }
 }
@@ -463,15 +477,26 @@ impl EditorSpec for Fol {
                     let handle = state.expr.insert(
                         state.handle,
                         Fragment::Span(Span(vec![Expr {
-                            label: EditorLabel::new(
-                                Constructor::Literal(query.to_owned()),
-                                Diagnostics(Cell::new(vec![])),
-                            ),
-                            kids: Span::empty(),
+                            label: GenEditorLabel {
+                                constructor: Constructor::Literal("var".to_owned()),
+                                diagnostics: Diagnostics(Cell::new(vec![])),
+                            },
+                            kids: Span(vec![Expr {
+                                label: EditorLabel::new(
+                                    Constructor::Literal(query.to_owned()),
+                                    Diagnostics(Cell::new(vec![])),
+                                ),
+                                kids: Span::empty(),
+                            }]),
                         }])),
                     );
 
                     state.handle = handle;
+
+                    for kid in &state.expr.kids.0 {
+                        println!("check_type");
+                        let _success = check_type(hash_map! {}, &Type::Prop, kid);
+                    }
 
                     Some(state)
                 },
@@ -602,25 +627,6 @@ impl EditorSpec for Fol {
         } else {
             color_scheme.normal_background
         };
-
-        {
-            let ds = expr.label.diagnostics.0.take();
-
-            for d in &ds {
-                egui::Frame::new().show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(d.0.clone())
-                                .color(color_scheme.normal_text)
-                                .text_style(egui::TextStyle::Monospace),
-                        )
-                        .selectable(false),
-                    );
-                });
-            }
-
-            expr.label.diagnostics.0.set(ds);
-        }
 
         if !rule.kids.is_empty() {
             egui::Frame::new().fill(fill_color).show(ui, |ui| {

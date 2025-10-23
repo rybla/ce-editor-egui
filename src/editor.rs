@@ -60,13 +60,19 @@ pub struct Diagnostics(pub Cell<Vec<Diagnostic>>);
 
 impl Debug for Diagnostics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Diagnostics").field(&self.0.take()).finish()
+        let ds = self.0.take();
+        let r = f.debug_tuple("Diagnostics").field(&ds).finish();
+        self.0.set(ds);
+        r
     }
 }
 
 impl Clone for Diagnostics {
     fn clone(&self) -> Self {
-        Self(Cell::new(vec![]))
+        let ds = self.0.take();
+        let ds_clone = ds.clone();
+        self.0.set(ds);
+        Self(Cell::new(ds_clone))
     }
 }
 
@@ -748,6 +754,25 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
         } else {
             color_scheme.normal_background
         };
+
+        {
+            let ds = expr.label.diagnostics.0.take();
+
+            for d in &ds {
+                egui::Frame::new().show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(d.0.clone())
+                                .color(color_scheme.normal_text)
+                                .text_style(egui::TextStyle::Monospace),
+                        )
+                        .selectable(false),
+                    );
+                });
+            }
+
+            expr.label.diagnostics.0.set(ds);
+        }
 
         let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)> = vec![];
 
