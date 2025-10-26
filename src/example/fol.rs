@@ -179,7 +179,7 @@ fn get_rule(c: &Constructor) -> Option<&Rule> {
 }
 
 #[expect(dead_code)]
-fn get_sorts(span: &Span<EditorLabel>) -> Vec<Option<&Sort>> {
+fn get_sorts(span: &Span<DiagEditorLabel>) -> Vec<Option<&Sort>> {
     span.0
         .iter()
         .map(|e| get_rule(&e.label.constructor).map(|r| &r.sort))
@@ -274,7 +274,7 @@ fn check_pos_arg(
     success: &mut bool,
     ctx: HashMap<String, Type<'_>>,
     expected_type: &Type<'_>,
-    pos_arg: &EditorExpr,
+    pos_arg: &DiagExpr,
 ) {
     pos_arg.clear_diagnostics();
     // todo!("this needs to filter out newlines");
@@ -301,7 +301,7 @@ fn check_free_args(
     success: &mut bool,
     ctx: &HashMap<String, Type<'_>>,
     expected_type: &Type<'_>,
-    args: &[EditorExpr],
+    args: &[DiagExpr],
 ) {
     for arg in args {
         check_type_helper(success, ctx.clone(), expected_type, arg);
@@ -311,7 +311,7 @@ fn check_free_args(
 fn check_type<'a>(
     ctx: HashMap<String, Type<'a>>,
     expected_type: &Type<'a>,
-    expr: &EditorExpr,
+    expr: &DiagExpr,
 ) -> bool {
     let mut success = true;
     check_type_helper(&mut success, ctx, expected_type, expr);
@@ -324,7 +324,7 @@ fn check_type_helper<'a>(
     success: &mut bool,
     ctx: HashMap<String, Type<'a>>,
     expected_type: &Type<'a>,
-    expr: &EditorExpr,
+    expr: &DiagExpr,
 ) {
     let expected_sort = expected_type.get_sort();
     // clean up the old annotation
@@ -450,10 +450,10 @@ impl EditorSpec for Fol {
         "fol".to_owned()
     }
 
-    fn initial_state() -> CoreEditorState {
-        CoreEditorState::new(
+    fn initial_state() -> CoreState {
+        CoreState::new(
             Expr::new(
-                EditorLabel {
+                DiagEditorLabel {
                     constructor: Constructor::Root,
                     diagnostics: Default::default(),
                 },
@@ -461,6 +461,13 @@ impl EditorSpec for Fol {
             ),
             Default::default(),
         )
+    }
+
+    fn diagnose(state: &CoreState<MutDiagnostics>) {
+        for kid in &state.expr.kids.0 {
+            println!("check_type");
+            let _success = check_type(hash_map! {}, &Type::Prop, kid);
+        }
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
@@ -499,14 +506,7 @@ impl EditorSpec for Fol {
                     //                         }])),
                     //                     );
                     let handle = todo!();
-
                     state.handle = handle;
-
-                    for kid in &state.expr.kids.0 {
-                        println!("check_type");
-                        let _success = check_type(hash_map! {}, &Type::Prop, kid);
-                    }
-
                     Some(state)
                 },
             },
@@ -539,7 +539,7 @@ impl EditorSpec for Fol {
         Default::default()
     }
 
-    fn is_valid_handle_specialized(h: &Handle, root: &EditorExpr) -> bool {
+    fn is_valid_handle_specialized(h: &Handle, root: &DiagExpr) -> bool {
         match h {
             Handle::Point(p) => {
                 let e = root.get_expr_old(&p.path);
@@ -622,7 +622,7 @@ impl EditorSpec for Fol {
         ren_ctx: &RenderContext,
         state: &mut EditorState<Self>,
         path: &Path,
-        expr: &EditorExpr,
+        expr: &DiagExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
         label: &str,
     ) {

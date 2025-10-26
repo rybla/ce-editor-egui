@@ -1044,6 +1044,28 @@ impl<L: Display> Display for Expr<L> {
     }
 }
 
+impl<L1> Expr<L1> {
+    pub fn map<L2, F>(&self, f: &mut F) -> Expr<L2>
+    where
+        F: FnMut(&L1) -> L2,
+    {
+        Expr {
+            label: f(&self.label),
+            kids: Span(self.kids.0.iter().map(|e| e.map(f)).collect()),
+        }
+    }
+
+    pub fn map_owned<L2, F>(self, f: &mut F) -> Expr<L2>
+    where
+        F: FnMut(L1) -> L2,
+    {
+        Expr {
+            label: f(self.label),
+            kids: Span(self.kids.0.into_iter().map(|e| e.map_owned(f)).collect()),
+        }
+    }
+}
+
 impl<L: Debug + Display> Expr<L> {
     pub fn pat(&self) -> (&L, &[Self]) {
         (&self.label, self.kids.0.as_slice())
