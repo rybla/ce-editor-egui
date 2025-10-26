@@ -56,11 +56,12 @@ lazy_static! {
 }
 
 #[derive(Default)]
-pub struct Diagnostics(pub Cell<Vec<Diagnostic>>);
+pub struct MutDiagnostics(pub Cell<Vec<Diagnostic>>);
 
-impl Debug for Diagnostics {
+impl Debug for MutDiagnostics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ds = self.0.take();
+<<<<<<< Updated upstream
         let r = f.debug_tuple("Diagnostics").field(&ds).finish();
         self.0.set(ds);
         r
@@ -73,6 +74,11 @@ impl Clone for Diagnostics {
         let ds_clone = ds.clone();
         self.0.set(ds);
         Self(Cell::new(ds_clone))
+=======
+        let ds_clone = ds.clone();
+        self.0.set(ds);
+        f.debug_tuple("Diagnostics").field(&ds_clone).finish()
+>>>>>>> Stashed changes
     }
 }
 
@@ -88,7 +94,7 @@ impl<D> Display for GenEditorLabel<D> {
     }
 }
 
-pub type EditorLabel = GenEditorLabel<Diagnostics>;
+pub type EditorLabel = GenEditorLabel<MutDiagnostics>;
 pub type PlainEditorLabel = GenEditorLabel<()>;
 
 impl<D> GenEditorLabel<D> {
@@ -110,7 +116,7 @@ impl Expr<EditorLabel> {
 // e = (constructor [PosArg [d]])
 // d = newline | e
 pub type GenEditorExpr<D> = Expr<GenEditorLabel<D>>;
-pub type EditorExpr = GenEditorExpr<Diagnostics>;
+pub type EditorExpr = GenEditorExpr<MutDiagnostics>;
 pub type PlainExpr = GenEditorExpr<()>;
 
 #[macro_export]
@@ -169,7 +175,7 @@ impl EditorExpr {
         Self {
             label: EditorLabel {
                 constructor: constructor.clone(),
-                diagnostics: Diagnostics(Cell::new(vec![])),
+                diagnostics: MutDiagnostics(Cell::new(vec![])),
             },
             kids: Span(
                 kids.0
@@ -277,7 +283,11 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             {
                 if let Some(option) = menu.focus_option() {
                     // TODO: this still seems problematic that we are cloning the entire core state for every single update
-                    if let Some(core) = (option.edit)(&menu.query, self.core.clone()) {
+                    let core = self.core.clone();
+                    println!("BEFORE running option.edit");
+                    let opt_core = (option.edit)(&menu.query, core);
+                    println!("AFTER running option.edit");
+                    if let Some(core) = opt_core {
                         self.do_action(Action::SetCore(core));
                     } else {
                         trace!(target: "editor.edit", "edit failed");
@@ -348,7 +358,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             let h = core.expr.insert(
                 core.handle,
                 Fragment::Span(span![ex![
-                    EditorLabel::new(Constructor::Newline, Diagnostics(Cell::new(vec![]))),
+                    EditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
                     []
                 ]]),
             );
@@ -1067,13 +1077,25 @@ impl EditMenuPattern {
 
 pub type Edit = fn(&String, CoreEditorState) -> Option<CoreEditorState>;
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum Constructor {
     Literal(String),
     Root,
     Newline,
     /// positional argument
     PosArg,
+}
+
+impl Clone for Constructor {
+    fn clone(&self) -> Self {
+        println!("cloning Constructor: {self}");
+        match self {
+            Self::Literal(lit) => Self::Literal(lit.clone()),
+            Self::Root => Self::Root,
+            Self::Newline => Self::Newline,
+            Self::PosArg => Self::PosArg,
+        }
+    }
 }
 
 impl Display for Constructor {

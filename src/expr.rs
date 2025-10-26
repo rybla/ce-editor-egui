@@ -239,7 +239,7 @@ impl Point {
         self.path == other.path && self.i.is_left_of_index(&other.i)
     }
 
-    pub fn move_dir<L: Debug + Display + Clone>(
+    pub fn move_dir<L: Debug + Display>(
         &mut self,
         expr: &Expr<L>,
         dir: &MoveDir,
@@ -349,7 +349,7 @@ impl Handle {
         }
     }
 
-    pub fn move_up<L: Debug + Display + Clone>(&mut self, expr: &Expr<L>) -> Result<(), MoveError> {
+    pub fn move_up<L: Debug + Display>(&mut self, expr: &Expr<L>) -> Result<(), MoveError> {
         match self {
             Self::Point(p) => {
                 let e = expr.at_path(&p.path);
@@ -397,7 +397,7 @@ impl Handle {
         }
     }
 
-    pub fn move_dir<L: Debug + Display + Clone>(
+    pub fn move_dir<L: Debug + Display>(
         &mut self,
         expr: &Expr<L>,
         dir: &MoveDir,
@@ -457,7 +457,7 @@ impl Handle {
         }
     }
 
-    pub fn drag<L: Debug + Display + Clone>(self, e: &Expr<L>, target: &Point) -> Option<Self> {
+    pub fn drag<L: Debug + Display>(self, e: &Expr<L>, target: &Point) -> Option<Self> {
         trace!(target: "expr.drag", "self   = {self}");
         trace!(target: "expr.drag", "e      = {e}");
         trace!(target: "expr.drag", "target = {target}");
@@ -1044,7 +1044,7 @@ impl<L: Display> Display for Expr<L> {
     }
 }
 
-impl<L: Debug + Display + Clone> Expr<L> {
+impl<L: Debug + Display> Expr<L> {
     pub fn pat(&self) -> (&L, &[Self]) {
         (&self.label, self.kids.0.as_slice())
     }
@@ -1070,11 +1070,14 @@ impl<L: Debug + Display + Clone> Expr<L> {
             .fold(0, |h, e| std::cmp::max(h, 1 + e.height()))
     }
 
-    pub fn at_handle_cloned(&self, h: &Handle) -> Option<Fragment<L>> {
+    pub fn at_handle_cloned(&self, h: &Handle) -> Option<Fragment<L>>
+    where
+        L: Clone,
+    {
         match h {
             Handle::Point(_) => None,
-            Handle::Span(h) => Some(Fragment::Span(self.at_span_handle(h))),
-            Handle::Zipper(h) => Some(Fragment::Zipper(self.at_zipper_handle(h))),
+            Handle::Span(h) => Some(Fragment::Span(Span(self.at_span_handle(h).to_vec()))),
+            Handle::Zipper(h) => Some(Fragment::Zipper(self.at_zipper_handle(h).to_owned())),
         }
     }
 
@@ -1117,7 +1120,10 @@ impl<L: Debug + Display + Clone> Expr<L> {
         }
     }
 
-    pub fn at_handle(&self, h: &Handle) -> Option<Fragment<L>> {
+    pub fn at_handle(&self, h: &Handle) -> Option<Fragment<L>>
+    where
+        L: Debug,
+    {
         match h {
             Handle::Point(_) => None,
             Handle::Span(h) => Some(Fragment::Span(self.at_span_handle(h))),
@@ -1287,79 +1293,96 @@ impl<L: Debug + Display + Clone> Expr<L> {
         self.kids.at_step_mut(step)
     }
 
-    pub fn at_span_handle(&self, h: &SpanHandle) -> Span<L> {
+    pub fn at_span_handle(&self, h: &SpanHandle) -> &[Expr<L>] {
         let e = self.at_path(&h.path);
-        Span(e.kids.at_index_range(&h.i_l, &h.i_r).to_vec())
+        e.kids.at_index_range(&h.i_l, &h.i_r)
     }
 
-    pub fn at_zipper_handle(&self, h: &ZipperHandle) -> Zipper<L> {
+    pub fn at_zipper_handle(&self, h: &ZipperHandle) -> ZipperRef<'_, L> {
         let s0 = h.first_middle_step();
         let mut e = self.at_path(&h.path_o);
-        let span_ol = Span(e.kids.at_index_range(&h.i_ol, &s0.left_index()).to_vec());
-        let span_or = Span(e.kids.at_index_range(&s0.right_index(), &h.i_or).to_vec());
-        let mut ths: Vec<Tooth<L>> = vec![];
+        let span_ol = e.kids.at_index_range(&h.i_ol, &s0.left_index());
+        let span_or = e.kids.at_index_range(&s0.right_index(), &h.i_or);
+        let mut middle: Vec<_> = vec![];
         for s in &h.path_m.0 {
             let (th, e_sub) = e.tooth_at_step(s);
-            ths.push(th);
+            middle.push(th);
             e = e_sub;
         }
-        Zipper {
+        ZipperRef {
             span_ol,
             span_or,
-            middle: Context(ths),
+            middle,
         }
     }
 
-    pub fn tooth_at_step(&self, s: &Step) -> (Tooth<L>, &Self) {
+    pub fn tooth_at_step(&self, s: &Step) -> (ToothRef<'_, L>, &Expr<L>) {
         (
-            Tooth {
-                label: self.label.clone(),
-                span_l: Span(
-                    self.kids
-                        .at_index_range(&self.kids.leftmost_index(), &s.left_index())
-                        .to_vec(),
-                ),
-                span_r: Span(
-                    self.kids
-                        .at_index_range(&s.right_index(), &self.kids.rightmost_index())
-                        .to_vec(),
-                ),
+            ToothRef {
+                label: &self.label,
+                span_l: self
+                    .kids
+                    .at_index_range(&self.kids.leftmost_index(), &s.left_index()),
+                span_r: self
+                    .kids
+                    .at_index_range(&s.right_index(), &self.kids.rightmost_index()),
             },
             self.kids.at_step(s),
         )
     }
 
-    pub fn into_context_from_path(&self, path: &Path) -> (Context<L>, &Self) {
-        let mut ctx = Context::empty();
+    pub fn to_context_from_path(
+        &self,
+        path: &Path,
+    ) -> (Vec<(&L, &[Expr<L>], &[Expr<L>])>, &Expr<L>) {
+        let mut ths = vec![];
         let mut e = self;
         for s in &path.0 {
             let (th, e_sub) = e.tooth_at_step(s);
-            ctx.0.push(th);
+            ths.push(th);
             e = e_sub;
         }
-        (ctx, e)
+        (ths, e)
     }
 
-    pub fn into_context_from_point(&self, p: &Point) -> Context<L> {
-        let (mut ctx, e) = self.into_context_from_path(&p.path);
-        ctx.0.push(e.tooth_at_index(&p.i));
-        ctx
-    }
-
-    pub fn tooth_at_index(&self, i: &Index) -> Tooth<L> {
-        Tooth {
-            label: self.label.clone(),
-            span_l: Span(
-                self.kids
-                    .at_index_range(&self.kids.leftmost_index(), i)
-                    .to_vec(),
-            ),
-            span_r: Span(
-                self.kids
-                    .at_index_range(i, &self.kids.rightmost_index())
-                    .to_vec(),
-            ),
+    pub fn into_context_at_path(self, path: &Path) -> (Context<L>, Expr<L>) {
+        let mut ths = vec![];
+        let mut e = self;
+        for s in &path.0 {
+            let (th, e_sub) = e.into_tooth_at_step(*s);
+            ths.push(th);
+            e = e_sub;
         }
+        (Context(ths), e)
+    }
+
+    pub fn into_tooth_at_step(self, s: Step) -> (Tooth<L>, Self) {
+        let (l, m, r) = self.kids.split_at_step(s);
+        (
+            Tooth {
+                label: self.label,
+                span_l: l,
+                span_r: r,
+            },
+            m,
+        )
+    }
+
+    pub fn to_context_from_point(
+        &self,
+        p: &Point,
+    ) -> (Vec<(&L, &[Expr<L>], &[Expr<L>])>, &Expr<L>) {
+        let (mut ths, e) = self.to_context_from_path(&p.path);
+        ths.push(e.tooth_at_index(&p.i));
+        (ths, e)
+    }
+
+    pub fn tooth_at_index(&self, i: &Index) -> (&L, &[Expr<L>], &[Expr<L>]) {
+        (
+            &self.label,
+            self.kids.at_index_range(&self.kids.leftmost_index(), i),
+            self.kids.at_index_range(i, &self.kids.rightmost_index()),
+        )
     }
 }
 
@@ -1383,7 +1406,7 @@ impl<L: Display> Display for Fragment<L> {
     }
 }
 
-impl<L: Debug + Display + Clone> Fragment<L> {
+impl<L: Debug + Display> Fragment<L> {
     fn norm(self) -> Self {
         match self {
             Self::Zipper(zipper)
@@ -1419,7 +1442,14 @@ impl<L: Display> Display for Span<L> {
     }
 }
 
-impl<L: Debug + Display + Clone> Span<L> {
+impl<L: Debug + Display> Span<L> {
+    pub fn split_at_step(mut self, s: Step) -> (Self, Expr<L>, Self) {
+        let mid = self.0.remove(s.0);
+        let after = Span(self.0.split_off(s.0));
+        let before = self;
+        (before, mid, after)
+    }
+
     pub fn replace_subspan(&mut self, i_l: &Index, i_r: &Index, new_span: Self) -> Self {
         trace!(target: "expr.replace_subspan", "self     = {self}");
         trace!(target: "expr.replace_subspan", "i_l      = {i_l}");
@@ -1438,8 +1468,8 @@ impl<L: Debug + Display + Clone> Span<L> {
             trace!(target: "expr.into_zipper", "span_ol = {span_ol}");
             trace!(target: "expr.into_zipper", "e       = {e}");
             trace!(target: "expr.into_zipper", "span_or = {span_or}");
-            let middle = e.into_context_from_point(&Point::new(Path(p.path.0[1..].to_vec()), p.i));
-            trace!(target: "expr.into_zipper", "middle = {middle}");
+            let middle = e.to_context_from_point(&Point::new(Path(p.path.0[1..].to_vec()), p.i));
+            // trace!(target: "expr.into_zipper", "middle = {middle}");
             Zipper {
                 span_ol,
                 span_or,
@@ -1556,7 +1586,7 @@ impl<L: Display> Display for Zipper<L> {
     }
 }
 
-impl<L: Debug + Display + Clone> Zipper<L> {
+impl<L: Debug + Display> Zipper<L> {
     pub fn surround(self, span: Span<L>) -> Span<L> {
         match self.middle.surround_span(span) {
             Ok(e) => self.span_ol.concat(Span(vec![e])).concat(self.span_or),
@@ -1585,6 +1615,54 @@ impl<L: Debug + Display + Clone> Zipper<L> {
 }
 
 // -----------------------------------------------------------------------------
+// *Refs
+// -----------------------------------------------------------------------------
+
+pub type SpanRef<'a, L> = &'a [Expr<L>];
+
+pub enum FragmentRef<'a, L> {
+    Span(&)
+}
+
+pub struct ToothRef<'a, L> {
+    pub label: &'a L,
+    pub span_l: &'a [Expr<L>],
+    pub span_r: &'a [Expr<L>],
+}
+
+impl<'a, L> ToothRef<'a, L> {
+    pub fn to_owned(&self) -> Tooth<L>
+    where
+        L: Clone,
+    {
+        Tooth {
+            label: self.label.clone(),
+            span_l: Span(self.span_l.to_vec()),
+            span_r: Span(self.span_r.to_vec()),
+        }
+    }
+}
+
+pub struct ZipperRef<'a, L> {
+    pub span_ol: &'a [Expr<L>],
+    pub span_or: &'a [Expr<L>],
+    pub middle: Vec<ToothRef<'a, L>>,
+}
+
+impl<'a, L> ZipperRef<'a, L> {
+    pub fn to_owned(&self) -> Zipper<L>
+    where
+        L: Clone,
+    {
+        Zipper {
+            span_ol: Span(self.span_ol.to_vec()),
+            span_or: Span(self.span_or.to_vec()),
+            middle: Context(self.middle.into_iter().map(|th| th.to_owned()).collect()),
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 // ExprContext
 // -----------------------------------------------------------------------------
 
@@ -1605,7 +1683,7 @@ impl<L: Display> Display for Context<L> {
     }
 }
 
-impl<L: Debug + Display + Clone> Context<L> {
+impl<L: Debug + Display> Context<L> {
     pub fn empty() -> Self {
         Self(vec![])
     }
@@ -1665,7 +1743,7 @@ impl<L: Display> Display for Tooth<L> {
     }
 }
 
-impl<L: Debug + Display + Clone> Tooth<L> {
+impl<L: Debug + Display> Tooth<L> {
     pub fn surround(self, span: Span<L>) -> Expr<L> {
         Expr {
             label: self.label,

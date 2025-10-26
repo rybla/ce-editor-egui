@@ -206,7 +206,7 @@ macro_rules! make_simple_edit_menu_option {
                             kids.push(ex![
                                 GenEditorLabel::new(
                                     Constructor::PosArg,
-                                    Diagnostics(Cell::new(vec![]))
+                                    MutDiagnostics(Cell::new(vec![]))
                                 ),
                                 []
                             ]);
@@ -228,7 +228,7 @@ macro_rules! make_simple_edit_menu_option {
                             None => vec![Tooth {
                                 label: EditorLabel::new(
                                     Constructor::Literal($name.to_owned()),
-                                    Diagnostics(Cell::new(vec![])),
+                                    MutDiagnostics(Cell::new(vec![])),
                                 ),
                                 span_l: Span::empty(),
                                 span_r: Span(kids),
@@ -237,7 +237,7 @@ macro_rules! make_simple_edit_menu_option {
                                 Tooth {
                                     label: EditorLabel::new(
                                         Constructor::Literal($name.to_owned()),
-                                        Diagnostics(Cell::new(vec![])),
+                                        MutDiagnostics(Cell::new(vec![])),
                                     ),
                                     span_l: Span::empty(),
                                     span_r: Span(kids),
@@ -477,6 +477,7 @@ impl EditorSpec for Fol {
                     let handle = state.expr.insert(
                         state.handle,
                         Fragment::Span(Span(vec![Expr {
+<<<<<<< Updated upstream
                             label: GenEditorLabel {
                                 constructor: Constructor::Literal("var".to_owned()),
                                 diagnostics: Diagnostics(Cell::new(vec![])),
@@ -488,6 +489,13 @@ impl EditorSpec for Fol {
                                 ),
                                 kids: Span::empty(),
                             }]),
+=======
+                            label: EditorLabel::new(
+                                Constructor::Literal(query.to_owned()),
+                                MutDiagnostics(Cell::new(vec![])),
+                            ),
+                            kids: Span::empty(),
+>>>>>>> Stashed changes
                         }])),
                     );
 
