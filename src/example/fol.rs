@@ -474,30 +474,31 @@ impl EditorSpec for Fol {
                 }),
                 edit: |query, state| {
                     let mut state = state;
-                    let handle = state.expr.insert(
-                        state.handle,
-                        Fragment::Span(Span(vec![Expr {
-<<<<<<< Updated upstream
-                            label: GenEditorLabel {
-                                constructor: Constructor::Literal("var".to_owned()),
-                                diagnostics: Diagnostics(Cell::new(vec![])),
-                            },
-                            kids: Span(vec![Expr {
-                                label: EditorLabel::new(
-                                    Constructor::Literal(query.to_owned()),
-                                    Diagnostics(Cell::new(vec![])),
-                                ),
-                                kids: Span::empty(),
-                            }]),
-=======
-                            label: EditorLabel::new(
-                                Constructor::Literal(query.to_owned()),
-                                MutDiagnostics(Cell::new(vec![])),
-                            ),
-                            kids: Span::empty(),
->>>>>>> Stashed changes
-                        }])),
-                    );
+                    //                     let handle = state.expr.insert(
+                    //                         state.handle,
+                    //                         Fragment::Span(Span(vec![Expr {
+                    // <<<<<<< Updated upstream
+                    //                             label: GenEditorLabel {
+                    //                                 constructor: Constructor::Literal("var".to_owned()),
+                    //                                 diagnostics: Diagnostics(Cell::new(vec![])),
+                    //                             },
+                    //                             kids: Span(vec![Expr {
+                    //                                 label: EditorLabel::new(
+                    //                                     Constructor::Literal(query.to_owned()),
+                    //                                     Diagnostics(Cell::new(vec![])),
+                    //                                 ),
+                    //                                 kids: Span::empty(),
+                    //                             }]),
+                    // =======
+                    //                             label: EditorLabel::new(
+                    //                                 Constructor::Literal(query.to_owned()),
+                    //                                 MutDiagnostics(Cell::new(vec![])),
+                    //                             ),
+                    //                             kids: Span::empty(),
+                    // >>>>>>> Stashed changes
+                    //                         }])),
+                    //                     );
+                    let handle = todo!();
 
                     state.handle = handle;
 
@@ -541,7 +542,7 @@ impl EditorSpec for Fol {
     fn is_valid_handle_specialized(h: &Handle, root: &EditorExpr) -> bool {
         match h {
             Handle::Point(p) => {
-                let e = root.at_path(&p.path);
+                let e = root.get_expr_old(&p.path);
                 match &e.label.constructor {
                     Constructor::Literal(_) => {
                         let sort = get_rule(&e.label.constructor)

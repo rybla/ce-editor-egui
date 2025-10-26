@@ -23,7 +23,7 @@ impl Index {
         self.0 < other.0
     }
 
-    pub fn is_left_of_step(&self, s: &Step) -> bool {
+    pub fn is_left_of_step(&self, s: Step) -> bool {
         self.0 <= s.0
     }
 
@@ -35,7 +35,7 @@ impl Index {
         Self(self.0 + offset.0)
     }
 
-    pub fn is_right_of_step(&self, s: &Step) -> bool {
+    pub fn is_right_of_step(&self, s: Step) -> bool {
         self.0 > s.0
     }
 
@@ -83,7 +83,7 @@ impl Step {
         Index(self.0 + 1)
     }
 
-    pub fn is_left_of_index(&self, i: &Index) -> bool {
+    pub fn is_left_of_index(&self, i: Index) -> bool {
         self.0 < i.0
     }
 
@@ -244,14 +244,14 @@ impl Point {
         expr: &Expr<L>,
         dir: &MoveDir,
     ) -> Result<(), MoveError> {
-        let sub_expr = expr.at_path(&self.path);
+        let sub_expr = expr.get_subexpr(&self.path);
         let leftmost = sub_expr.kids.leftmost_index();
         let rightmost = sub_expr.kids.rightmost_index();
         match dir {
             MoveDir::Prev => {
                 if leftmost.is_left_of_index(&self.i) {
                     self.path.0.push(self.i.left_step());
-                    let e = expr.at_path(&self.path);
+                    let e = expr.get_subexpr(&self.path);
                     self.i = e.kids.rightmost_index();
                     Ok(())
                 } else if let Some(s) = self.path.0.pop() {
@@ -264,7 +264,7 @@ impl Point {
             MoveDir::Next => {
                 if self.i.is_left_of_index(&rightmost) {
                     self.path.0.push(self.i.right_step());
-                    let e = expr.at_path(&self.path);
+                    let e = expr.get_subexpr(&self.path);
                     self.i = e.kids.leftmost_index();
                     Ok(())
                 } else if let Some(s) = self.path.0.pop() {
@@ -352,7 +352,7 @@ impl Handle {
     pub fn move_up<L: Debug + Display>(&mut self, expr: &Expr<L>) -> Result<(), MoveError> {
         match self {
             Self::Point(p) => {
-                let e = expr.at_path(&p.path);
+                let e = expr.get_subexpr(&p.path);
                 let path = Path(p.path.0.drain(..).collect::<Vec<_>>());
                 let mut h = SpanHandle {
                     path,
@@ -376,7 +376,7 @@ impl Handle {
                 Ok(())
             }
             Self::Span(h) => {
-                let e = expr.at_path(&h.path);
+                let e = expr.get_subexpr(&h.path);
                 if h.i_l == e.kids.leftmost_index() && h.i_r == e.kids.rightmost_index() {
                     let mut path = Path(h.path.0.drain(..).collect::<Vec<_>>());
                     let s = path.0.pop().ok_or(MoveError::Boundary)?;
@@ -491,14 +491,14 @@ impl Handle {
                         && let p_ol = &target
                         && let Some(path_m) = p_ol.path.diff(&p_il.path)
                         && let Some(s) = path_m.0.first()
-                        && p_ol.i.is_left_of_step(s)
+                        && p_ol.i.is_left_of_step(*s)
                     {
                         trace!(target: "expr.drag", "drag from inner left to outer left");
                         let path_o = p_ol.path.clone();
                         let i_or = s.right_index();
                         let i_ol = p_ol.i;
                         let i_il = p_il.i;
-                        let i_ir = e.at_path(&p_il.path).kids.rightmost_index();
+                        let i_ir = e.get_subexpr(&p_il.path).kids.rightmost_index();
                         let focus = ZipperFocus::OuterLeft;
                         Some(Self::Zipper(ZipperHandle {
                             path_o,
@@ -515,13 +515,13 @@ impl Handle {
                         && let p_or = &target
                         && let Some(path_m) = p_or.path.diff(&p_ir.path)
                         && let Some(s) = path_m.0.first()
-                        && s.is_left_of_index(&p_or.i)
+                        && s.is_left_of_index(p_or.i)
                     {
                         trace!(target: "expr.drag", "drag from inner right to outer right");
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
                         let i_or = p_or.i;
-                        let i_il = e.at_path(&p_ir.path).kids.leftmost_index();
+                        let i_il = e.get_subexpr(&p_ir.path).kids.leftmost_index();
                         let i_ir = p_ir.i;
                         let focus = ZipperFocus::OuterRight;
                         Some(Self::Zipper(ZipperHandle {
@@ -539,14 +539,14 @@ impl Handle {
                         && let p_il = &target
                         && let Some(path_m) = p_ol.path.diff(&p_il.path)
                         && let Some(s) = path_m.0.first()
-                        && p_ol.i.is_left_of_step(s)
+                        && p_ol.i.is_left_of_step(*s)
                     {
                         trace!(target: "expr.drag", "drag from outer left to inner left");
                         let path_o = p_ol.path.clone();
                         let i_ol = p_ol.i;
                         let i_or = s.right_index();
                         let i_il = p_il.i;
-                        let i_ir = e.at_path(&p_il.path).kids.rightmost_index();
+                        let i_ir = e.get_subexpr(&p_il.path).kids.rightmost_index();
                         let focus = ZipperFocus::InnerLeft;
                         Some(Self::Zipper(ZipperHandle {
                             path_o,
@@ -569,7 +569,7 @@ impl Handle {
                         let path_o = p_or.path.clone();
                         let i_ol = s.left_index();
                         let i_or = p_or.i;
-                        let i_il = e.at_path(&p_ir.path).kids.leftmost_index();
+                        let i_il = e.get_subexpr(&p_ir.path).kids.leftmost_index();
                         let i_ir = p_ir.i;
                         let focus = ZipperFocus::InnerRight;
                         Some(Self::Zipper(ZipperHandle {
@@ -955,7 +955,7 @@ impl ZipperHandle {
         }
     }
 
-    pub fn first_middle_step(&self) -> &Step {
+    pub fn first_middle_step(&self) -> Step {
         self.path_m
             .0
             .first()
@@ -1070,18 +1070,7 @@ impl<L: Debug + Display> Expr<L> {
             .fold(0, |h, e| std::cmp::max(h, 1 + e.height()))
     }
 
-    pub fn at_handle_cloned(&self, h: &Handle) -> Option<Fragment<L>>
-    where
-        L: Clone,
-    {
-        match h {
-            Handle::Point(_) => None,
-            Handle::Span(h) => Some(Fragment::Span(Span(self.at_span_handle(h).to_vec()))),
-            Handle::Zipper(h) => Some(Fragment::Zipper(self.at_zipper_handle(h).to_owned())),
-        }
-    }
-
-    pub fn insert(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
+    pub fn insert_fragment(&mut self, h: Handle, frag: Fragment<L>) -> Handle {
         trace!(target: "expr.insert", "self = {self}");
         trace!(target: "expr.insert", "h    = {h}");
         trace!(target: "expr.insert", "frag = {frag}");
@@ -1120,14 +1109,14 @@ impl<L: Debug + Display> Expr<L> {
         }
     }
 
-    pub fn at_handle(&self, h: &Handle) -> Option<Fragment<L>>
+    pub fn get_fragment(&self, h: &Handle) -> Option<FragmentRef<'_, L>>
     where
         L: Debug,
     {
         match h {
             Handle::Point(_) => None,
-            Handle::Span(h) => Some(Fragment::Span(self.at_span_handle(h))),
-            Handle::Zipper(h) => Some(Fragment::Zipper(self.at_zipper_handle(h))),
+            Handle::Span(h) => Some(FragmentRef::Span(self.get_span(h))),
+            Handle::Zipper(h) => Some(FragmentRef::Zipper(self.get_zipper(h))),
         }
     }
 
@@ -1138,7 +1127,7 @@ impl<L: Debug + Display> Expr<L> {
         trace!(target: "expr.replace_span", "h        = {h}");
         trace!(target: "expr.replace_span", "new_span = {new_span}");
 
-        let parent = self.at_path_mut(&h.path);
+        let parent = self.get_subexpr_mut(&h.path);
         let new_span_offset = &new_span.offset();
         let old_span = Span(parent.kids.0.splice(h.i_l.0..h.i_r.0, new_span.0).collect());
         (
@@ -1164,7 +1153,7 @@ impl<L: Debug + Display> Expr<L> {
         trace!(target: "expr.replace_zipper", "new_zipper = {new_zipper}");
 
         // take the inner span
-        let e_o = self.at_path_mut(&h.path_o);
+        let e_o = self.get_subexpr_mut(&h.path_o);
         let (span_i, _) = e_o.replace_span(
             &SpanHandle {
                 path: h.path_m.clone(),
@@ -1188,9 +1177,9 @@ impl<L: Debug + Display> Expr<L> {
             // replaced the span above with an empty span, we actually did that
             // in e_o's kids directly, Which means we need to just go to a point
             // here.
-            e_o.kids.replace_subspan(&h.i_ol, &h.i_ol, new_span_m)
+            e_o.kids.replace_subspan(h.i_ol, h.i_ol, new_span_m)
         } else {
-            e_o.kids.replace_subspan(&h.i_ol, &h.i_or, new_span_m)
+            e_o.kids.replace_subspan(h.i_ol, h.i_or, new_span_m)
         };
         trace!(target: "expr.replace_zipper", "old_span_m = {old_span_m}");
 
@@ -1233,31 +1222,19 @@ impl<L: Debug + Display> Expr<L> {
         }
     }
 
-    pub fn at_path(&self, path: &Path) -> &Self {
-        let mut e = self;
-        for s in &path.0 {
-            e = e.at_step(s);
-        }
-        e
-    }
-
-    pub fn at_path_owned(self, path: &Path) -> (Context<L>, Self) {
+    pub fn into_subexpr(self, path: &Path) -> (Context<L>, Self) {
         let mut ctx: Context<L> = Context::empty();
         let mut e = self;
         for s in &path.0 {
-            let (th, e_kid) = e.at_step_owned(s);
+            let (th, e_kid) = e.into_kid(*s);
             ctx.0.push(th);
             e = e_kid;
         }
         (ctx, e)
     }
 
-    pub fn at_step(&self, step: &Step) -> &Self {
-        self.kids.at_step(step)
-    }
-
-    pub fn at_step_owned(self, s: &Step) -> (Tooth<L>, Self) {
-        let (left, middle, right) = self.kids.at_step_owned(s);
+    pub fn into_kid(self, s: Step) -> (Tooth<L>, Self) {
+        let (left, middle, right) = self.kids.into_kid(s);
         (
             Tooth {
                 label: self.label,
@@ -1281,32 +1258,32 @@ impl<L: Debug + Display> Expr<L> {
         }
     }
 
-    pub fn at_path_mut(&mut self, path: &Path) -> &mut Self {
+    pub fn get_subexpr_mut(&mut self, path: &Path) -> &mut Self {
         let mut expr = self;
         for step in &path.0 {
-            expr = expr.at_step_mut(step);
+            expr = expr.get_kid_mut(*step);
         }
         expr
     }
 
-    pub fn at_step_mut(&mut self, step: &Step) -> &mut Self {
-        self.kids.at_step_mut(step)
+    pub fn get_kid_mut(&mut self, step: Step) -> &mut Self {
+        self.kids.get_kid_mut(step)
     }
 
-    pub fn at_span_handle(&self, h: &SpanHandle) -> &[Expr<L>] {
-        let e = self.at_path(&h.path);
-        e.kids.at_index_range(&h.i_l, &h.i_r)
+    pub fn get_span(&self, h: &SpanHandle) -> SpanRef<'_, L> {
+        let e = self.get_subexpr(&h.path);
+        e.kids.get_subspan(h.i_l, h.i_r)
     }
 
-    pub fn at_zipper_handle(&self, h: &ZipperHandle) -> ZipperRef<'_, L> {
+    pub fn get_zipper(&self, h: &ZipperHandle) -> ZipperRef<'_, L> {
         let s0 = h.first_middle_step();
-        let mut e = self.at_path(&h.path_o);
-        let span_ol = e.kids.at_index_range(&h.i_ol, &s0.left_index());
-        let span_or = e.kids.at_index_range(&s0.right_index(), &h.i_or);
-        let mut middle: Vec<_> = vec![];
+        let mut e = self.get_subexpr(&h.path_o);
+        let span_ol = e.kids.get_subspan(h.i_ol, s0.left_index());
+        let span_or = e.kids.get_subspan(s0.right_index(), h.i_or);
+        let mut middle = ContextRef(vec![]);
         for s in &h.path_m.0 {
-            let (th, e_sub) = e.tooth_at_step(s);
-            middle.push(th);
+            let (th, e_sub) = e.at_kid(*s);
+            middle.0.push(th);
             e = e_sub;
         }
         ZipperRef {
@@ -1316,73 +1293,61 @@ impl<L: Debug + Display> Expr<L> {
         }
     }
 
-    pub fn tooth_at_step(&self, s: &Step) -> (ToothRef<'_, L>, &Expr<L>) {
+    pub fn into_tooth(self, i: Index) -> Tooth<L> {
+        let (l, r) = self.kids.into_index(i);
+        Tooth {
+            label: self.label,
+            span_l: l,
+            span_r: r,
+        }
+    }
+
+    pub fn at_kid(&self, s: Step) -> (ToothRef<'_, L>, &Expr<L>) {
         (
             ToothRef {
                 label: &self.label,
                 span_l: self
                     .kids
-                    .at_index_range(&self.kids.leftmost_index(), &s.left_index()),
+                    .get_subspan(self.kids.leftmost_index(), s.left_index()),
                 span_r: self
                     .kids
-                    .at_index_range(&s.right_index(), &self.kids.rightmost_index()),
+                    .get_subspan(s.right_index(), self.kids.rightmost_index()),
             },
-            self.kids.at_step(s),
+            self.kids.at_kid(s),
         )
     }
 
-    pub fn to_context_from_path(
-        &self,
-        path: &Path,
-    ) -> (Vec<(&L, &[Expr<L>], &[Expr<L>])>, &Expr<L>) {
+    pub fn get_subexpr(&self, path: &Path) -> &Expr<L> {
+        let mut e = self;
+        for s in &path.0 {
+            e = e.at_kid(*s).1;
+        }
+        e
+    }
+
+    pub fn at_subexpr(&self, path: &Path) -> (ContextRef<'_, L>, &Expr<L>) {
         let mut ths = vec![];
         let mut e = self;
         for s in &path.0 {
-            let (th, e_sub) = e.tooth_at_step(s);
+            let (th, e_sub) = e.at_kid(*s);
             ths.push(th);
             e = e_sub;
         }
-        (ths, e)
+        (ContextRef(ths), e)
     }
 
-    pub fn into_context_at_path(self, path: &Path) -> (Context<L>, Expr<L>) {
-        let mut ths = vec![];
-        let mut e = self;
-        for s in &path.0 {
-            let (th, e_sub) = e.into_tooth_at_step(*s);
-            ths.push(th);
-            e = e_sub;
+    pub fn into_context(self, p: &Point) -> Context<L> {
+        let (mut ctx, e) = self.into_subexpr(&p.path);
+        ctx.0.push(e.into_tooth(p.i));
+        ctx
+    }
+
+    pub fn at_tooth(&self, i: Index) -> ToothRef<'_, L> {
+        ToothRef {
+            label: &self.label,
+            span_l: self.kids.get_subspan(self.kids.leftmost_index(), i),
+            span_r: self.kids.get_subspan(i, self.kids.rightmost_index()),
         }
-        (Context(ths), e)
-    }
-
-    pub fn into_tooth_at_step(self, s: Step) -> (Tooth<L>, Self) {
-        let (l, m, r) = self.kids.split_at_step(s);
-        (
-            Tooth {
-                label: self.label,
-                span_l: l,
-                span_r: r,
-            },
-            m,
-        )
-    }
-
-    pub fn to_context_from_point(
-        &self,
-        p: &Point,
-    ) -> (Vec<(&L, &[Expr<L>], &[Expr<L>])>, &Expr<L>) {
-        let (mut ths, e) = self.to_context_from_path(&p.path);
-        ths.push(e.tooth_at_index(&p.i));
-        (ths, e)
-    }
-
-    pub fn tooth_at_index(&self, i: &Index) -> (&L, &[Expr<L>], &[Expr<L>]) {
-        (
-            &self.label,
-            self.kids.at_index_range(&self.kids.leftmost_index(), i),
-            self.kids.at_index_range(i, &self.kids.rightmost_index()),
-        )
     }
 }
 
@@ -1443,14 +1408,7 @@ impl<L: Display> Display for Span<L> {
 }
 
 impl<L: Debug + Display> Span<L> {
-    pub fn split_at_step(mut self, s: Step) -> (Self, Expr<L>, Self) {
-        let mid = self.0.remove(s.0);
-        let after = Span(self.0.split_off(s.0));
-        let before = self;
-        (before, mid, after)
-    }
-
-    pub fn replace_subspan(&mut self, i_l: &Index, i_r: &Index, new_span: Self) -> Self {
+    pub fn replace_subspan(&mut self, i_l: Index, i_r: Index, new_span: Self) -> Self {
         trace!(target: "expr.replace_subspan", "self     = {self}");
         trace!(target: "expr.replace_subspan", "i_l      = {i_l}");
         trace!(target: "expr.replace_subspan", "i_r      = {i_r}");
@@ -1463,20 +1421,19 @@ impl<L: Debug + Display> Span<L> {
         trace!(target: "expr.into_zipper", "p    = {p}");
 
         if let Some(s) = p.path.0.first() {
-            self.assert_step_in_bounds(s);
-            let (span_ol, e, span_or) = self.extract_at_step(s);
+            self.assert_step_in_bounds(*s);
+            let (span_ol, e, span_or) = self.into_kid(*s);
             trace!(target: "expr.into_zipper", "span_ol = {span_ol}");
             trace!(target: "expr.into_zipper", "e       = {e}");
             trace!(target: "expr.into_zipper", "span_or = {span_or}");
-            let middle = e.to_context_from_point(&Point::new(Path(p.path.0[1..].to_vec()), p.i));
-            // trace!(target: "expr.into_zipper", "middle = {middle}");
+            let middle = e.into_context(&Point::new(Path(p.path.0[1..].to_vec()), p.i));
             Zipper {
                 span_ol,
                 span_or,
                 middle,
             }
         } else {
-            let (span_ol, span_or) = self.split_at_index(&p.i);
+            let (span_ol, span_or) = self.into_index(p.i);
             Zipper {
                 span_ol,
                 span_or,
@@ -1485,12 +1442,12 @@ impl<L: Debug + Display> Span<L> {
         }
     }
 
-    pub fn extract_at_step(self, s: &Step) -> (Self, Expr<L>, Self) {
+    pub fn into_kid(self, s: Step) -> (Self, Expr<L>, Self) {
         let (es_l, e, es_r) = extract_from_vec_at_index(self.0, s.0).expect("index to valid");
         (Self(es_l), e, Self(es_r))
     }
 
-    pub fn split_at_index(self, i: &Index) -> (Self, Self) {
+    pub fn into_index(self, i: Index) -> (Self, Self) {
         let (es_l, es_r) = split_vec_at_index(self.0, i.0);
         (Self(es_l), Self(es_r))
     }
@@ -1499,25 +1456,19 @@ impl<L: Debug + Display> Span<L> {
         Self(vec![])
     }
 
-    pub fn assert_step_in_bounds(&self, s: &Step) {
+    pub fn assert_step_in_bounds(&self, s: Step) {
         assert!(s.0 < self.0.len(), "step out of bounds");
     }
 
-    pub fn assert_index_in_bounds(&self, i: &Index) {
+    pub fn assert_index_in_bounds(&self, i: Index) {
         assert!(i.0 <= self.0.len(), "index out of bounds");
     }
 
-    pub fn at_step(&self, step: &Step) -> &Expr<L> {
+    pub fn at_kid(&self, step: Step) -> &Expr<L> {
         self.0.get(step.0).expect("step in bounds")
     }
 
-    pub fn at_step_owned(self, s: &Step) -> (Self, Expr<L>, Self) {
-        let (left, middle, right) =
-            extract_from_vec_at_index(self.0, s.0).expect("index in bounds");
-        (Self(left), middle, Self(right))
-    }
-
-    pub fn steps_and_kids(&self) -> impl Iterator<Item = (Step, &Expr<L>)> {
+    pub fn iter_steps_and_kids(&self) -> impl Iterator<Item = (Step, &Expr<L>)> {
         self.0.iter().enumerate().map(|(i, e)| (Step(i), e))
     }
 
@@ -1529,7 +1480,7 @@ impl<L: Debug + Display> Span<L> {
         Index(0)
     }
 
-    pub fn at_step_mut(&mut self, s: &Step) -> &mut Expr<L> {
+    pub fn get_kid_mut(&mut self, s: Step) -> &mut Expr<L> {
         self.assert_step_in_bounds(s);
         &mut self.0[s.0]
     }
@@ -1538,16 +1489,13 @@ impl<L: Debug + Display> Span<L> {
         Offset(self.0.len())
     }
 
-    pub fn at_index_range<'a>(&'a self, i_l: &Index, i_r: &Index) -> &'a [Expr<L>] {
+    pub fn get_subspan<'a>(&'a self, i_l: Index, i_r: Index) -> SpanRef<'a, L> {
         &self.0[i_l.0..i_r.0]
     }
 
-    pub fn at_sub_span(&self, i_l: &Index, i_r: &Index) -> Self {
-        Self(self.at_index_range(i_l, i_r).to_vec())
-    }
-
-    pub fn concat(self, other: Self) -> Self {
-        Self([self.0, other.0].concat())
+    pub fn concat(mut self, mut other: Self) -> Self {
+        self.0.append(&mut other.0);
+        self
     }
 }
 
@@ -1615,19 +1563,33 @@ impl<L: Debug + Display> Zipper<L> {
 }
 
 // -----------------------------------------------------------------------------
-// *Refs
+// Refs
 // -----------------------------------------------------------------------------
 
+// TODO: turn this into: pub struct SpanRef<'a, L>(&'a [Expr<L>]);
 pub type SpanRef<'a, L> = &'a [Expr<L>];
 
 pub enum FragmentRef<'a, L> {
-    Span(&)
+    Span(SpanRef<'a, L>),
+    Zipper(ZipperRef<'a, L>),
+}
+
+impl<'a, L> FragmentRef<'a, L> {
+    pub fn to_owned(&self) -> Fragment<L>
+    where
+        L: Clone,
+    {
+        match self {
+            FragmentRef::Span(span) => Fragment::Span(Span(span.to_vec())),
+            FragmentRef::Zipper(zipper) => Fragment::Zipper(zipper.to_owned()),
+        }
+    }
 }
 
 pub struct ToothRef<'a, L> {
     pub label: &'a L,
-    pub span_l: &'a [Expr<L>],
-    pub span_r: &'a [Expr<L>],
+    pub span_l: SpanRef<'a, L>,
+    pub span_r: SpanRef<'a, L>,
 }
 
 impl<'a, L> ToothRef<'a, L> {
@@ -1643,10 +1605,21 @@ impl<'a, L> ToothRef<'a, L> {
     }
 }
 
+pub struct ContextRef<'a, L>(pub Vec<ToothRef<'a, L>>);
+
+impl<'a, L> ContextRef<'a, L> {
+    pub fn to_owned(&self) -> Context<L>
+    where
+        L: Clone,
+    {
+        Context(self.0.iter().map(|th| th.to_owned()).collect())
+    }
+}
+
 pub struct ZipperRef<'a, L> {
-    pub span_ol: &'a [Expr<L>],
-    pub span_or: &'a [Expr<L>],
-    pub middle: Vec<ToothRef<'a, L>>,
+    pub span_ol: SpanRef<'a, L>,
+    pub span_or: SpanRef<'a, L>,
+    pub middle: ContextRef<'a, L>,
 }
 
 impl<'a, L> ZipperRef<'a, L> {
@@ -1657,7 +1630,7 @@ impl<'a, L> ZipperRef<'a, L> {
         Zipper {
             span_ol: Span(self.span_ol.to_vec()),
             span_or: Span(self.span_or.to_vec()),
-            middle: Context(self.middle.into_iter().map(|th| th.to_owned()).collect()),
+            middle: Context(self.middle.0.iter().map(|th| th.to_owned()).collect()),
         }
     }
 }
@@ -1834,7 +1807,7 @@ mod tests {
         let mut e = ex!["root", [ex!["a", []]]];
         let h = Handle::Point(point![[0], 0]);
         let frag = Fragment::Zipper(zipper![[], [tooth!["b", [], []]], []]);
-        let h = e.insert(h, frag);
+        let h = e.insert_fragment(h, frag);
         assert_eq!(e, ex!["root", [ex!["a", [ex!["b", []]]]]]);
         assert_eq!(
             h,
@@ -1868,7 +1841,7 @@ mod tests {
         let mut e = ex!["root", [ex!["a", []]]];
         let h = span_handle![[], 0, 1, SpanFocus::Right];
         let frag = zipper![[], [tooth!["b", [], []]], []];
-        let h = e.insert(Handle::Span(h), Fragment::Zipper(frag));
+        let h = e.insert_fragment(Handle::Span(h), Fragment::Zipper(frag));
         assert_eq!(e, ex!["root", [ex!["b", [ex!["a", []]]]]]);
         assert_eq!(
             h,

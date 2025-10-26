@@ -61,7 +61,6 @@ pub struct MutDiagnostics(pub Cell<Vec<Diagnostic>>);
 impl Debug for MutDiagnostics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ds = self.0.take();
-<<<<<<< Updated upstream
         let r = f.debug_tuple("Diagnostics").field(&ds).finish();
         self.0.set(ds);
         r
@@ -74,11 +73,6 @@ impl Clone for Diagnostics {
         let ds_clone = ds.clone();
         self.0.set(ds);
         Self(Cell::new(ds_clone))
-=======
-        let ds_clone = ds.clone();
-        self.0.set(ds);
-        f.debug_tuple("Diagnostics").field(&ds_clone).finish()
->>>>>>> Stashed changes
     }
 }
 
@@ -355,7 +349,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             .unwrap_or(false)
         {
             let mut core = self.core.clone();
-            let h = core.expr.insert(
+            let h = core.expr.insert_fragment(
                 core.handle,
                 Fragment::Span(span![ex![
                     EditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
@@ -786,7 +780,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
 
         let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)> = vec![];
 
-        for (s, e) in expr.kids.steps_and_kids() {
+        for (s, e) in expr.kids.iter_steps_and_kids() {
             render_steps_and_kids.push((
                 RenderPoint {
                     path,
@@ -900,16 +894,16 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 }
             }
             Action::Copy => {
-                if let Some(frag) = self.core.expr.at_handle_cloned(&self.core.handle) {
+                if let Some(frag) = self.core.expr.get_fragment(&self.core.handle) {
                     self.snapshot();
-                    self.core.clipboard = Some(frag);
+                    self.core.clipboard = Some(frag.to_owned());
                 }
             }
             Action::Paste => {
                 if let Some(frag) = self.core.clipboard.clone() {
                     self.snapshot();
                     self.menu = None;
-                    let handle = self.core.expr.insert(self.core.handle.clone(), frag);
+                    let handle = self.core.expr.insert_fragment(self.core.handle.clone(), frag);
                     self.core.handle = handle;
                 }
             }
@@ -1142,7 +1136,7 @@ pub trait EditorSpec: 'static {
 
         let b_general = || match handle {
             Handle::Point(p) => {
-                let e = root.at_path(&p.path);
+                let e = root.get_expr_old(&p.path);
                 #[expect(clippy::match_like_matches_macro)]
                 match e.label.constructor {
                     Constructor::Newline => false,
@@ -1150,7 +1144,7 @@ pub trait EditorSpec: 'static {
                 }
             }
             Handle::Span(h) => {
-                let e = root.at_path(&h.path);
+                let e = root.get_expr_old(&h.path);
                 #[expect(clippy::match_like_matches_macro)]
                 match e.label.constructor {
                     Constructor::Newline => false,
@@ -1161,7 +1155,7 @@ pub trait EditorSpec: 'static {
                 // These are closures so that the final conjunction is evaluated
                 // in a short-circuited fashion.
                 let b1 = || {
-                    let e = root.at_path(&h.path_o);
+                    let e = root.get_expr_old(&h.path_o);
                     #[expect(clippy::match_like_matches_macro)]
                     match e.label.constructor {
                         Constructor::Newline => false,
@@ -1169,7 +1163,7 @@ pub trait EditorSpec: 'static {
                     }
                 };
                 let b2 = || {
-                    let e = root.at_path(&h.path_i());
+                    let e = root.get_expr_old(&h.path_i());
                     #[expect(clippy::match_like_matches_macro)]
                     match e.label.constructor {
                         Constructor::Newline => false,
