@@ -725,9 +725,8 @@ impl<ES: EditorSpec> EditorState<ES> {
     }
 
     pub fn snapshot(&mut self) {
-        // self.history.push(self.core.clone());
-        // self.future = vec![];
-        todo!()
+        self.history.push(self.core.to_plain());
+        self.future = vec![];
     }
 }
 
@@ -1195,7 +1194,7 @@ pub fn render_expr_contents<ES: EditorSpec>(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreState<D> {
     pub expr: GenEditorExpr<D>,
     pub handle: Handle,
