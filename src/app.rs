@@ -63,7 +63,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
                     ui.set_max_size(ui.min_size());
                 });
 
-            ui.label(format!("expr: {}", &self.editor_state.core.expr));
+            ui.label(format!("expr: {}", &self.editor_state.core.root));
             ui.label(format!("handle: {}", &self.editor_state.core.handle));
             if let Some(frag) = &self.editor_state.core.clipboard {
                 ui.label(format!("clipboard: {frag}"));

@@ -216,7 +216,7 @@ macro_rules! make_simple_edit_menu_option {
 
                 let tooth_into_first_kid = pop_front(&mut kids).map(|e| e.into_tooth(Index(0)));
 
-                let handle = state.expr.insert_fragment(
+                let handle = state.root.insert_fragment(
                     state.handle,
                     Fragment::Zipper(Zipper {
                         span_ol: Span::empty(),
@@ -458,7 +458,7 @@ impl EditorSpec for Fol {
     }
 
     fn diagnose(state: &CoreState<MutDiagnostics>) {
-        for kid in &state.expr.kids.0 {
+        for kid in &state.root.kids.0 {
             let _success = check_type(hash_map! {}, &Type::Prop, kid);
         }
     }
@@ -473,7 +473,7 @@ impl EditorSpec for Fol {
                     Some(query.to_owned())
                 }),
                 edit: |query, mut state| {
-                    state.handle = state.expr.insert_fragment(
+                    state.handle = state.root.insert_fragment(
                         state.handle,
                         Fragment::Span(Span(vec![GenEditorExpr::new_lit(
                             "var".to_owned(),

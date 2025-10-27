@@ -328,7 +328,7 @@ impl<ES: EditorSpec + ?Sized> Default for EditorState<ES> {
         let state: CoreState<MutDiagnostics> = {
             let state = ES::initial_state();
             let state: CoreState<MutDiagnostics> = CoreState {
-                expr: state.expr.into_annotated(),
+                root: state.root.into_annotated(),
                 handle: state.handle,
                 clipboard: state.clipboard,
             };
@@ -369,7 +369,7 @@ impl<ES: EditorSpec> EditorState<ES> {
         let opt_core = (edit)(
             query,
             DiagCoreState {
-                expr: self.core.expr.to_diag(),
+                root: self.core.root.to_diag(),
                 handle: self.core.handle.clone(),
                 clipboard: self.core.clipboard.clone(),
             },
@@ -435,7 +435,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                     let opt_core = (option.edit)(
                         &menu.query,
                         DiagCoreState {
-                            expr: self.core.expr.to_diag(),
+                            root: self.core.root.to_diag(),
                             handle: self.core.handle.clone(),
                             clipboard: self.core.clipboard.clone(),
                         },
@@ -523,14 +523,14 @@ impl<ES: EditorSpec> EditorState<ES> {
         {
             let mut target = self.core.handle.focus_point();
             loop {
-                let move_status = target.move_dir(&self.core.expr, &dir);
+                let move_status = target.move_dir(&self.core.root, &dir);
                 if move_status.is_err() {
                     trace!(target: "editor.move", "select bailed since a move failed");
                     break;
                 }
 
-                if let Some(h) = self.core.handle.clone().drag(&self.core.expr, &target)
-                    && ES::is_valid_handle(&h, &self.core.expr)
+                if let Some(h) = self.core.handle.clone().drag(&self.core.root, &target)
+                    && ES::is_valid_handle(&h, &self.core.root)
                 {
                     self.do_action(Action::SetHandle(SetHandle {
                         handle: h,
@@ -550,13 +550,13 @@ impl<ES: EditorSpec> EditorState<ES> {
             #[expect(unused_assignments)]
             let mut move_status = Ok(());
             loop {
-                move_status = origin.move_dir(&self.core.expr, &dir);
+                move_status = origin.move_dir(&self.core.root, &dir);
                 if let Err(err) = &move_status {
                     trace!(target: "editor.move", "move bailed since a move failed: {err:?}");
                     break;
                 }
 
-                if ES::is_valid_handle(&origin, &self.core.expr) {
+                if ES::is_valid_handle(&origin, &self.core.root) {
                     break;
                 }
             }
@@ -575,13 +575,13 @@ impl<ES: EditorSpec> EditorState<ES> {
         {
             let mut origin = self.core.handle.clone();
             loop {
-                let move_status = origin.move_up(&self.core.expr);
+                let move_status = origin.move_up(&self.core.root);
                 if move_status.is_err() {
                     trace!(target: "editor.move", "move bailed since a move failed");
                     break;
                 }
 
-                if ES::is_valid_handle_specialized(&self.core.handle, &self.core.expr) {
+                if ES::is_valid_handle_specialized(&self.core.handle, &self.core.root) {
                     break;
                 }
             }
@@ -641,13 +641,13 @@ impl<ES: EditorSpec> EditorState<ES> {
                                 indent_level: 0,
                                 color_scheme: Self::color_scheme(ui),
                                 handle: &self.core.handle,
-                                root: &self.core.expr,
+                                root: &self.core.root,
                                 drag_origin: &self.drag_origin,
                                 menu: &mut self.menu,
                                 actions: &mut actions,
                             },
                             &Path::empty(),
-                            &self.core.expr,
+                            &self.core.root,
                         );
                         for action in actions {
                             self.do_action(action);
@@ -675,7 +675,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                 }
             }
             Action::Copy => {
-                if let Some(frag) = self.core.expr.get_fragment(&self.core.handle) {
+                if let Some(frag) = self.core.root.get_fragment(&self.core.handle) {
                     let clipboard = Some(frag.map_to_owned(&mut |l| l.to_plain()));
                     self.snapshot();
                     self.core.clipboard = clipboard;
@@ -688,14 +688,14 @@ impl<ES: EditorSpec> EditorState<ES> {
                     self.menu = None;
                     let handle = self
                         .core
-                        .expr
+                        .root
                         .insert_fragment(self.core.handle.clone(), frag);
                     self.core.handle = handle;
                 }
             }
             Action::Cut => {
                 self.snapshot();
-                if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
+                if let Some((frag, h)) = self.core.root.cut(&self.core.handle) {
                     self.menu = None;
                     self.core.clipboard = Some(frag.into_plain());
                     self.core.handle = h;
@@ -703,7 +703,7 @@ impl<ES: EditorSpec> EditorState<ES> {
             }
             Action::Delete => {
                 self.snapshot();
-                if let Some((_frag, h)) = self.core.expr.cut(&self.core.handle) {
+                if let Some((_frag, h)) = self.core.root.cut(&self.core.handle) {
                     self.menu = None;
                     self.core.handle = h;
                 }
@@ -1199,7 +1199,7 @@ pub fn render_expr_contents<ES: EditorSpec>(
 
 #[derive(Debug, Clone)]
 pub struct CoreState<D> {
-    pub expr: GenEditorExpr<D>,
+    pub root: GenEditorExpr<D>,
     pub handle: Handle,
     pub clipboard: Option<PlainFragment>,
 }
@@ -1207,7 +1207,7 @@ pub struct CoreState<D> {
 impl<D> CoreState<D> {
     pub fn new(expr: GenEditorExpr<D>, handle: Handle) -> Self {
         Self {
-            expr,
+            root: expr,
             handle,
             clipboard: None,
         }
@@ -1215,7 +1215,7 @@ impl<D> CoreState<D> {
 
     pub fn into_diag(self) -> DiagCoreState {
         CoreState {
-            expr: self.expr.into_diag(),
+            root: self.root.into_diag(),
             handle: self.handle,
             clipboard: self.clipboard,
         }
@@ -1223,7 +1223,7 @@ impl<D> CoreState<D> {
 
     pub fn to_diag(&self) -> DiagCoreState {
         CoreState {
-            expr: self.expr.to_diag(),
+            root: self.root.to_diag(),
             handle: self.handle.clone(),
             clipboard: self.clipboard.clone(),
         }
@@ -1231,7 +1231,7 @@ impl<D> CoreState<D> {
 
     pub fn into_plain(self) -> PlainCoreState {
         CoreState {
-            expr: self.expr.into_plain(),
+            root: self.root.into_plain(),
             handle: self.handle,
             clipboard: self.clipboard,
         }
@@ -1239,7 +1239,7 @@ impl<D> CoreState<D> {
 
     pub fn to_plain(&self) -> PlainCoreState {
         CoreState {
-            expr: self.expr.to_plain(),
+            root: self.root.to_plain(),
             handle: self.handle.clone(),
             clipboard: self.clipboard.clone(),
         }
@@ -1561,7 +1561,7 @@ pub struct SetHandle {
 }
 
 pub fn insert_newline(_query: &str, mut state: DiagCoreState) -> Option<DiagCoreState> {
-    let h = state.expr.insert_fragment(
+    let h = state.root.insert_fragment(
         state.handle,
         Fragment::Span(span![ex![
             GenEditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
