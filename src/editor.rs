@@ -332,7 +332,9 @@ impl<ES: EditorSpec + ?Sized> Default for EditorState<ES> {
                 handle: state.handle,
                 clipboard: state.clipboard,
             };
+            trace!(target: "diagnose", "BEGIN diagnose");
             ES::diagnose(&state);
+            trace!(target: "diagnose", "END diagnose");
             state
         };
         Self {
@@ -717,6 +719,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                 self.snapshot();
                 self.menu = None;
                 self.core = core;
+                ES::diagnose(&self.core);
             }
             Action::SetDragOrigin(handle) => {
                 self.drag_origin = handle;
@@ -1363,25 +1366,13 @@ impl EditMenuPattern {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum Constructor {
     Literal(String),
     Root,
     Newline,
     /// positional argument
     PosArg,
-}
-
-impl Clone for Constructor {
-    fn clone(&self) -> Self {
-        println!("cloning Constructor: {self}");
-        match self {
-            Self::Literal(lit) => Self::Literal(lit.clone()),
-            Self::Root => Self::Root,
-            Self::Newline => Self::Newline,
-            Self::PosArg => Self::PosArg,
-        }
-    }
 }
 
 impl Display for Constructor {

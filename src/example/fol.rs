@@ -249,13 +249,6 @@ macro_rules! make_simple_edit_menu_option {
 
                 state.handle = handle;
 
-                for kid in &state.expr.kids.0 {
-                    println!("check_type");
-                    let _success = check_type(hash_map! {}, &Type::Prop, kid);
-                }
-
-                println!("resulting expr: {:?}", state.expr.kids);
-
                 Some(state)
             },
         )
@@ -464,7 +457,6 @@ impl EditorSpec for Fol {
 
     fn diagnose(state: &CoreState<MutDiagnostics>) {
         for kid in &state.expr.kids.0 {
-            println!("check_type");
             let _success = check_type(hash_map! {}, &Type::Prop, kid);
         }
     }
