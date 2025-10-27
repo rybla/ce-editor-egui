@@ -56,9 +56,9 @@ lazy_static! {
 }
 
 #[derive(Default)]
-pub struct Diagnostics(pub Cell<Vec<Diagnostic>>);
+pub struct MutDiagnostics(pub Cell<Vec<Diagnostic>>);
 
-impl Debug for Diagnostics {
+impl Debug for MutDiagnostics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ds = self.0.take();
         let r = f.debug_tuple("Diagnostics").field(&ds).finish();
@@ -67,14 +67,14 @@ impl Debug for Diagnostics {
     }
 }
 
-impl Clone for Diagnostics {
-    fn clone(&self) -> Self {
-        let ds = self.0.take();
-        let ds_clone = ds.clone();
-        self.0.set(ds);
-        Self(Cell::new(ds_clone))
-    }
-}
+// impl Clone for Diagnostics {
+//     fn clone(&self) -> Self {
+//         let ds = self.0.take();
+//         let ds_clone = ds.clone();
+//         self.0.set(ds);
+//         Self(Cell::new(ds_clone))
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct GenEditorLabel<D> {
@@ -88,7 +88,7 @@ impl<D> Display for GenEditorLabel<D> {
     }
 }
 
-pub type EditorLabel = GenEditorLabel<Diagnostics>;
+pub type DiagEditorLabel = GenEditorLabel<MutDiagnostics>;
 pub type PlainEditorLabel = GenEditorLabel<()>;
 
 impl<D> GenEditorLabel<D> {
@@ -98,9 +98,37 @@ impl<D> GenEditorLabel<D> {
             diagnostics,
         }
     }
+
+    pub fn into_plain(self) -> PlainEditorLabel {
+        GenEditorLabel {
+            constructor: self.constructor,
+            diagnostics: (),
+        }
+    }
+
+    pub fn to_plain(&self) -> PlainEditorLabel {
+        GenEditorLabel {
+            constructor: self.constructor.clone(),
+            diagnostics: (),
+        }
+    }
+
+    pub fn to_diag(&self) -> DiagEditorLabel {
+        GenEditorLabel {
+            constructor: self.constructor.clone(),
+            diagnostics: MutDiagnostics::default(),
+        }
+    }
+
+    pub fn into_diag(self) -> DiagEditorLabel {
+        GenEditorLabel {
+            constructor: self.constructor,
+            diagnostics: MutDiagnostics::default(),
+        }
+    }
 }
 
-impl Expr<EditorLabel> {
+impl Expr<DiagEditorLabel> {
     pub fn pat2(&self) -> (&Constructor, &[Self]) {
         (&self.label.constructor, self.kids.0.as_slice())
     }
@@ -110,8 +138,17 @@ impl Expr<EditorLabel> {
 // e = (constructor [PosArg [d]])
 // d = newline | e
 pub type GenEditorExpr<D> = Expr<GenEditorLabel<D>>;
-pub type EditorExpr = GenEditorExpr<Diagnostics>;
+pub type DiagExpr = GenEditorExpr<MutDiagnostics>;
 pub type PlainExpr = GenEditorExpr<()>;
+
+impl PlainExpr {
+    pub fn into_annotated(self) -> DiagExpr {
+        self.map_owned(&mut |l| GenEditorLabel {
+            constructor: l.constructor,
+            diagnostics: MutDiagnostics::default(),
+        })
+    }
+}
 
 #[macro_export]
 macro_rules! editor_ex {
@@ -124,6 +161,32 @@ macro_rules! editor_ex {
 }
 
 impl<D> GenEditorExpr<D> {
+    pub fn new_pos_arg(kids: Vec<Self>) -> Self
+    where
+        D: Default,
+    {
+        Self {
+            label: GenEditorLabel {
+                constructor: Constructor::PosArg,
+                diagnostics: Default::default(),
+            },
+            kids: Span(kids),
+        }
+    }
+
+    pub fn new_lit(lit: String, kids: Vec<Self>) -> Self
+    where
+        D: Default,
+    {
+        Self {
+            label: GenEditorLabel {
+                constructor: Constructor::Literal(lit),
+                diagnostics: Default::default(),
+            },
+            kids: Span(kids),
+        }
+    }
+
     pub fn pat_pos_arg(&self) -> &[Self] {
         match self.label.constructor {
             Constructor::PosArg => self.kids.0.as_slice(),
@@ -143,33 +206,34 @@ impl<D> GenEditorExpr<D> {
             self.kids.0.as_slice(),
         )
     }
-}
-
-impl EditorExpr {
-    pub fn to_plain(self) -> PlainExpr {
-        let Self {
-            label: EditorLabel { constructor, .. },
-            kids,
-        } = self;
-        Expr {
-            label: GenEditorLabel {
-                constructor: constructor.clone(),
-                diagnostics: (),
-            },
-            kids: Span(kids.0.into_iter().map(|x| x.to_plain()).collect()),
-        }
+    pub fn to_plain(&self) -> PlainExpr {
+        self.map(&mut |l| l.to_plain())
     }
 
+    pub fn into_plain(self) -> PlainExpr {
+        self.map_owned(&mut |l| l.into_plain())
+    }
+
+    pub fn to_diag(&self) -> DiagExpr {
+        self.map(&mut |l| l.to_diag())
+    }
+
+    pub fn into_diag(self) -> DiagExpr {
+        self.map_owned(&mut |l| l.into_diag())
+    }
+}
+
+impl DiagExpr {
     // clones but without cloning Cells, and just makes new Cells
     pub fn clone_without_diagnostics(&self) -> Self {
         let Self {
-            label: EditorLabel { constructor, .. },
+            label: DiagEditorLabel { constructor, .. },
             kids,
         } = self;
         Self {
-            label: EditorLabel {
+            label: DiagEditorLabel {
                 constructor: constructor.clone(),
-                diagnostics: Diagnostics(Cell::new(vec![])),
+                diagnostics: MutDiagnostics(Cell::new(vec![])),
             },
             kids: Span(
                 kids.0
@@ -194,20 +258,88 @@ impl EditorExpr {
     }
 }
 
+pub type DiagFragment = Fragment<GenEditorLabel<MutDiagnostics>>;
+pub type PlainFragment = Fragment<GenEditorLabel<()>>;
+
+impl DiagFragment {
+    pub fn into_plain(self) -> PlainFragment {
+        match self {
+            Self::Span(span) => Fragment::Span(span.into_plain()),
+            Self::Zipper(zipper) => Fragment::Zipper(zipper.into_plain()),
+        }
+    }
+}
+
+pub type DiagSpan = Span<GenEditorLabel<MutDiagnostics>>;
+pub type PlainSpan = Span<GenEditorLabel<()>>;
+
+impl DiagSpan {
+    pub fn into_plain(self) -> PlainSpan {
+        Span(self.0.into_iter().map(|e| e.into_plain()).collect())
+    }
+}
+
+pub type DiagZipper = Zipper<GenEditorLabel<MutDiagnostics>>;
+pub type PlainZipper = Zipper<GenEditorLabel<()>>;
+
+impl DiagZipper {
+    pub fn into_plain(self) -> PlainZipper {
+        Zipper {
+            span_ol: self.span_ol.into_plain(),
+            span_or: self.span_or.into_plain(),
+            middle: self.middle.into_plain(),
+        }
+    }
+}
+
+pub type DiagContext = Context<GenEditorLabel<MutDiagnostics>>;
+pub type PlainContext = Context<GenEditorLabel<()>>;
+
+impl DiagContext {
+    pub fn into_plain(self) -> PlainContext {
+        Context(self.0.into_iter().map(|th| th.into_plain()).collect())
+    }
+}
+
+pub type DiagTooth = Tooth<GenEditorLabel<MutDiagnostics>>;
+pub type PlainTooth = Tooth<GenEditorLabel<()>>;
+
+impl DiagTooth {
+    pub fn into_plain(self) -> PlainTooth {
+        Tooth {
+            label: self.label.into_plain(),
+            span_l: self.span_l.into_plain(),
+            span_r: self.span_r.into_plain(),
+        }
+    }
+}
+
 pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub spec: PhantomData<ES>,
-    pub core: CoreEditorState,
+    pub core: CoreState<MutDiagnostics>,
     pub menu: Option<EditMenu>,
-    pub history: Vec<CoreEditorState>,
-    pub future: Vec<CoreEditorState>,
+    pub history: Vec<PlainCoreState>,
+    pub future: Vec<PlainCoreState>,
     pub drag_origin: Option<Handle>,
 }
 
 impl<ES: EditorSpec + ?Sized> Default for EditorState<ES> {
     fn default() -> Self {
+        let state: CoreState<MutDiagnostics> = {
+            let state = ES::initial_state();
+            let state: CoreState<MutDiagnostics> = CoreState {
+                expr: state.expr.into_annotated(),
+                handle: state.handle,
+                clipboard: state.clipboard,
+            };
+            trace!(target: "diagnose", "BEGIN diagnose");
+            ES::diagnose(&state);
+            trace!(target: "diagnose", "END diagnose");
+            state
+        };
         Self {
             spec: PhantomData,
-            core: ES::initial_state(),
+            core: state,
             menu: Default::default(),
             history: vec![],
             future: vec![],
@@ -216,7 +348,7 @@ impl<ES: EditorSpec + ?Sized> Default for EditorState<ES> {
     }
 }
 
-impl<ES: EditorSpec + ?Sized> EditorState<ES> {
+impl<ES: EditorSpec> EditorState<ES> {
     pub fn escape(&mut self) {
         if self.menu.is_some() {
             self.menu = None;
@@ -226,6 +358,26 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .handle
                 .escape()
                 .unwrap_or_else(|e| trace!(target: "editor.move", "escape failed: {e:?}"));
+        }
+    }
+
+    pub fn do_edit(
+        &mut self,
+        edit: impl Fn(&str, DiagCoreState) -> Option<DiagCoreState>,
+        query: &str,
+    ) {
+        let opt_core = (edit)(
+            query,
+            DiagCoreState {
+                expr: self.core.expr.to_diag(),
+                handle: self.core.handle.clone(),
+                clipboard: self.core.clipboard.clone(),
+            },
+        );
+        if let Some(core) = opt_core {
+            self.do_action(Action::SetCore(core));
+        } else {
+            trace!(target: "editor.edit", "edit failed");
         }
     }
 
@@ -276,8 +428,19 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                 .unwrap_or(false)
             {
                 if let Some(option) = menu.focus_option() {
-                    // TODO: this still seems problematic that we are cloning the entire core state for every single update
-                    if let Some(core) = (option.edit)(&menu.query, self.core.clone()) {
+                    // NOTE: this should be the same as
+                    // self.do_edit(&option.edit, &menu.query), but
+                    // unfortunately ownership prevents me from calling
+                    // self.do_edit since that borrows self as mutable
+                    let opt_core = (option.edit)(
+                        &menu.query,
+                        DiagCoreState {
+                            expr: self.core.expr.to_diag(),
+                            handle: self.core.handle.clone(),
+                            clipboard: self.core.clipboard.clone(),
+                        },
+                    );
+                    if let Some(core) = opt_core {
                         self.do_action(Action::SetCore(core));
                     } else {
                         trace!(target: "editor.edit", "edit failed");
@@ -344,16 +507,7 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
             .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Enter)
             .unwrap_or(false)
         {
-            let mut core = self.core.clone();
-            let h = core.expr.insert(
-                core.handle,
-                Fragment::Span(span![ex![
-                    EditorLabel::new(Constructor::Newline, Diagnostics(Cell::new(vec![]))),
-                    []
-                ]]),
-            );
-            core.handle = h;
-            self.do_action(Action::SetCore(core));
+            self.do_edit(insert_newline, "");
         }
         // rotate focus
         else if key_and_mods.map(|(_, m)| m.command).unwrap_or(false)
@@ -478,188 +632,264 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                         ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                         ui.set_row_height(ui.text_style_height(&egui::TextStyle::Body));
 
-                        self.render_expr(
+                        let mut actions = vec![];
+                        render_expr::<ES>(
                             ctx,
                             ui,
-                            &RenderContext {
+                            RenderContext {
                                 interactive: true,
                                 indent_level: 0,
+                                color_scheme: Self::color_scheme(ui),
+                                handle: &self.core.handle,
+                                root: &self.core.expr,
+                                drag_origin: &self.drag_origin,
+                                menu: &mut self.menu,
+                                actions: &mut actions,
                             },
                             &Path::empty(),
-                            &self.core.expr.clone(),
+                            &self.core.expr,
                         );
+                        for action in actions {
+                            self.do_action(action);
+                        }
                     },
                 )
             })
         });
     }
 
-    pub fn render_point(
-        &mut self,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        p: &Point,
-    ) {
-        let handle_at_point = Handle::Point(p.clone());
-        let is_valid_handle = ES::is_valid_handle(&handle_at_point, &self.core.expr);
-
-        if is_valid_handle {
-            let color_scheme = Self::color_scheme(ui);
-
-            let is_handle = p == &self.core.handle.focus_point();
-
-            let is_at_handle = match &self.core.handle {
-                Handle::Point(handle) => p == handle,
-                Handle::Span(handle) => p == &handle.p_l() || p == &handle.p_r(),
-                Handle::Zipper(handle) => {
-                    p == &handle.p_ol()
-                        || p == &handle.p_or()
-                        || p == &handle.p_il()
-                        || p == &handle.p_ir()
+    pub fn do_action(&mut self, action: Action) {
+        match action {
+            Action::Redo => {
+                if let Some(core) = self.future.pop() {
+                    self.history.push(self.core.to_plain());
+                    self.menu = None;
+                    self.core = core.to_diag();
                 }
-            };
+            }
+            Action::Undo => {
+                if let Some(core) = self.history.pop() {
+                    self.future.push(self.core.to_plain());
+                    self.menu = None;
+                    self.core = core.to_diag();
+                }
+            }
+            Action::Copy => {
+                if let Some(frag) = self.core.expr.get_fragment(&self.core.handle) {
+                    let clipboard = Some(frag.map_to_owned(&mut |l| l.to_plain()));
+                    self.snapshot();
+                    self.core.clipboard = clipboard;
+                }
+            }
+            Action::Paste => {
+                if let Some(frag) = &self.core.clipboard {
+                    let frag = frag.to_ref().map_to_owned(&mut |l| l.to_diag());
+                    self.snapshot();
+                    self.menu = None;
+                    let handle = self
+                        .core
+                        .expr
+                        .insert_fragment(self.core.handle.clone(), frag);
+                    self.core.handle = handle;
+                }
+            }
+            Action::Cut => {
+                self.snapshot();
+                if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
+                    self.menu = None;
+                    self.core.clipboard = Some(frag.into_plain());
+                    self.core.handle = h;
+                }
+            }
+            Action::Delete => {
+                self.snapshot();
+                if let Some((_frag, h)) = self.core.expr.cut(&self.core.handle) {
+                    self.menu = None;
+                    self.core.handle = h;
+                }
+            }
+            Action::SetHandle(args) => {
+                if args.snapshot {
+                    self.snapshot();
+                }
+                self.menu = None;
+                self.core.handle = args.handle;
+            }
+            Action::SetCore(core) => {
+                self.snapshot();
+                self.menu = None;
+                self.core = core;
+                ES::diagnose(&self.core);
+            }
+            Action::SetDragOrigin(handle) => {
+                self.drag_origin = handle;
+            }
+        }
+    }
 
-            let is_in_handle = self.core.handle.contains_point(p);
+    pub fn snapshot(&mut self) {
+        self.history.push(self.core.to_plain());
+        self.future = vec![];
+    }
+}
 
-            let fill_color = if is_handle {
-                color_scheme.active_background
-            } else if is_at_handle {
-                color_scheme.inactive_background
-            } else if is_in_handle {
-                color_scheme.highlight_background
-            } else {
-                color_scheme.normal_background
-            };
+#[expect(clippy::needless_pass_by_value)]
+pub fn render_point<ES: EditorSpec>(
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    rc: RenderContext<'_>,
+    p: &Point,
+) {
+    let handle_at_point = Handle::Point(p.clone());
+    let is_valid_handle = ES::is_valid_handle(&handle_at_point, rc.root);
 
-            egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                let label = ui.add(
-                    egui::Label::new(
-                        egui::RichText::new("•".to_owned()).color(color_scheme.ghost_text),
-                    )
-                    .selectable(false)
-                    .sense(egui::Sense::click_and_drag()),
-                );
+    if is_valid_handle {
+        let is_handle = *p == rc.handle.focus_point();
 
-                if ren_ctx.interactive {
-                    if label.clicked() {
-                        trace!(target: "editor", "click at point: p = {p}");
-                        let h = Handle::Point(p.clone());
-                        self.do_action(Action::SetHandle(SetHandle {
-                            handle: h,
+        let is_at_handle = match rc.handle {
+            Handle::Point(handle) => p == handle,
+            Handle::Span(handle) => p == &handle.p_l() || p == &handle.p_r(),
+            Handle::Zipper(handle) => {
+                p == &handle.p_ol()
+                    || p == &handle.p_or()
+                    || p == &handle.p_il()
+                    || p == &handle.p_ir()
+            }
+        };
+
+        let is_in_handle = rc.handle.contains_point(p);
+
+        let fill_color = if is_handle {
+            rc.color_scheme.active_background
+        } else if is_at_handle {
+            rc.color_scheme.inactive_background
+        } else if is_in_handle {
+            rc.color_scheme.highlight_background
+        } else {
+            rc.color_scheme.normal_background
+        };
+
+        egui::Frame::new().fill(fill_color).show(ui, |ui| {
+            let label = ui.add(
+                egui::Label::new(
+                    egui::RichText::new("•".to_owned()).color(rc.color_scheme.ghost_text),
+                )
+                .selectable(false)
+                .sense(egui::Sense::click_and_drag()),
+            );
+
+            if rc.interactive {
+                if label.clicked() {
+                    trace!(target: "editor", "click at point: p = {p}");
+                    let h = Handle::Point(p.clone());
+                    rc.actions.push(Action::SetHandle(SetHandle {
+                        handle: h,
+                        snapshot: false,
+                    }));
+                }
+
+                if label.drag_started_by(egui::PointerButton::Primary) {
+                    trace!(target: "editor.drag", "drag start at point: p = {p}");
+                    rc.actions.push(Action::SetHandle(SetHandle {
+                        handle: Handle::Point(p.clone()),
+                        snapshot: false,
+                    }));
+                    rc.actions
+                        .push(Action::SetDragOrigin(Some(Handle::Point(p.clone()))));
+                } else if let Some(drag_origin) = rc.drag_origin
+                    && let Some(pointer_pos) = ctx.pointer_latest_pos()
+                    && label.rect.contains(pointer_pos)
+                {
+                    trace!(target: "editor.drag", "drag hover at point: p = {p}");
+                    if let Some(h) = drag_origin.clone().drag(rc.root, p) {
+                        rc.actions.push(Action::SetHandle(SetHandle {
+                            handle: h.clone(),
                             snapshot: false,
                         }));
                     }
-
-                    if label.drag_started_by(egui::PointerButton::Primary) {
-                        trace!(target: "editor.drag", "drag start at point: p = {p}");
-                        self.do_action(Action::SetHandle(SetHandle {
-                            handle: Handle::Point(p.clone()),
-                            snapshot: false,
-                        }));
-                        self.drag_origin = Some(Handle::Point(p.clone()));
-                    } else if let Some(drag_origin) = &self.drag_origin
-                        && let Some(pointer_pos) = ctx.pointer_latest_pos()
-                        && label.rect.contains(pointer_pos)
-                    {
-                        trace!(target: "editor.drag", "drag hover at point: p = {p}");
-                        if let Some(h) = drag_origin.clone().drag(&self.core.expr, p) {
-                            self.do_action(Action::SetHandle(SetHandle {
-                                handle: h.clone(),
-                                snapshot: false,
-                            }));
-                        }
-                    }
                 }
+            }
 
-                if is_handle && let Some(menu) = &mut self.menu {
-                    let menu_width = 100f32;
-                    let menu_query_height = ui.text_style_height(&egui::TextStyle::Body);
-                    let menu_options_height = 80f32;
-                    let menu_height = menu_query_height + menu_options_height;
+            if is_handle && let Some(menu) = rc.menu {
+                let menu_width = 100f32;
+                let menu_query_height = ui.text_style_height(&egui::TextStyle::Body);
+                let menu_options_height = 80f32;
+                let menu_height = menu_query_height + menu_options_height;
 
-                    // render edit menu stuff
-                    egui::Frame::new()
-                        .fill(color_scheme.normal_background)
-                        .outer_margin(egui::Margin {
-                            left: 0i8,
-                            right: 5i8,
-                            top: 0i8,
-                            bottom: 5i8,
-                        })
-                        .show(ui, |ui| {
-                            ui.with_layout(
-                                egui::Layout::top_down_justified(egui::Align::TOP),
-                                |ui| {
-                                    ui.set_width(menu_width);
-                                    ui.set_height(menu_height);
-                                    ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                // render edit menu stuff
+                egui::Frame::new()
+                    .fill(rc.color_scheme.normal_background)
+                    .outer_margin(egui::Margin {
+                        left: 0i8,
+                        right: 5i8,
+                        top: 0i8,
+                        bottom: 5i8,
+                    })
+                    .show(ui, |ui| {
+                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::TOP), |ui| {
+                            ui.set_width(menu_width);
+                            ui.set_height(menu_height);
+                            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
 
-                                    // query
-                                    egui::Frame::new().show(ui, |ui| {
-                                        ui.set_height(menu_query_height);
+                            // query
+                            egui::Frame::new().show(ui, |ui| {
+                                ui.set_height(menu_query_height);
 
-                                        // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
-                                        let textedit = egui::TextEdit::singleline(&mut menu.query)
-                                            .hint_text("query edit menu")
-                                            .desired_width(menu_width) // 100f32 is a fine width for now
-                                            .cursor_at_end(true);
-                                        let textedit_response = ui.add(textedit);
-                                        // on change, update menu
-                                        if textedit_response.changed() {
-                                            menu.update(true);
-                                        }
-                                        // when the menu is open, the query should always have focus
-                                        if !textedit_response.has_focus() {
-                                            textedit_response.request_focus();
-                                        }
-                                    });
+                                // TODO: prevent default behavior on ArrowUp and ArrowDown, since that controls menu cycling
+                                let textedit = egui::TextEdit::singleline(&mut menu.query)
+                                    .hint_text("query edit menu")
+                                    .desired_width(menu_width) // 100f32 is a fine width for now
+                                    .cursor_at_end(true);
+                                let textedit_response = ui.add(textedit);
+                                // on change, update menu
+                                if textedit_response.changed() {
+                                    menu.update(true);
+                                }
+                                // when the menu is open, the query should always have focus
+                                if !textedit_response.has_focus() {
+                                    textedit_response.request_focus();
+                                }
+                            });
 
-                                    ui.end_row();
+                            ui.end_row();
 
-                                    // options
-                                    egui::Frame::new().show(ui, |ui| {
-                                        ui.set_height(menu_options_height);
+                            // options
+                            egui::Frame::new().show(ui, |ui| {
+                                ui.set_height(menu_options_height);
 
-                                        let menu_index = menu.index;
-                                        let matched_items = menu.matched_items();
-                                        let matched_items_count = matched_items.len();
-                                        let focus_index = if matched_items_count == 0 {
-                                            None
-                                        } else {
-                                            Some(menu_index.rem_euclid(matched_items_count as i8)
-                                                as usize)
-                                        };
-                                        let requested_scroll_to_option =
-                                            menu.requested_scroll_to_option;
+                                let menu_index = menu.index;
+                                let matched_items = menu.matched_items();
+                                let matched_items_count = matched_items.len();
+                                let focus_index = if matched_items_count == 0 {
+                                    None
+                                } else {
+                                    Some(menu_index.rem_euclid(matched_items_count as i8) as usize)
+                                };
+                                let requested_scroll_to_option = menu.requested_scroll_to_option;
 
-                                        egui::ScrollArea::vertical().show(ui, |ui| {
-                                            ui.with_layout(
-                                                egui::Layout::left_to_right(egui::Align::TOP)
-                                                    .with_main_wrap(true),
-                                                |ui| {
-                                                    ui.spacing_mut().item_spacing =
-                                                        egui::Vec2::ZERO;
-                                                    ui.set_row_height(
-                                                        ui.text_style_height(
-                                                            &egui::TextStyle::Body,
-                                                        ),
-                                                    );
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::TOP)
+                                            .with_main_wrap(true),
+                                        |ui| {
+                                            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                                            ui.set_row_height(
+                                                ui.text_style_height(&egui::TextStyle::Body),
+                                            );
 
-                                                    let matched_items = menu.matched_items();
+                                            let matched_items = menu.matched_items();
 
-                                                    // let mut responses = vec![];
-                                                    let mut focus_response = None;
+                                            // let mut responses = vec![];
+                                            let mut focus_response = None;
 
-                                                    for (i, (label, _item)) in
-                                                        matched_items.iter().enumerate()
-                                                    {
-                                                        let focused = Some(i) == focus_index;
+                                            for (i, (label, _item)) in
+                                                matched_items.iter().enumerate()
+                                            {
+                                                let focused = Some(i) == focus_index;
 
-                                                        let frame =
-                                                            egui::Frame::new().show(ui, |ui| {
-                                                                ui.set_width(menu_width);
-                                                                ui.with_layout(
+                                                let frame = egui::Frame::new().show(ui, |ui| {
+                                                    ui.set_width(menu_width);
+                                                    ui.with_layout(
                                                         egui::Layout::left_to_right(
                                                             egui::Align::TOP,
                                                         )
@@ -701,255 +931,324 @@ impl<ES: EditorSpec + ?Sized> EditorState<ES> {
                                                             })
                                                         },
                                                     );
-                                                            });
+                                                });
 
-                                                        if requested_scroll_to_option && focused {
-                                                            focus_response = Some(frame.response);
-                                                        }
+                                                if requested_scroll_to_option && focused {
+                                                    focus_response = Some(frame.response);
+                                                }
 
-                                                        ui.end_row();
-                                                    }
+                                                ui.end_row();
+                                            }
 
-                                                    if let Some(focus_response) = focus_response {
-                                                        focus_response
-                                                            .scroll_to_me(Some(egui::Align::TOP));
-                                                    }
-                                                    menu.requested_scroll_to_option = false;
-                                                },
-                                            );
-                                        });
-                                    })
-                                },
-                            );
+                                            if let Some(focus_response) = focus_response {
+                                                focus_response.scroll_to_me(Some(egui::Align::TOP));
+                                            }
+                                            menu.requested_scroll_to_option = false;
+                                        },
+                                    );
+                                });
+                            })
                         });
-                }
+                    });
+            }
+        });
+    }
+}
+
+pub fn render_expr<ES: EditorSpec>(
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    rc: RenderContext<'_>,
+    path: &Path,
+    expr: &DiagExpr,
+) {
+    render_expr_contents::<ES>(ctx, ui, rc, path, expr);
+}
+
+pub fn render_expr_contents<ES: EditorSpec>(
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    rc: RenderContext<'_>,
+    path: &Path,
+    expr: &DiagExpr,
+) {
+    let selected = rc.handle.contains_path(path);
+    let fill_color = if selected {
+        rc.color_scheme.highlight_background
+    } else {
+        rc.color_scheme.normal_background
+    };
+
+    {
+        let ds = expr.label.diagnostics.0.take();
+
+        for d in &ds {
+            egui::Frame::new().show(ui, |ui| {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(d.0.clone())
+                            .color(rc.color_scheme.normal_text)
+                            .text_style(egui::TextStyle::Monospace),
+                    )
+                    .selectable(false),
+                );
             });
         }
+
+        expr.label.diagnostics.0.set(ds);
     }
 
-    pub fn render_expr(
-        &mut self,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        path: &Path,
-        expr: &EditorExpr,
-    ) {
-        self.render_expr_contents(ctx, ui, ren_ctx, path, expr);
-    }
+    let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)> = vec![];
 
-    pub fn render_expr_contents(
-        &mut self,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        path: &Path,
-        expr: &EditorExpr,
-    ) {
-        let color_scheme = Self::color_scheme(ui);
-
-        let selected = self.core.handle.contains_path(path);
-        let fill_color = if selected {
-            color_scheme.highlight_background
-        } else {
-            color_scheme.normal_background
-        };
-
-        {
-            let ds = expr.label.diagnostics.0.take();
-
-            for d in &ds {
-                egui::Frame::new().show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(d.0.clone())
-                                .color(color_scheme.normal_text)
-                                .text_style(egui::TextStyle::Monospace),
-                        )
-                        .selectable(false),
-                    );
-                });
-            }
-
-            expr.label.diagnostics.0.set(ds);
-        }
-
-        let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)> = vec![];
-
-        for (s, e) in expr.kids.steps_and_kids() {
-            render_steps_and_kids.push((
-                RenderPoint {
-                    path,
-                    i: s.left_index(),
-                },
-                Some(RenderExpr {
-                    expr: e,
-                    path: path.clone().append(Path(vec![s])),
-                }),
-            ));
-        }
-
+    for (s, e) in expr.kids.iter_steps_and_kids() {
         render_steps_and_kids.push((
             RenderPoint {
                 path,
-                i: expr.kids.rightmost_index(),
+                i: s.left_index(),
             },
-            None,
+            Some(RenderExpr {
+                expr: e,
+                path: path.clone().append(Path(vec![s])),
+            }),
         ));
+    }
 
-        let literal_kids_count = render_steps_and_kids
-            .iter()
-            .filter(|(_, o_re)| match o_re {
-                Some(re) => matches!(re.expr.label.constructor, Constructor::Literal(_)),
-                None => false,
-            })
-            .collect::<Vec<_>>()
-            .len();
+    render_steps_and_kids.push((
+        RenderPoint {
+            path,
+            i: expr.kids.rightmost_index(),
+        },
+        None,
+    ));
 
-        match &expr.label.constructor {
-            Constructor::Literal(literal) => ES::assemble_rendered_expr(
-                ctx,
-                ui,
-                ren_ctx,
-                self,
-                path,
-                expr,
-                render_steps_and_kids,
-                literal,
-            ),
-            Constructor::Root => {
-                for (step, kid) in &render_steps_and_kids {
-                    step.render(ctx, ui, ren_ctx, self);
-                    if let Some(kid) = kid {
-                        kid.render(ctx, ui, ren_ctx, self);
-                    }
-                }
-            }
-            Constructor::Newline => {
-                ui.end_row();
-                egui::Frame::new().show(ui, |ui| {
-                    ui.set_width(
-                        (std::cmp::max(path.0.len(), 1) - 1) as f32
-                            * INDENT_WIDTH_EM
-                            * ui.text_style_height(&egui::TextStyle::Body),
+    let literal_kids_count = render_steps_and_kids
+        .iter()
+        .filter(|(_, o_re)| match o_re {
+            Some(re) => matches!(re.expr.label.constructor, Constructor::Literal(_)),
+            None => false,
+        })
+        .collect::<Vec<_>>()
+        .len();
+
+    match &expr.label.constructor {
+        Constructor::Literal(literal) => {
+            ES::assemble_rendered_expr(ctx, ui, rc, path, expr, render_steps_and_kids, literal);
+        }
+        Constructor::Root => {
+            let RenderContext {
+                handle,
+                root,
+                color_scheme,
+                drag_origin,
+                menu,
+                actions,
+                interactive,
+                indent_level,
+            } = rc;
+            for (step, kid) in &render_steps_and_kids {
+                step.render::<ES>(
+                    ctx,
+                    ui,
+                    // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                    RenderContext {
+                        handle,
+                        root,
+                        color_scheme,
+                        drag_origin,
+                        menu,
+                        actions,
+                        interactive,
+                        indent_level,
+                    },
+                );
+                if let Some(kid) = kid {
+                    kid.render::<ES>(
+                        ctx,
+                        ui,
+                        // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                        RenderContext {
+                            handle,
+                            root,
+                            color_scheme,
+                            drag_origin,
+                            menu,
+                            actions,
+                            interactive,
+                            indent_level,
+                        },
                     );
-                });
-            }
-            Constructor::PosArg if literal_kids_count == 1 => {
-                for (step, kid) in &render_steps_and_kids {
-                    step.render(ctx, ui, ren_ctx, self);
-                    if let Some(kid) = kid {
-                        kid.render(ctx, ui, ren_ctx, self);
-                    }
                 }
-            }
-            Constructor::PosArg => {
-                egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(egui::RichText::new("[").color(color_scheme.accent_text))
-                            .selectable(false),
-                    );
-                });
-
-                for (step, kid) in &render_steps_and_kids {
-                    step.render(ctx, ui, ren_ctx, self);
-                    if let Some(kid) = kid {
-                        kid.render(ctx, ui, ren_ctx, self);
-                    }
-                }
-
-                egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(egui::RichText::new("]").color(color_scheme.accent_text))
-                            .selectable(false),
-                    );
-                });
             }
         }
-    }
+        Constructor::Newline => {
+            ui.end_row();
+            egui::Frame::new().show(ui, |ui| {
+                ui.set_width(
+                    (std::cmp::max(path.0.len(), 1) - 1) as f32
+                        * INDENT_WIDTH_EM
+                        * ui.text_style_height(&egui::TextStyle::Body),
+                );
+            });
+        }
+        Constructor::PosArg if literal_kids_count == 1 => {
+            let RenderContext {
+                handle,
+                root,
+                color_scheme,
+                drag_origin,
+                menu,
+                actions,
+                interactive,
+                indent_level,
+            } = rc;
+            for (step, kid) in &render_steps_and_kids {
+                step.render::<ES>(
+                    ctx,
+                    ui,
+                    // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                    RenderContext {
+                        handle,
+                        root,
+                        color_scheme,
+                        drag_origin,
+                        menu,
+                        actions,
+                        interactive,
+                        indent_level,
+                    },
+                );
+                if let Some(kid) = kid {
+                    kid.render::<ES>(
+                        ctx,
+                        ui,
+                        // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                        RenderContext {
+                            handle,
+                            root,
+                            color_scheme,
+                            drag_origin,
+                            menu,
+                            actions,
+                            interactive,
+                            indent_level,
+                        },
+                    );
+                }
+            }
+        }
+        Constructor::PosArg => {
+            egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                ui.add(
+                    egui::Label::new(egui::RichText::new("[").color(rc.color_scheme.accent_text))
+                        .selectable(false),
+                );
+            });
 
-    pub fn snapshot(&mut self) {
-        self.history.push(self.core.clone());
-        self.future = vec![];
-    }
+            let RenderContext {
+                handle,
+                root,
+                color_scheme,
+                drag_origin,
+                menu,
+                actions,
+                interactive,
+                indent_level,
+            } = rc;
+            for (step, kid) in &render_steps_and_kids {
+                step.render::<ES>(
+                    ctx,
+                    ui,
+                    RenderContext {
+                        handle,
+                        root,
+                        color_scheme,
+                        drag_origin,
+                        menu,
+                        actions,
+                        interactive,
+                        indent_level,
+                    },
+                );
+                if let Some(kid) = kid {
+                    kid.render::<ES>(
+                        ctx,
+                        ui,
+                        RenderContext {
+                            handle,
+                            root,
+                            color_scheme,
+                            drag_origin,
+                            menu,
+                            actions,
+                            interactive,
+                            indent_level,
+                        },
+                    );
+                }
+            }
 
-    pub fn do_action(&mut self, action: Action) {
-        match action {
-            Action::Redo => {
-                if let Some(core) = self.future.pop() {
-                    self.history.push(self.core.clone());
-                    self.menu = None;
-                    self.core = core;
-                }
-            }
-            Action::Undo => {
-                if let Some(core) = self.history.pop() {
-                    self.future.push(self.core.clone());
-                    self.menu = None;
-                    self.core = core;
-                }
-            }
-            Action::Copy => {
-                if let Some(frag) = self.core.expr.at_handle_cloned(&self.core.handle) {
-                    self.snapshot();
-                    self.core.clipboard = Some(frag);
-                }
-            }
-            Action::Paste => {
-                if let Some(frag) = self.core.clipboard.clone() {
-                    self.snapshot();
-                    self.menu = None;
-                    let handle = self.core.expr.insert(self.core.handle.clone(), frag);
-                    self.core.handle = handle;
-                }
-            }
-            Action::Cut => {
-                self.snapshot();
-                if let Some((frag, h)) = self.core.expr.cut(&self.core.handle) {
-                    self.menu = None;
-                    self.core.clipboard = Some(frag);
-                    self.core.handle = h;
-                }
-            }
-            Action::Delete => {
-                self.snapshot();
-                if let Some((_frag, h)) = self.core.expr.cut(&self.core.handle) {
-                    self.menu = None;
-                    self.core.handle = h;
-                }
-            }
-            Action::SetHandle(args) => {
-                if args.snapshot {
-                    self.snapshot();
-                }
-                self.menu = None;
-                self.core.handle = args.handle;
-            }
-            Action::SetCore(core) => {
-                self.snapshot();
-                self.menu = None;
-                self.core = core;
-            }
+            egui::Frame::new().fill(fill_color).show(ui, |ui| {
+                ui.add(
+                    egui::Label::new(egui::RichText::new("]").color(rc.color_scheme.accent_text))
+                        .selectable(false),
+                );
+            });
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CoreEditorState {
-    pub expr: EditorExpr,
+pub struct CoreState<D> {
+    pub expr: GenEditorExpr<D>,
     pub handle: Handle,
-    pub clipboard: Option<Fragment<EditorLabel>>,
+    pub clipboard: Option<PlainFragment>,
 }
 
-impl CoreEditorState {
-    pub fn new(expr: EditorExpr, handle: Handle) -> Self {
+impl<D> CoreState<D> {
+    pub fn new(expr: GenEditorExpr<D>, handle: Handle) -> Self {
         Self {
             expr,
             handle,
             clipboard: None,
         }
     }
+
+    pub fn into_diag(self) -> DiagCoreState {
+        CoreState {
+            expr: self.expr.into_diag(),
+            handle: self.handle,
+            clipboard: self.clipboard,
+        }
+    }
+
+    pub fn to_diag(&self) -> DiagCoreState {
+        CoreState {
+            expr: self.expr.to_diag(),
+            handle: self.handle.clone(),
+            clipboard: self.clipboard.clone(),
+        }
+    }
+
+    pub fn into_plain(self) -> PlainCoreState {
+        CoreState {
+            expr: self.expr.into_plain(),
+            handle: self.handle,
+            clipboard: self.clipboard,
+        }
+    }
+
+    pub fn to_plain(&self) -> PlainCoreState {
+        CoreState {
+            expr: self.expr.to_plain(),
+            handle: self.handle.clone(),
+            clipboard: self.clipboard.clone(),
+        }
+    }
 }
+
+pub type DiagCoreState = CoreState<MutDiagnostics>;
+
+pub type PlainCoreState = CoreState<()>;
 
 pub struct EditMenu {
     pub query: String,
@@ -1033,6 +1332,8 @@ impl EditMenu {
     }
 }
 
+pub type Edit = fn(&str, DiagCoreState) -> Option<DiagCoreState>;
+
 #[derive(Debug, Clone)]
 pub struct EditMenuOption {
     pub pattern: EditMenuPattern,
@@ -1054,7 +1355,7 @@ impl EditMenuOption {
 #[derive(Debug, Clone)]
 pub enum EditMenuPattern {
     Static(String),
-    Dynamic(String, fn(&String) -> Option<String>),
+    Dynamic(String, fn(&str) -> Option<String>),
 }
 
 impl EditMenuPattern {
@@ -1064,8 +1365,6 @@ impl EditMenuPattern {
         }
     }
 }
-
-pub type Edit = fn(&String, CoreEditorState) -> Option<CoreEditorState>;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum Constructor {
@@ -1096,7 +1395,13 @@ impl Display for Diagnostic {
     }
 }
 
-pub struct RenderContext {
+pub struct RenderContext<'a> {
+    pub handle: &'a Handle,
+    pub root: &'a DiagExpr,
+    pub color_scheme: &'a ColorScheme,
+    pub drag_origin: &'a Option<Handle>,
+    pub menu: &'a mut Option<EditMenu>,
+    pub actions: &'a mut Vec<Action>,
     pub interactive: bool,
     pub indent_level: u8,
 }
@@ -1106,21 +1411,21 @@ pub struct AssembleRenderExprArgs {}
 pub trait EditorSpec: 'static {
     fn name() -> String;
 
-    fn initial_state() -> CoreEditorState;
+    fn initial_state() -> PlainCoreState;
 
     fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption>;
 
-    fn get_diagnostics(state: EditorState<Self>) -> Vec<Diagnostic>;
+    fn diagnose(state: &CoreState<MutDiagnostics>);
 
-    fn is_valid_handle_specialized(handle: &Handle, root: &EditorExpr) -> bool;
+    fn is_valid_handle_specialized(handle: &Handle, root: &DiagExpr) -> bool;
 
-    fn is_valid_handle(handle: &Handle, root: &EditorExpr) -> bool {
+    fn is_valid_handle(handle: &Handle, root: &DiagExpr) -> bool {
         trace!(target: "is_valid_handle", "handle = {handle}");
         trace!(target: "is_valid_handle", "root   = {root}");
 
         let b_general = || match handle {
             Handle::Point(p) => {
-                let e = root.at_path(&p.path);
+                let e = root.get_subexpr(&p.path);
                 #[expect(clippy::match_like_matches_macro)]
                 match e.label.constructor {
                     Constructor::Newline => false,
@@ -1128,7 +1433,7 @@ pub trait EditorSpec: 'static {
                 }
             }
             Handle::Span(h) => {
-                let e = root.at_path(&h.path);
+                let e = root.get_subexpr(&h.path);
                 #[expect(clippy::match_like_matches_macro)]
                 match e.label.constructor {
                     Constructor::Newline => false,
@@ -1139,7 +1444,7 @@ pub trait EditorSpec: 'static {
                 // These are closures so that the final conjunction is evaluated
                 // in a short-circuited fashion.
                 let b1 = || {
-                    let e = root.at_path(&h.path_o);
+                    let e = root.get_subexpr(&h.path_o);
                     #[expect(clippy::match_like_matches_macro)]
                     match e.label.constructor {
                         Constructor::Newline => false,
@@ -1147,7 +1452,7 @@ pub trait EditorSpec: 'static {
                     }
                 };
                 let b2 = || {
-                    let e = root.at_path(&h.path_i());
+                    let e = root.get_subexpr(&h.path_i());
                     #[expect(clippy::match_like_matches_macro)]
                     match e.label.constructor {
                         Constructor::Newline => false,
@@ -1163,14 +1468,12 @@ pub trait EditorSpec: 'static {
         b_general() && b_specialized()
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn assemble_rendered_expr(
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        state: &mut EditorState<Self>,
+        rc: RenderContext<'_>,
         path: &Path,
-        expr: &EditorExpr,
+        expr: &DiagExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
         literal: &str,
     );
@@ -1204,17 +1507,16 @@ pub struct RenderPoint<'a> {
 }
 
 impl<'a> RenderPoint<'a> {
-    pub fn render<ES: EditorSpec + ?Sized>(
+    pub fn render<ES: EditorSpec>(
         &self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        state: &mut EditorState<ES>,
+        rc: RenderContext<'_>,
     ) {
-        state.render_point(
+        render_point::<ES>(
             ctx,
             ui,
-            ren_ctx,
+            rc,
             &Point {
                 path: self.path.clone(),
                 i: self.i,
@@ -1225,35 +1527,30 @@ impl<'a> RenderPoint<'a> {
 
 pub struct RenderExpr<'a> {
     pub path: Path,
-    pub expr: &'a EditorExpr,
+    pub expr: &'a DiagExpr,
 }
 
 impl<'a> RenderExpr<'a> {
-    pub fn render<ES: EditorSpec + ?Sized>(
+    pub fn render<ES: EditorSpec>(
         &self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        state: &mut EditorState<ES>,
+        rc: RenderContext<'_>,
     ) {
-        EditorState::render_expr(state, ctx, ui, ren_ctx, &self.path, self.expr);
+        render_expr::<ES>(ctx, ui, rc, &self.path, self.expr);
     }
 }
 
 // -----------------------------------------------------------------------------
-
-pub struct StateAction {
-    pub state: CoreEditorState,
-    pub action: Action,
-}
 
 pub enum Action {
     Copy,
     Paste,
     Cut,
     Delete,
-    SetCore(CoreEditorState),
+    SetCore(DiagCoreState),
     SetHandle(SetHandle),
+    SetDragOrigin(Option<Handle>),
     Undo,
     Redo,
 }
@@ -1261,4 +1558,16 @@ pub enum Action {
 pub struct SetHandle {
     pub handle: Handle,
     pub snapshot: bool,
+}
+
+pub fn insert_newline(_query: &str, mut state: DiagCoreState) -> Option<DiagCoreState> {
+    let h = state.expr.insert_fragment(
+        state.handle,
+        Fragment::Span(span![ex![
+            GenEditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
+            []
+        ]]),
+    );
+    state.handle = h;
+    Some(state)
 }

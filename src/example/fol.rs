@@ -35,6 +35,7 @@ impl Sort {
     }
 }
 
+#[expect(dead_code)] // until we actually construct Proof
 #[derive(Debug, Clone)]
 enum Type<'a> {
     Prop,
@@ -77,7 +78,6 @@ impl RuleKids {
     pub fn len(&self) -> Option<usize> {
         match self {
             FixedArity(sorts) => Some(sorts.len()),
-            FreeArity(_) => None,
             _ => None,
         }
     }
@@ -179,7 +179,7 @@ fn get_rule(c: &Constructor) -> Option<&Rule> {
 }
 
 #[expect(dead_code)]
-fn get_sorts(span: &Span<EditorLabel>) -> Vec<Option<&Sort>> {
+fn get_sorts(span: &Span<DiagEditorLabel>) -> Vec<Option<&Sort>> {
     span.0
         .iter()
         .map(|e| get_rule(&e.label.constructor).map(|r| &r.sort))
@@ -199,14 +199,14 @@ macro_rules! make_simple_edit_menu_option {
                     .get($name)
                     .unwrap_or_else(|| panic!("no rule for {}", $name));
 
-                let mut kids: Vec<Expr<EditorLabel>> = vec![];
+                let mut kids: Vec<DiagExpr> = vec![];
                 match &rule.kids {
                     FixedArity(sorts) => {
                         for _ in 0..sorts.len() {
                             kids.push(ex![
                                 GenEditorLabel::new(
                                     Constructor::PosArg,
-                                    Diagnostics(Cell::new(vec![]))
+                                    MutDiagnostics(Cell::new(vec![]))
                                 ),
                                 []
                             ]);
@@ -216,28 +216,27 @@ macro_rules! make_simple_edit_menu_option {
                     LiteralKid => {} // TODO: put some diagnostic if not 1 kid
                 }
 
-                let tooth_into_first_kid =
-                    pop_front(&mut kids).map(|e| e.tooth_at_index(&Index(0)));
+                let tooth_into_first_kid = pop_front(&mut kids).map(|e| e.into_tooth(Index(0)));
 
-                let handle = state.expr.insert(
+                let handle = state.expr.insert_fragment(
                     state.handle,
                     Fragment::Zipper(Zipper {
                         span_ol: Span::empty(),
                         span_or: Span::empty(),
                         middle: Context(match tooth_into_first_kid {
                             None => vec![Tooth {
-                                label: EditorLabel::new(
+                                label: GenEditorLabel::new(
                                     Constructor::Literal($name.to_owned()),
-                                    Diagnostics(Cell::new(vec![])),
+                                    MutDiagnostics(Cell::new(vec![])),
                                 ),
                                 span_l: Span::empty(),
                                 span_r: Span(kids),
                             }],
                             Some(tooth_into_first_kid) => vec![
                                 Tooth {
-                                    label: EditorLabel::new(
+                                    label: GenEditorLabel::new(
                                         Constructor::Literal($name.to_owned()),
-                                        Diagnostics(Cell::new(vec![])),
+                                        MutDiagnostics(Cell::new(vec![])),
                                     ),
                                     span_l: Span::empty(),
                                     span_r: Span(kids),
@@ -249,13 +248,6 @@ macro_rules! make_simple_edit_menu_option {
                 );
 
                 state.handle = handle;
-
-                for kid in &state.expr.kids.0 {
-                    println!("check_type");
-                    let _success = check_type(hash_map! {}, &Type::Prop, kid);
-                }
-
-                println!("resulting expr: {:?}", state.expr.kids);
 
                 Some(state)
             },
@@ -274,10 +266,10 @@ fn check_pos_arg(
     success: &mut bool,
     ctx: HashMap<String, Type<'_>>,
     expected_type: &Type<'_>,
-    pos_arg: &EditorExpr,
+    pos_arg: &DiagExpr,
 ) {
     pos_arg.clear_diagnostics();
-    // todo!("this needs to filter out newlines");
+    // TODO: this needs to filter out newlines
     let without_newlines = pos_arg
         .pat_pos_arg()
         .iter()
@@ -301,7 +293,7 @@ fn check_free_args(
     success: &mut bool,
     ctx: &HashMap<String, Type<'_>>,
     expected_type: &Type<'_>,
-    args: &[EditorExpr],
+    args: &[DiagExpr],
 ) {
     for arg in args {
         check_type_helper(success, ctx.clone(), expected_type, arg);
@@ -311,7 +303,7 @@ fn check_free_args(
 fn check_type<'a>(
     ctx: HashMap<String, Type<'a>>,
     expected_type: &Type<'a>,
-    expr: &EditorExpr,
+    expr: &DiagExpr,
 ) -> bool {
     let mut success = true;
     check_type_helper(&mut success, ctx, expected_type, expr);
@@ -324,7 +316,7 @@ fn check_type_helper<'a>(
     success: &mut bool,
     ctx: HashMap<String, Type<'a>>,
     expected_type: &Type<'a>,
-    expr: &EditorExpr,
+    expr: &DiagExpr,
 ) {
     let expected_sort = expected_type.get_sort();
     // clean up the old annotation
@@ -348,7 +340,7 @@ fn check_type_helper<'a>(
         ..
     } = match GRAMMAR.get(lit) {
         None => {
-            add_error(Diagnostic("unknown expr label".to_owned()));
+            add_error(Diagnostic("foreign".to_owned()));
             return;
         }
         Some(rule) => rule,
@@ -357,7 +349,7 @@ fn check_type_helper<'a>(
     // check sort
     if rule_sort != &expected_sort {
         add_error(Diagnostic(format!(
-            "this expr was expected to have sort {expected_sort:?} but actually has sort {rule_sort:?}"
+            "expected {expected_sort:?}; actually {rule_sort:?}"
         )));
     }
 
@@ -366,7 +358,7 @@ fn check_type_helper<'a>(
         Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
             let expr_kids_len = expr.kids.0.len();
             add_error(Diagnostic(format!(
-                "this expr was expected to have {} kids but actually has {} kids",
+                "expected {} kids; actually {} kids",
                 rule_kids
                     .len()
                     .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
@@ -379,30 +371,36 @@ fn check_type_helper<'a>(
     // check kid sorts
     match (expr.pat_literal(), expected_type) {
         (("var", [x]), _) => {
-            let x = match x.pat_literal() {
-                (x, []) => x,
-                _ => panic!("the first child of var should be a literal"),
+            let x = match x.pat_pos_arg() {
+                [x] => match x.pat_literal() {
+                    (x, []) => x,
+                    _ => panic!("the first child of var should be a literal"),
+                },
+                _ => panic!("the first child of var should be a literal wrapped in a PosArg"),
             };
             if !ctx.contains_key(x) {
-                add_error(Diagnostic("this var expr is out-of-scope".to_owned()));
+                add_error(Diagnostic("mal-scoped var".to_owned()));
             }
         }
-        (("forall" | "exists", [x, p]), _) => {
+        (("forall" | "exists", [x0, p]), _) => {
             let ctx = {
                 let mut ctx = ctx;
-                let x = match x.pat_pos_arg() {
+                match x0.pat_pos_arg() {
                     [x] => match x.pat_literal() {
-                        (x, []) => x,
-                        _ => panic!(
-                            "first arg of forall or exists should be a literal wrapped in a pos arg"
-                        ),
+                        ("var", [x]) => match x.pat_pos_arg() {
+                            [x] => match x.pat_literal() {
+                                (x, []) => {
+                                    ctx.insert(x.to_owned(), Type::Num);
+                                    ctx
+                                }
+                                _ => panic!("TODO"),
+                            },
+                            _ => ctx,
+                        },
+                        _ => ctx,
                     },
-                    _ => panic!(
-                        "the first child of forall and exist should be a literal wrapped ina pos arg"
-                    ),
-                };
-                ctx.insert(x.to_owned(), Type::Num);
-                ctx
+                    _ => ctx,
+                }
             };
             check_pos_arg(success, ctx, &Type::Prop, p);
         }
@@ -450,17 +448,23 @@ impl EditorSpec for Fol {
         "fol".to_owned()
     }
 
-    fn initial_state() -> CoreEditorState {
-        CoreEditorState::new(
+    fn initial_state() -> PlainCoreState {
+        CoreState::new(
             Expr::new(
-                EditorLabel {
+                GenEditorLabel {
                     constructor: Constructor::Root,
-                    diagnostics: Default::default(),
+                    diagnostics: (),
                 },
                 Span::empty(),
             ),
             Default::default(),
         )
+    }
+
+    fn diagnose(state: &CoreState<MutDiagnostics>) {
+        for kid in &state.expr.kids.0 {
+            let _success = check_type(hash_map! {}, &Type::Prop, kid);
+        }
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption> {
@@ -470,34 +474,19 @@ impl EditorSpec for Fol {
                     if query.is_empty() || GRAMMAR.keys().any(|x| x == query) {
                         return None;
                     }
-                    Some(query.clone())
+                    Some(query.to_owned())
                 }),
-                edit: |query, state| {
-                    let mut state = state;
-                    let handle = state.expr.insert(
+                edit: |query, mut state| {
+                    state.handle = state.expr.insert_fragment(
                         state.handle,
-                        Fragment::Span(Span(vec![Expr {
-                            label: GenEditorLabel {
-                                constructor: Constructor::Literal("var".to_owned()),
-                                diagnostics: Diagnostics(Cell::new(vec![])),
-                            },
-                            kids: Span(vec![Expr {
-                                label: EditorLabel::new(
-                                    Constructor::Literal(query.to_owned()),
-                                    Diagnostics(Cell::new(vec![])),
-                                ),
-                                kids: Span::empty(),
-                            }]),
-                        }])),
+                        Fragment::Span(Span(vec![GenEditorExpr::new_lit(
+                            "var".to_owned(),
+                            vec![GenEditorExpr::new_pos_arg(vec![GenEditorExpr::new_lit(
+                                query.to_owned(),
+                                vec![],
+                            )])],
+                        )])),
                     );
-
-                    state.handle = handle;
-
-                    for kid in &state.expr.kids.0 {
-                        println!("check_type");
-                        let _success = check_type(hash_map! {}, &Type::Prop, kid);
-                    }
-
                     Some(state)
                 },
             },
@@ -526,14 +515,10 @@ impl EditorSpec for Fol {
         ]
     }
 
-    fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
-        Default::default()
-    }
-
-    fn is_valid_handle_specialized(h: &Handle, root: &EditorExpr) -> bool {
+    fn is_valid_handle_specialized(h: &Handle, root: &DiagExpr) -> bool {
         match h {
             Handle::Point(p) => {
-                let e = root.at_path(&p.path);
+                let e = root.get_subexpr(&p.path);
                 match &e.label.constructor {
                     Constructor::Literal(_) => {
                         let sort = get_rule(&e.label.constructor)
@@ -606,14 +591,12 @@ impl EditorSpec for Fol {
         }
     }
 
-    // TODO, this is currently just copied from ce
     fn assemble_rendered_expr(
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        state: &mut EditorState<Self>,
+        rc: RenderContext<'_>,
         path: &Path,
-        expr: &EditorExpr,
+        expr: &DiagExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
         label: &str,
     ) {
@@ -621,7 +604,7 @@ impl EditorSpec for Fol {
         let rule = get_rule(&expr.label.constructor)
             .unwrap_or_else(|| panic!("no rule for {}", expr.label.constructor));
 
-        let selected = state.core.handle.contains_path(path);
+        let selected = rc.handle.contains_path(path);
         let fill_color = if selected {
             color_scheme.highlight_background
         } else {
@@ -667,10 +650,48 @@ impl EditorSpec for Fol {
             render_label(ui);
         }
 
+        let RenderContext {
+            handle,
+            root,
+            color_scheme: color_scheme_1,
+            drag_origin,
+            menu,
+            actions,
+            interactive,
+            indent_level,
+        } = rc;
         for (i, (step, kid)) in render_steps_and_kids.iter().enumerate() {
-            step.render(ctx, ui, ren_ctx, state);
+            step.render::<Self>(
+                ctx,
+                ui,
+                // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                RenderContext {
+                    handle,
+                    root,
+                    color_scheme: color_scheme_1,
+                    drag_origin,
+                    menu,
+                    actions,
+                    interactive,
+                    indent_level,
+                },
+            );
             if let Some(kid) = kid {
-                kid.render(ctx, ui, ren_ctx, state);
+                kid.render::<Self>(
+                    ctx,
+                    ui,
+                    // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                    RenderContext {
+                        handle,
+                        root,
+                        color_scheme: color_scheme_1,
+                        drag_origin,
+                        menu,
+                        actions,
+                        interactive,
+                        indent_level,
+                    },
+                );
             }
             if rule.infix && i == 0 {
                 render_label(ui);
