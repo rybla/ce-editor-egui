@@ -340,7 +340,7 @@ fn check_type_helper<'a>(
         ..
     } = match GRAMMAR.get(lit) {
         None => {
-            add_error(Diagnostic("unknown expr label".to_owned()));
+            add_error(Diagnostic("foreign".to_owned()));
             return;
         }
         Some(rule) => rule,
@@ -349,7 +349,7 @@ fn check_type_helper<'a>(
     // check sort
     if rule_sort != &expected_sort {
         add_error(Diagnostic(format!(
-            "this expr was expected to have sort {expected_sort:?} but actually has sort {rule_sort:?}"
+            "expected {expected_sort:?}; actually {rule_sort:?}"
         )));
     }
 
@@ -358,7 +358,7 @@ fn check_type_helper<'a>(
         Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
             let expr_kids_len = expr.kids.0.len();
             add_error(Diagnostic(format!(
-                "this expr was expected to have {} kids but actually has {} kids",
+                "expected {} kids; actually {} kids",
                 rule_kids
                     .len()
                     .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
@@ -371,30 +371,36 @@ fn check_type_helper<'a>(
     // check kid sorts
     match (expr.pat_literal(), expected_type) {
         (("var", [x]), _) => {
-            let x = match x.pat_literal() {
-                (x, []) => x,
-                _ => panic!("the first child of var should be a literal"),
+            let x = match x.pat_pos_arg() {
+                [x] => match x.pat_literal() {
+                    (x, []) => x,
+                    _ => panic!("the first child of var should be a literal"),
+                },
+                _ => panic!("the first child of var should be a literal wrapped in a PosArg"),
             };
             if !ctx.contains_key(x) {
-                add_error(Diagnostic("this var expr is out-of-scope".to_owned()));
+                add_error(Diagnostic("mal-scoped var".to_owned()));
             }
         }
-        (("forall" | "exists", [x, p]), _) => {
+        (("forall" | "exists", [x0, p]), _) => {
             let ctx = {
                 let mut ctx = ctx;
-                let x = match x.pat_pos_arg() {
+                match x0.pat_pos_arg() {
                     [x] => match x.pat_literal() {
-                        (x, []) => x,
-                        _ => panic!(
-                            "first arg of forall or exists should be a literal wrapped in a pos arg"
-                        ),
+                        ("var", [x]) => match x.pat_pos_arg() {
+                            [x] => match x.pat_literal() {
+                                (x, []) => {
+                                    ctx.insert(x.to_owned(), Type::Num);
+                                    ctx
+                                }
+                                _ => panic!("TODO"),
+                            },
+                            _ => ctx,
+                        },
+                        _ => ctx,
                     },
-                    _ => panic!(
-                        "the first child of forall and exist should be a literal wrapped ina pos arg"
-                    ),
-                };
-                ctx.insert(x.to_owned(), Type::Num);
-                ctx
+                    _ => ctx,
+                }
             };
             check_pos_arg(success, ctx, &Type::Prop, p);
         }
