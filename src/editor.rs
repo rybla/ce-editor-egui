@@ -631,6 +631,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                     |ui| {
                         ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                         ui.set_row_height(ui.text_style_height(&egui::TextStyle::Body));
+                        ui.set_min_height(400.0);
 
                         let mut actions = vec![];
                         render_expr::<ES>(
@@ -962,16 +963,6 @@ pub fn render_expr<ES: EditorSpec>(
     path: &Path,
     expr: &DiagExpr,
 ) {
-    render_expr_contents::<ES>(ctx, ui, rc, path, expr);
-}
-
-pub fn render_expr_contents<ES: EditorSpec>(
-    ctx: &egui::Context,
-    ui: &mut egui::Ui,
-    rc: RenderContext<'_>,
-    path: &Path,
-    expr: &DiagExpr,
-) {
     let selected = rc.handle.contains_path(path);
     let fill_color = if selected {
         rc.color_scheme.highlight_background
@@ -983,16 +974,26 @@ pub fn render_expr_contents<ES: EditorSpec>(
         let ds = expr.label.diagnostics.0.take();
 
         for d in &ds {
-            egui::Frame::new().show(ui, |ui| {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(d.0.clone())
-                            .color(rc.color_scheme.normal_text)
-                            .text_style(egui::TextStyle::Monospace),
-                    )
-                    .selectable(false),
-                );
-            });
+            let response = egui::Frame::new()
+                .fill(egui::Color32::RED)
+                .show(ui, |ui| {
+                    ui.add(egui::Label::new(
+                        egui::RichText::new(" ! ".to_owned()).color(egui::Color32::WHITE),
+                    ))
+                })
+                .response;
+
+            if response.hovered() {
+                egui::Area::new(ui.id().with("example_popup"))
+                    .fixed_pos(response.rect.left_bottom())
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.set_max_width(200.0);
+                            ui.heading("Diagnostic");
+                            ui.label(d.0.clone())
+                        })
+                    });
+            }
         }
 
         expr.label.diagnostics.0.set(ds);
