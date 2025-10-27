@@ -8,8 +8,8 @@ use crate::{
 };
 use lazy_static::lazy_static;
 use map_macro::hash_map;
-use std::cell::Cell;
 use std::collections::HashMap;
+use std::{cell::Cell, fmt::Display};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 // this is like Type but with less information
@@ -49,6 +49,17 @@ impl<'a> Type<'a> {
             Type::Num => Num,
             Type::Var => Var,
             Type::Proof(_) => Proof,
+        }
+    }
+}
+
+impl<'a> Display for Type<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Prop => write!(f, "Prop"),
+            Type::Num => write!(f, "Num"),
+            Type::Var => write!(f, "Var"),
+            Type::Proof(p) => write!(f, "Proof({p})"),
         }
     }
 }
@@ -275,7 +286,7 @@ fn check_pos_arg(
         .collect::<Vec<_>>();
     match without_newlines.as_slice() {
         [] => {
-            pos_arg.add_diagnostic(Diagnostic("hole".to_owned()));
+            pos_arg.add_diagnostic(Diagnostic(format!("hole of sort {expected_type}")));
         }
         [kid] => {
             check_type_helper(success, ctx, expected_type, kid);

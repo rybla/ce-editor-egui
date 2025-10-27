@@ -631,7 +631,6 @@ impl<ES: EditorSpec> EditorState<ES> {
                     |ui| {
                         ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                         ui.set_row_height(ui.text_style_height(&egui::TextStyle::Body));
-                        ui.set_min_height(400.0);
 
                         let mut actions = vec![];
                         render_expr::<ES>(
@@ -983,15 +982,27 @@ pub fn render_expr<ES: EditorSpec>(
                 })
                 .response;
 
-            if response.hovered() {
+            if response.hovered()
+                || match rc.handle {
+                    Handle::Point(p) => &p.path == path,
+                    _ => false,
+                }
+            {
                 egui::Area::new(ui.id().with("example_popup"))
-                    .fixed_pos(response.rect.left_bottom())
+                    .pivot(egui::Align2::LEFT_BOTTOM)
+                    .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
                     .show(ui.ctx(), |ui| {
-                        egui::Frame::popup(ui.style()).show(ui, |ui| {
-                            ui.set_max_width(200.0);
-                            ui.heading("Diagnostic");
-                            ui.label(d.0.clone())
-                        })
+                        egui::Frame::popup(ui.style())
+                            .shadow(egui::Shadow::NONE)
+                            .show(ui, |ui| {
+                                ui.set_max_width(200.0);
+                                ui.add(egui::Label::new(
+                                    egui::RichText::new("Diagnostic".to_owned())
+                                        .underline()
+                                        .size(10.0),
+                                ));
+                                ui.label(d.0.clone())
+                            })
                     });
             }
         }
