@@ -972,7 +972,7 @@ pub fn render_expr<ES: EditorSpec>(
     {
         let ds = expr.label.diagnostics.0.take();
 
-        for d in &ds {
+        for (i, d) in ds.iter().enumerate() {
             let response = egui::Frame::new()
                 .fill(egui::Color32::RED)
                 .show(ui, |ui| {
@@ -988,7 +988,7 @@ pub fn render_expr<ES: EditorSpec>(
                     _ => false,
                 }
             {
-                egui::Area::new(ui.id().with("example_popup"))
+                egui::Area::new(ui.id().with(i))
                     .pivot(egui::Align2::LEFT_BOTTOM)
                     .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
                     .show(ui.ctx(), |ui| {
