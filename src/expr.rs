@@ -1397,8 +1397,12 @@ impl<L: Display> Display for Fragment<L> {
 impl<L: Debug + Display> Fragment<L> {
     pub fn to_ref(&self) -> FragmentRef<'_, L> {
         match self {
-            Fragment::Span(span) => FragmentRef::Span(&span.0),
-            Fragment::Zipper(zipper) => FragmentRef::Zipper(zipper),
+            Fragment::Span(span) => FragmentRef::Span(span.to_ref()),
+            Fragment::Zipper(zipper) => FragmentRef::Zipper(ZipperRef {
+                span_ol: zipper.span_ol.to_ref(),
+                span_or: zipper.span_or.to_ref(),
+                middle: zipper.middle.to_ref(),
+            }),
         }
     }
 
@@ -1526,6 +1530,10 @@ impl<L: Debug + Display> Span<L> {
     pub fn concat(mut self, mut other: Self) -> Self {
         self.0.append(&mut other.0);
         self
+    }
+
+    fn to_ref(&self) -> SpanRef<'_, L> {
+        self.0.as_slice()
     }
 }
 
@@ -1747,6 +1755,10 @@ impl<L: Debug + Display> Context<L> {
     fn inner_path(&self) -> Path {
         Path(self.0.iter().map(|th| th.inner_step()).collect())
     }
+
+    fn to_ref(&self) -> ContextRef<'_, L> {
+        ContextRef(self.0.iter().map(|th| th.to_ref()).collect())
+    }
 }
 
 /// A tooth of an [Expr] around a [Step].
@@ -1797,6 +1809,14 @@ impl<L: Debug + Display> Tooth<L> {
 
     fn inner_step(&self) -> Step {
         Step(0).add_offset(&self.span_l.offset())
+    }
+
+    fn to_ref(&self) -> ToothRef<'_, L> {
+        ToothRef {
+            label: &self.label,
+            span_l: self.span_l.to_ref(),
+            span_r: self.span_r.to_ref(),
+        }
     }
 }
 
