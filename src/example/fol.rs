@@ -100,7 +100,7 @@ macro_rules! rule {
             infix: true
         }
     };
-    ( $sort: expr, LIT ) => {
+    ( $sort: expr, LITERAL ) => {
         Rule {
             sort: $sort,
             kids: LiteralKid,
@@ -134,7 +134,7 @@ macro_rules! string_hash_map {
 lazy_static! {
     static ref GRAMMAR: HashMap<String, Rule> = string_hash_map! {
         // Prop
-        "var" => rule![Prop, LIT], // this one is wierd
+        "var" => rule![Prop, LITERAL],
         "<" => rule![Prop, [Num, Num], infix],
         ">" => rule![Prop, [Num, Num], infix],
         ">=" => rule![Prop, [Num, Num], infix],
@@ -371,12 +371,9 @@ fn check_type_helper<'a>(
     // check kid sorts
     match (expr.pat_literal(), expected_type) {
         (("var", [x]), _) => {
-            let x = match x.pat_pos_arg() {
-                [x] => match x.pat_literal() {
-                    (x, []) => x,
-                    _ => panic!("the first child of var should be a literal"),
-                },
-                _ => panic!("the first child of var should be a literal wrapped in a PosArg"),
+            let x = match x.pat_literal() {
+                (x, []) => x,
+                _ => panic!("the first child of var should be a literal"),
             };
             if !ctx.contains_key(x) {
                 add_error(Diagnostic("mal-scoped var".to_owned()));
@@ -387,15 +384,12 @@ fn check_type_helper<'a>(
                 let mut ctx = ctx;
                 match x0.pat_pos_arg() {
                     [x] => match x.pat_literal() {
-                        ("var", [x]) => match x.pat_pos_arg() {
-                            [x] => match x.pat_literal() {
-                                (x, []) => {
-                                    ctx.insert(x.to_owned(), Type::Num);
-                                    ctx
-                                }
-                                _ => panic!("TODO"),
-                            },
-                            _ => ctx,
+                        ("var", [x]) => match x.pat_literal() {
+                            (x, []) => {
+                                ctx.insert(x.to_owned(), Type::Num);
+                                ctx
+                            }
+                            _ => panic!("TODO"),
                         },
                         _ => ctx,
                     },
@@ -481,10 +475,7 @@ impl EditorSpec for Fol {
                         state.handle,
                         Fragment::Span(Span(vec![GenEditorExpr::new_lit(
                             "var".to_owned(),
-                            vec![GenEditorExpr::new_pos_arg(vec![GenEditorExpr::new_lit(
-                                query.to_owned(),
-                                vec![],
-                            )])],
+                            vec![GenEditorExpr::new_lit(query.to_owned(), vec![])],
                         )])),
                     );
                     Some(state)
