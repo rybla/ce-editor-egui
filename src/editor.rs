@@ -1,4 +1,4 @@
-use crate::{expr::*, utility::is_single_char};
+use crate::{ex, expr::*, span, utility::is_single_char};
 use egui;
 use lazy_static::lazy_static;
 use log::trace;
@@ -333,6 +333,22 @@ impl<ES: EditorSpec> EditorState<ES> {
         }
     }
 
+    pub fn do_edit(&mut self, edit: &Edit, query: &String) {
+        let opt_core = (edit)(
+            query,
+            DiagCoreState {
+                expr: self.core.expr.to_diag(),
+                handle: self.core.handle.clone(),
+                clipboard: self.core.clipboard.clone(),
+            },
+        );
+        if let Some(core) = opt_core {
+            self.do_action(Action::SetCore(core));
+        } else {
+            trace!(target: "editor.edit", "edit failed");
+        }
+    }
+
     pub fn update(&mut self, ctx: &egui::Context) {
         trace!(target: "editor.update", "update");
 
@@ -380,6 +396,10 @@ impl<ES: EditorSpec> EditorState<ES> {
                 .unwrap_or(false)
             {
                 if let Some(option) = menu.focus_option() {
+                    // NOTE: this should be the same as
+                    // self.do_edit(&option.edit, &menu.query), but
+                    // unfortunately ownership prevents me from calling
+                    // self.do_edit since that borrows self as mutable
                     let opt_core = (option.edit)(
                         &menu.query,
                         DiagCoreState {
@@ -456,21 +476,18 @@ impl<ES: EditorSpec> EditorState<ES> {
             .unwrap_or(false)
         {
             // // let mut core = self.core;
-            // let mut root = self.core.expr.map(&mut |x| GenEditorLabel {
-            //     constructor: x.constructor.clone(),
-            //     diagnostics: x.diagnostics.0.,
-            // });
-
-            // let h = core.expr.insert_fragment(
-            //     core.handle,
+            // let mut root = self.core.expr.map(&mut |l| l.to_diag());
+            // let h = self.core.expr.insert_fragment(
+            //     self.core.handle,
             //     Fragment::Span(span![ex![
-            //         EditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
+            //         GenEditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
             //         []
             //     ]]),
             // );
-            // core.handle = h;
+            // self.core.handle = h;
             // self.do_action(Action::SetCore(core));
-            todo!()
+
+            todo!("self.do_edit(&insert_newline, &String::new())");
         }
         // rotate focus
         else if key_and_mods.map(|(_, m)| m.command).unwrap_or(false)
@@ -624,38 +641,35 @@ impl<ES: EditorSpec> EditorState<ES> {
     pub fn do_action(&mut self, action: Action) {
         match action {
             Action::Redo => {
-                // if let Some(core) = self.future.pop() {
-                //     self.history.push(self.core.clone());
-                //     self.menu = None;
-                //     self.core = core;
-                // }
-                todo!()
+                if let Some(core) = self.future.pop() {
+                    self.history.push(self.core.to_plain());
+                    self.menu = None;
+                    self.core = core.to_diag();
+                }
             }
             Action::Undo => {
-                // if let Some(core) = self.history.pop() {
-                //     self.future.push(self.core.clone());
-                //     self.menu = None;
-                //     self.core = core;
-                // }
-                todo!()
+                if let Some(core) = self.history.pop() {
+                    self.future.push(self.core.to_plain());
+                    self.menu = None;
+                    self.core = core.to_diag();
+                }
             }
             Action::Copy => {
                 if let Some(frag) = self.core.expr.get_fragment(&self.core.handle) {
+                    let clipboard = Some(frag.map_to_owned(&mut |l| l.to_plain()));
                     self.snapshot();
-                    // self.core.clipboard = Some(frag.to_owned());
-                    todo!(
-                        "Actually, we want to do a map over the fragment to zero out the diagnostics first before putting it in the clipboard."
-                    )
+                    self.core.clipboard = clipboard;
                 }
             }
             Action::Paste => {
                 if let Some(frag) = &self.core.clipboard {
+                    let frag = frag.to_ref().map_to_owned(&mut |l| l.to_diag());
                     self.snapshot();
                     self.menu = None;
                     let handle = self
-                                .core
-                                .expr
-                                .insert_fragment(self.core.handle.clone(), todo!("Here we want to map over the fragment to fill default diagnostics first. "));
+                        .core
+                        .expr
+                        .insert_fragment(self.core.handle.clone(), frag);
                     self.core.handle = handle;
                 }
             }
@@ -686,7 +700,9 @@ impl<ES: EditorSpec> EditorState<ES> {
                 self.menu = None;
                 self.core = core;
             }
-            Action::SetDragOrigin(handle) => todo!(),
+            Action::SetDragOrigin(handle) => {
+                self.drag_origin = handle;
+            }
         }
     }
 
@@ -758,7 +774,7 @@ pub fn render_point<ES: EditorSpec>(
                         snapshot: false,
                     }));
                     rc.actions
-                        .push(Action::SetDragOrigin(Handle::Point(p.clone())));
+                        .push(Action::SetDragOrigin(Some(Handle::Point(p.clone()))));
                 } else if let Some(drag_origin) = rc.drag_origin
                     && let Some(pointer_pos) = ctx.pointer_latest_pos()
                     && label.rect.contains(pointer_pos)
@@ -1175,19 +1191,43 @@ impl<D> CoreState<D> {
             clipboard: None,
         }
     }
+
+    pub fn into_diag(self) -> DiagCoreState {
+        CoreState {
+            expr: self.expr.into_diag(),
+            handle: self.handle,
+            clipboard: self.clipboard,
+        }
+    }
+
+    pub fn to_diag(&self) -> DiagCoreState {
+        CoreState {
+            expr: self.expr.to_diag(),
+            handle: self.handle.clone(),
+            clipboard: self.clipboard.clone(),
+        }
+    }
+
+    pub fn into_plain(self) -> PlainCoreState {
+        CoreState {
+            expr: self.expr.into_plain(),
+            handle: self.handle,
+            clipboard: self.clipboard,
+        }
+    }
+
+    pub fn to_plain(&self) -> PlainCoreState {
+        CoreState {
+            expr: self.expr.to_plain(),
+            handle: self.handle.clone(),
+            clipboard: self.clipboard.clone(),
+        }
+    }
 }
 
 pub type DiagCoreState = CoreState<MutDiagnostics>;
 
-impl DiagCoreState {}
-
 pub type PlainCoreState = CoreState<()>;
-
-impl PlainCoreState {
-    pub fn into_diag(self) -> DiagCoreState {
-        todo!()
-    }
-}
 
 pub struct EditMenu {
     pub query: String,
@@ -1502,7 +1542,7 @@ pub enum Action {
     Delete,
     SetCore(DiagCoreState),
     SetHandle(SetHandle),
-    SetDragOrigin(Handle),
+    SetDragOrigin(Option<Handle>),
     Undo,
     Redo,
 }
@@ -1510,4 +1550,16 @@ pub enum Action {
 pub struct SetHandle {
     pub handle: Handle,
     pub snapshot: bool,
+}
+
+fn insert_newline(_query: &String, mut state: DiagCoreState) -> Option<DiagCoreState> {
+    let h = state.expr.insert_fragment(
+        state.handle,
+        Fragment::Span(span![ex![
+            GenEditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
+            []
+        ]]),
+    );
+    state.handle = h;
+    Some(state)
 }

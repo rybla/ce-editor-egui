@@ -563,7 +563,7 @@ impl Handle {
                         && let p_ir = &target
                         && let Some(path_m) = p_or.path.diff(&p_ir.path)
                         && let Some(s) = path_m.0.first()
-                        && s.is_left_of_index(&p_or.i)
+                        && s.is_left_of_index(p_or.i)
                     {
                         trace!(target: "expr.drag", "drag from outer right to inner right");
                         let path_o = p_or.path.clone();
@@ -774,7 +774,7 @@ impl SpanHandle {
             .diff(&p.path)
             .map(|suffix| match suffix.0.first() {
                 None => self.i_l.is_left_of_index(&p.i) && p.i.is_left_of_index(&self.i_r),
-                Some(s0) => self.i_l.is_left_of_step(s0) && s0.is_left_of_index(&self.i_r),
+                Some(s0) => self.i_l.is_left_of_step(*s0) && s0.is_left_of_index(self.i_r),
             })
             .unwrap_or(false)
     }
@@ -783,7 +783,7 @@ impl SpanHandle {
         self.path
             .diff(path)
             .and_then(|suffix| suffix.0.first().copied())
-            .map(|s0| self.i_l.is_left_of_step(&s0) && s0.is_left_of_index(&self.i_r))
+            .map(|s0| self.i_l.is_left_of_step(s0) && s0.is_left_of_index(self.i_r))
             .unwrap_or(false)
     }
 
@@ -956,7 +956,8 @@ impl ZipperHandle {
     }
 
     pub fn first_middle_step(&self) -> Step {
-        self.path_m
+        *self
+            .path_m
             .0
             .first()
             .unwrap_or_else(|| panic!("zipper handle middle path should not be empty"))
@@ -1394,6 +1395,13 @@ impl<L: Display> Display for Fragment<L> {
 }
 
 impl<L: Debug + Display> Fragment<L> {
+    pub fn to_ref(&self) -> FragmentRef<'_, L> {
+        match self {
+            Fragment::Span(span) => FragmentRef::Span(&span.0),
+            Fragment::Zipper(zipper) => FragmentRef::Zipper(zipper),
+        }
+    }
+
     fn norm(self) -> Self {
         match self {
             Self::Zipper(zipper)
@@ -1606,6 +1614,18 @@ impl<'a, L> FragmentRef<'a, L> {
             FragmentRef::Zipper(zipper) => Fragment::Zipper(zipper.to_owned()),
         }
     }
+
+    pub fn map_to_owned<L2, F>(&self, f: &mut F) -> Fragment<L2>
+    where
+        F: FnMut(&L) -> L2,
+    {
+        match self {
+            FragmentRef::Span(span) => {
+                Fragment::Span(Span(span.iter().map(|e| e.map(f)).collect()))
+            }
+            FragmentRef::Zipper(zipper) => Fragment::Zipper(zipper.map_to_owned(f)),
+        }
+    }
 }
 
 pub struct ToothRef<'a, L> {
@@ -1623,6 +1643,17 @@ impl<'a, L> ToothRef<'a, L> {
             label: self.label.clone(),
             span_l: Span(self.span_l.to_vec()),
             span_r: Span(self.span_r.to_vec()),
+        }
+    }
+
+    fn map_to_owned<L2, F>(&self, f: &mut F) -> Tooth<L2>
+    where
+        F: FnMut(&L) -> L2,
+    {
+        Tooth {
+            label: f(self.label),
+            span_l: Span(self.span_l.iter().map(|e| e.map(f)).collect()),
+            span_r: Span(self.span_r.iter().map(|e| e.map(f)).collect()),
         }
     }
 }
@@ -1653,6 +1684,17 @@ impl<'a, L> ZipperRef<'a, L> {
             span_ol: Span(self.span_ol.to_vec()),
             span_or: Span(self.span_or.to_vec()),
             middle: Context(self.middle.0.iter().map(|th| th.to_owned()).collect()),
+        }
+    }
+
+    pub fn map_to_owned<L2, F>(&self, f: &mut F) -> Zipper<L2>
+    where
+        F: FnMut(&L) -> L2,
+    {
+        Zipper {
+            span_ol: Span(self.span_ol.iter().map(|e| e.map(f)).collect()),
+            span_or: Span(self.span_or.iter().map(|e| e.map(f)).collect()),
+            middle: Context(self.middle.0.iter().map(|th| th.map_to_owned(f)).collect()),
         }
     }
 }
