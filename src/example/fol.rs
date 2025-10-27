@@ -25,9 +25,7 @@ use Sort::{Num, Proof, Prop, Var};
 impl Sort {
     pub fn to_type(&self) -> Type<'_> {
         match self {
-            Proof => {
-                panic!("this shouldn't be able to happen, can't recover details of sort to type")
-            }
+            Proof => panic!("can't convert a Proof to a Type"),
             Prop => Type::Prop,
             Num => Type::Num,
             Var => Type::Var,
@@ -277,13 +275,13 @@ fn check_pos_arg(
         .collect::<Vec<_>>();
     match without_newlines.as_slice() {
         [] => {
-            pos_arg.add_diagnostic(Diagnostic("this expression is a hole fyi".to_owned()));
+            pos_arg.add_diagnostic(Diagnostic("hole".to_owned()));
         }
         [kid] => {
             check_type_helper(success, ctx, expected_type, kid);
         }
         _kids => {
-            pos_arg.add_diagnostic(Diagnostic("too many expressions".to_owned()));
+            pos_arg.add_diagnostic(Diagnostic("too many kids".to_owned()));
             *success = false;
         }
     }
@@ -324,7 +322,11 @@ fn check_type_helper<'a>(
 
     let lit = match &expr.label.constructor {
         Constructor::Literal(lit) => lit,
-        _ => panic!("check_type_helper should only every be called on Literal constructors"),
+        c => {
+            panic!(
+                "check_type_helper should only every be called on Literal constructors, instead of {c}"
+            )
+        }
     };
 
     // call this function to add error annotation, also sets the success flag
@@ -373,7 +375,7 @@ fn check_type_helper<'a>(
         (("var", [x]), _) => {
             let x = match x.pat_literal() {
                 (x, []) => x,
-                _ => panic!("the first child of var should be a literal"),
+                _ => panic!("first child of Var should be Literal"),
             };
             if !ctx.contains_key(x) {
                 add_error(Diagnostic("mal-scoped var".to_owned()));
@@ -389,7 +391,7 @@ fn check_type_helper<'a>(
                                 ctx.insert(x.to_owned(), Type::Num);
                                 ctx
                             }
-                            _ => panic!("TODO"),
+                            _ => panic!("first child of Var should be Literal"),
                         },
                         _ => ctx,
                     },
@@ -513,7 +515,7 @@ impl EditorSpec for Fol {
                 match &e.label.constructor {
                     Constructor::Literal(_) => {
                         let sort = get_rule(&e.label.constructor)
-                            .unwrap_or_else(|| panic!("no rule for {} ", e.label.constructor));
+                            .unwrap_or_else(|| panic!("no rule for {}", e.label.constructor));
                         matches!(&sort.kids, FreeArity(_))
                     }
                     Constructor::Newline => false,
