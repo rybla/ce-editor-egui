@@ -276,7 +276,7 @@ fn check_pos_arg(
     pos_arg: &DiagExpr,
 ) {
     pos_arg.clear_diagnostics();
-    // todo!("this needs to filter out newlines");
+    // TODO: this needs to filter out newlines
     let without_newlines = pos_arg
         .pat_pos_arg()
         .iter()
