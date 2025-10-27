@@ -1325,7 +1325,7 @@ impl<L: Debug + Display> Expr<L> {
         }
     }
 
-    pub fn at_kid(&self, s: Step) -> (ToothRef<'_, L>, &Expr<L>) {
+    pub fn at_kid(&self, s: Step) -> (ToothRef<'_, L>, &Self) {
         (
             ToothRef {
                 label: &self.label,
@@ -1340,7 +1340,7 @@ impl<L: Debug + Display> Expr<L> {
         )
     }
 
-    pub fn get_subexpr(&self, path: &Path) -> &Expr<L> {
+    pub fn get_subexpr(&self, path: &Path) -> &Self {
         let mut e = self;
         for s in &path.0 {
             e = e.at_kid(*s).1;
@@ -1348,7 +1348,7 @@ impl<L: Debug + Display> Expr<L> {
         e
     }
 
-    pub fn at_subexpr(&self, path: &Path) -> (ContextRef<'_, L>, &Expr<L>) {
+    pub fn at_subexpr(&self, path: &Path) -> (ContextRef<'_, L>, &Self) {
         let mut ths = vec![];
         let mut e = self;
         for s in &path.0 {
@@ -1397,8 +1397,8 @@ impl<L: Display> Display for Fragment<L> {
 impl<L: Debug + Display> Fragment<L> {
     pub fn to_ref(&self) -> FragmentRef<'_, L> {
         match self {
-            Fragment::Span(span) => FragmentRef::Span(span.to_ref()),
-            Fragment::Zipper(zipper) => FragmentRef::Zipper(ZipperRef {
+            Self::Span(span) => FragmentRef::Span(span.to_ref()),
+            Self::Zipper(zipper) => FragmentRef::Zipper(ZipperRef {
                 span_ol: zipper.span_ol.to_ref(),
                 span_or: zipper.span_or.to_ref(),
                 middle: zipper.middle.to_ref(),

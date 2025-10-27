@@ -161,6 +161,32 @@ macro_rules! editor_ex {
 }
 
 impl<D> GenEditorExpr<D> {
+    pub fn new_pos_arg(kids: Vec<Self>) -> Self
+    where
+        D: Default,
+    {
+        Self {
+            label: GenEditorLabel {
+                constructor: Constructor::PosArg,
+                diagnostics: Default::default(),
+            },
+            kids: Span(kids),
+        }
+    }
+
+    pub fn new_lit(lit: String, kids: Vec<Self>) -> Self
+    where
+        D: Default,
+    {
+        Self {
+            label: GenEditorLabel {
+                constructor: Constructor::Literal(lit),
+                diagnostics: Default::default(),
+            },
+            kids: Span(kids),
+        }
+    }
+
     pub fn pat_pos_arg(&self) -> &[Self] {
         match self.label.constructor {
             Constructor::PosArg => self.kids.0.as_slice(),
@@ -238,8 +264,8 @@ pub type PlainFragment = Fragment<GenEditorLabel<()>>;
 impl DiagFragment {
     pub fn into_plain(self) -> PlainFragment {
         match self {
-            Fragment::Span(span) => Fragment::Span(span.into_plain()),
-            Fragment::Zipper(zipper) => Fragment::Zipper(zipper.into_plain()),
+            Self::Span(span) => Fragment::Span(span.into_plain()),
+            Self::Zipper(zipper) => Fragment::Zipper(zipper.into_plain()),
         }
     }
 }
@@ -292,8 +318,8 @@ pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub spec: PhantomData<ES>,
     pub core: CoreState<MutDiagnostics>,
     pub menu: Option<EditMenu>,
-    pub history: Vec<CoreState<()>>,
-    pub future: Vec<CoreState<()>>,
+    pub history: Vec<PlainCoreState>,
+    pub future: Vec<PlainCoreState>,
     pub drag_origin: Option<Handle>,
 }
 
@@ -333,7 +359,11 @@ impl<ES: EditorSpec> EditorState<ES> {
         }
     }
 
-    pub fn do_edit(&mut self, edit: &Edit, query: &String) {
+    pub fn do_edit(
+        &mut self,
+        edit: impl Fn(&str, DiagCoreState) -> Option<DiagCoreState>,
+        query: &str,
+    ) {
         let opt_core = (edit)(
             query,
             DiagCoreState {
@@ -475,19 +505,7 @@ impl<ES: EditorSpec> EditorState<ES> {
             .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Enter)
             .unwrap_or(false)
         {
-            // // let mut core = self.core;
-            // let mut root = self.core.expr.map(&mut |l| l.to_diag());
-            // let h = self.core.expr.insert_fragment(
-            //     self.core.handle,
-            //     Fragment::Span(span![ex![
-            //         GenEditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
-            //         []
-            //     ]]),
-            // );
-            // self.core.handle = h;
-            // self.do_action(Action::SetCore(core));
-
-            todo!("self.do_edit(&insert_newline, &String::new())");
+            self.do_edit(insert_newline, "");
         }
         // rotate focus
         else if key_and_mods.map(|(_, m)| m.command).unwrap_or(false)
@@ -713,6 +731,7 @@ impl<ES: EditorSpec> EditorState<ES> {
     }
 }
 
+#[expect(clippy::needless_pass_by_value)]
 pub fn render_point<ES: EditorSpec>(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
@@ -780,7 +799,7 @@ pub fn render_point<ES: EditorSpec>(
                     && label.rect.contains(pointer_pos)
                 {
                     trace!(target: "editor.drag", "drag hover at point: p = {p}");
-                    if let Some(h) = drag_origin.clone().drag(&rc.root, p) {
+                    if let Some(h) = drag_origin.clone().drag(rc.root, p) {
                         rc.actions.push(Action::SetHandle(SetHandle {
                             handle: h.clone(),
                             snapshot: false,
@@ -1011,7 +1030,7 @@ pub fn render_expr_contents<ES: EditorSpec>(
 
     match &expr.label.constructor {
         Constructor::Literal(literal) => {
-            ES::assemble_rendered_expr(ctx, ui, rc, path, expr, render_steps_and_kids, literal)
+            ES::assemble_rendered_expr(ctx, ui, rc, path, expr, render_steps_and_kids, literal);
         }
         Constructor::Root => {
             let RenderContext {
@@ -1311,6 +1330,8 @@ impl EditMenu {
     }
 }
 
+pub type Edit = fn(&str, DiagCoreState) -> Option<DiagCoreState>;
+
 #[derive(Debug, Clone)]
 pub struct EditMenuOption {
     pub pattern: EditMenuPattern,
@@ -1332,7 +1353,7 @@ impl EditMenuOption {
 #[derive(Debug, Clone)]
 pub enum EditMenuPattern {
     Static(String),
-    Dynamic(String, fn(&String) -> Option<String>),
+    Dynamic(String, fn(&str) -> Option<String>),
 }
 
 impl EditMenuPattern {
@@ -1342,8 +1363,6 @@ impl EditMenuPattern {
         }
     }
 }
-
-pub type Edit = fn(&String, DiagCoreState) -> Option<DiagCoreState>;
 
 #[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum Constructor {
@@ -1402,7 +1421,7 @@ pub struct AssembleRenderExprArgs {}
 pub trait EditorSpec: 'static {
     fn name() -> String;
 
-    fn initial_state() -> CoreState<()>;
+    fn initial_state() -> PlainCoreState;
 
     fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption>;
 
@@ -1459,7 +1478,6 @@ pub trait EditorSpec: 'static {
         b_general() && b_specialized()
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn assemble_rendered_expr(
         ctx: &egui::Context,
         ui: &mut egui::Ui,
@@ -1552,7 +1570,7 @@ pub struct SetHandle {
     pub snapshot: bool,
 }
 
-fn insert_newline(_query: &String, mut state: DiagCoreState) -> Option<DiagCoreState> {
+pub fn insert_newline(_query: &str, mut state: DiagCoreState) -> Option<DiagCoreState> {
     let h = state.expr.insert_fragment(
         state.handle,
         Fragment::Span(span![ex![

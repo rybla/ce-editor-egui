@@ -35,6 +35,7 @@ impl Sort {
     }
 }
 
+#[expect(dead_code)] // until we actually construct Proof
 #[derive(Debug, Clone)]
 enum Type<'a> {
     Prop,
@@ -77,7 +78,6 @@ impl RuleKids {
     pub fn len(&self) -> Option<usize> {
         match self {
             FixedArity(sorts) => Some(sorts.len()),
-            FreeArity(_) => None,
             _ => None,
         }
     }
@@ -199,7 +199,7 @@ macro_rules! make_simple_edit_menu_option {
                     .get($name)
                     .unwrap_or_else(|| panic!("no rule for {}", $name));
 
-                let mut kids: Vec<Expr<EditorLabel>> = vec![];
+                let mut kids: Vec<DiagExpr> = vec![];
                 match &rule.kids {
                     FixedArity(sorts) => {
                         for _ in 0..sorts.len() {
@@ -216,17 +216,16 @@ macro_rules! make_simple_edit_menu_option {
                     LiteralKid => {} // TODO: put some diagnostic if not 1 kid
                 }
 
-                let tooth_into_first_kid =
-                    pop_front(&mut kids).map(|e| e.tooth_at_index(&Index(0)));
+                let tooth_into_first_kid = pop_front(&mut kids).map(|e| e.into_tooth(Index(0)));
 
-                let handle = state.expr.insert(
+                let handle = state.expr.insert_fragment(
                     state.handle,
                     Fragment::Zipper(Zipper {
                         span_ol: Span::empty(),
                         span_or: Span::empty(),
                         middle: Context(match tooth_into_first_kid {
                             None => vec![Tooth {
-                                label: EditorLabel::new(
+                                label: GenEditorLabel::new(
                                     Constructor::Literal($name.to_owned()),
                                     MutDiagnostics(Cell::new(vec![])),
                                 ),
@@ -235,7 +234,7 @@ macro_rules! make_simple_edit_menu_option {
                             }],
                             Some(tooth_into_first_kid) => vec![
                                 Tooth {
-                                    label: EditorLabel::new(
+                                    label: GenEditorLabel::new(
                                         Constructor::Literal($name.to_owned()),
                                         MutDiagnostics(Cell::new(vec![])),
                                     ),
@@ -450,12 +449,12 @@ impl EditorSpec for Fol {
         "fol".to_owned()
     }
 
-    fn initial_state() -> CoreState {
+    fn initial_state() -> PlainCoreState {
         CoreState::new(
             Expr::new(
-                DiagEditorLabel {
+                GenEditorLabel {
                     constructor: Constructor::Root,
-                    diagnostics: Default::default(),
+                    diagnostics: (),
                 },
                 Span::empty(),
             ),
@@ -477,36 +476,19 @@ impl EditorSpec for Fol {
                     if query.is_empty() || GRAMMAR.keys().any(|x| x == query) {
                         return None;
                     }
-                    Some(query.clone())
+                    Some(query.to_owned())
                 }),
-                edit: |query, state| {
-                    let mut state = state;
-                    //                     let handle = state.expr.insert(
-                    //                         state.handle,
-                    //                         Fragment::Span(Span(vec![Expr {
-                    // <<<<<<< Updated upstream
-                    //                             label: GenEditorLabel {
-                    //                                 constructor: Constructor::Literal("var".to_owned()),
-                    //                                 diagnostics: Diagnostics(Cell::new(vec![])),
-                    //                             },
-                    //                             kids: Span(vec![Expr {
-                    //                                 label: EditorLabel::new(
-                    //                                     Constructor::Literal(query.to_owned()),
-                    //                                     Diagnostics(Cell::new(vec![])),
-                    //                                 ),
-                    //                                 kids: Span::empty(),
-                    //                             }]),
-                    // =======
-                    //                             label: EditorLabel::new(
-                    //                                 Constructor::Literal(query.to_owned()),
-                    //                                 MutDiagnostics(Cell::new(vec![])),
-                    //                             ),
-                    //                             kids: Span::empty(),
-                    // >>>>>>> Stashed changes
-                    //                         }])),
-                    //                     );
-                    let handle = todo!();
-                    state.handle = handle;
+                edit: |query, mut state| {
+                    state.handle = state.expr.insert_fragment(
+                        state.handle,
+                        Fragment::Span(Span(vec![GenEditorExpr::new_lit(
+                            "var".to_owned(),
+                            vec![GenEditorExpr::new_pos_arg(vec![GenEditorExpr::new_lit(
+                                query.to_owned(),
+                                vec![],
+                            )])],
+                        )])),
+                    );
                     Some(state)
                 },
             },
@@ -535,14 +517,10 @@ impl EditorSpec for Fol {
         ]
     }
 
-    fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
-        Default::default()
-    }
-
     fn is_valid_handle_specialized(h: &Handle, root: &DiagExpr) -> bool {
         match h {
             Handle::Point(p) => {
-                let e = root.get_expr_old(&p.path);
+                let e = root.get_subexpr(&p.path);
                 match &e.label.constructor {
                     Constructor::Literal(_) => {
                         let sort = get_rule(&e.label.constructor)
@@ -615,12 +593,10 @@ impl EditorSpec for Fol {
         }
     }
 
-    // TODO, this is currently just copied from ce
     fn assemble_rendered_expr(
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        ren_ctx: &RenderContext,
-        state: &mut EditorState<Self>,
+        rc: RenderContext<'_>,
         path: &Path,
         expr: &DiagExpr,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
@@ -630,7 +606,7 @@ impl EditorSpec for Fol {
         let rule = get_rule(&expr.label.constructor)
             .unwrap_or_else(|| panic!("no rule for {}", expr.label.constructor));
 
-        let selected = state.core.handle.contains_path(path);
+        let selected = rc.handle.contains_path(path);
         let fill_color = if selected {
             color_scheme.highlight_background
         } else {
@@ -676,10 +652,48 @@ impl EditorSpec for Fol {
             render_label(ui);
         }
 
+        let RenderContext {
+            handle,
+            root,
+            color_scheme: color_scheme_1,
+            drag_origin,
+            menu,
+            actions,
+            interactive,
+            indent_level,
+        } = rc;
         for (i, (step, kid)) in render_steps_and_kids.iter().enumerate() {
-            step.render(ctx, ui, ren_ctx, state);
+            step.render::<Self>(
+                ctx,
+                ui,
+                // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                RenderContext {
+                    handle,
+                    root,
+                    color_scheme: color_scheme_1,
+                    drag_origin,
+                    menu,
+                    actions,
+                    interactive,
+                    indent_level,
+                },
+            );
             if let Some(kid) = kid {
-                kid.render(ctx, ui, ren_ctx, state);
+                kid.render::<Self>(
+                    ctx,
+                    ui,
+                    // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
+                    RenderContext {
+                        handle,
+                        root,
+                        color_scheme: color_scheme_1,
+                        drag_origin,
+                        menu,
+                        actions,
+                        interactive,
+                        indent_level,
+                    },
+                );
             }
             if rule.infix && i == 0 {
                 render_label(ui);
