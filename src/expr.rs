@@ -106,7 +106,7 @@ pub struct Path(pub Vec<Step>);
 
 #[macro_export]
 macro_rules! path {
-    ( $( $step:expr ),* ) => {
+    ( $( $step:expr ),* $(,)? ) => {
         Path(vec![ $( Step($step) ),* ])
     };
 }
@@ -191,7 +191,7 @@ pub struct Point {
 
 #[macro_export]
 macro_rules! point {
-    ( [ $( $s:expr ),* ], $i:expr ) => {
+    ( [ $( $s:expr ),* $(,)? ], $i:expr ) => {
         Point {
             path: path![ $( $s ),* ],
             i: Index($i),
@@ -715,7 +715,7 @@ pub struct SpanHandle {
 
 #[macro_export]
 macro_rules! span_handle {
-    ([ $( $s:expr ),* ], $i_l:expr, $i_r:expr, $focus:expr) => {
+    ([ $( $s:expr ),* $(,)? ], $i_l:expr, $i_r:expr, $focus:expr) => {
         SpanHandle {
             path: path![ $( $s ),* ],
             i_l: Index($i_l),
@@ -856,7 +856,7 @@ pub struct ZipperHandle {
 
 #[macro_export]
 macro_rules! zipper_handle {
-    ( [ $( $s_o:expr ),* ] , $i_ol:expr, $i_or:expr, [ $( $s_m:expr ),* ], $i_il:expr, $i_ir:expr, $focus:expr) => {
+    ( [ $( $s_o:expr ),* $(,)? ] , $i_ol:expr, $i_or:expr, [ $( $s_m:expr ),* $(,)? ], $i_il:expr, $i_ir:expr, $focus:expr) => {
         ZipperHandle {
             path_o: path![ $( $s_o ),* ],
             i_ol: Index($i_ol),
@@ -1026,7 +1026,7 @@ pub struct Expr<L> {
 
 #[macro_export]
 macro_rules! ex {
-    ( $label:expr, [ $( $e:expr ),* ] ) => {
+    ( $label:expr, [ $( $e:expr ),* $(,)? ] ) => {
         Expr {
             label: $label,
             kids: Span(vec![ $( $e ),* ]),
@@ -1430,7 +1430,7 @@ pub struct Span<L>(pub Vec<Expr<L>>);
 
 #[macro_export]
 macro_rules! span {
-    ( $( $e:expr ),* ) => {
+    ( $( $e:expr ),* $(,)? ) => {
         Span(vec![$( $e ),*])
     };
 }
@@ -1551,7 +1551,7 @@ pub struct Zipper<L> {
 
 #[macro_export]
 macro_rules! zipper {
-    ([ $( $e_l:expr ),* ], [ $( $th:expr ),* ], [ $( $e_r:expr ),* ]) => {
+    ([ $( $e_l:expr ),* $(,)? ], [ $( $th:expr ),* $(,)? ], [ $( $e_r:expr ),* $(,)? ]) => {
         Zipper {
             span_ol: span![$( $e_l ),*],
             span_or: span![$( $e_r ),*],
@@ -1717,7 +1717,7 @@ pub struct Context<L>(pub Vec<Tooth<L>>);
 
 #[macro_export]
 macro_rules! context {
-    ( $( $th:expr ),* ) => {
+    ( $( $th:expr ),* $(,)? ) => {
         Context(vec![ $( $th ),* ])
     };
 }
@@ -1771,7 +1771,7 @@ pub struct Tooth<L> {
 
 #[macro_export]
 macro_rules! tooth {
-    ($label:expr, [ $( $e_l:expr ),* ], [ $( $e_r:expr ),* ]) => {
+    ($label:expr, [ $( $e_l:expr ),* $(,)? ], [ $( $e_r:expr ),* $(,)? ]) => {
         Tooth {
             label: $label,
             span_l: span![$( $e_l ),*],

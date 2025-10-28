@@ -158,7 +158,7 @@ impl PlainExpr {
 
 #[macro_export]
 macro_rules! editor_ex {
-    ( $label:expr, [ $( $e:expr ),* ] ) => {
+    ( $label:expr, [ $( $e:expr ),* $(,)? ] ) => {
         Expr {
             label: GenEditorLabel { constructor: Constructor::Literal($label.to_owned()), diagnostics: Default::default() },
             kids: Span(vec![ $( $e ),* ]),
