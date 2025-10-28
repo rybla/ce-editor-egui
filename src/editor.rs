@@ -24,6 +24,8 @@ pub struct ColorScheme {
     pub inactive_text: egui::Color32,
     pub inactive_background: egui::Color32,
     pub highlight_background: egui::Color32,
+    pub error_background: egui::Color32,
+    pub error_text: egui::Color32,
 }
 
 lazy_static! {
@@ -39,6 +41,8 @@ lazy_static! {
         inactive_text: egui::Color32::WHITE,
         inactive_background: egui::Color32::DARK_BLUE,
         highlight_background: egui::Color32::DARK_BLUE,
+        error_background: egui::Color32::RED,
+        error_text: egui::Color32::WHITE,
     };
     pub static ref light_color_scheme: ColorScheme = ColorScheme {
         accent_text: egui::Color32::RED,
@@ -52,6 +56,8 @@ lazy_static! {
         inactive_text: egui::Color32::WHITE,
         inactive_background: egui::Color32::LIGHT_BLUE,
         highlight_background: egui::Color32::LIGHT_BLUE,
+        error_background: egui::Color32::RED,
+        error_text: egui::Color32::WHITE,
     };
 }
 
@@ -962,33 +968,27 @@ pub fn render_expr<ES: EditorSpec>(
     path: &Path,
     expr: &DiagExpr,
 ) {
-    let selected = rc.handle.contains_path(path);
-    let fill_color = if selected {
-        rc.color_scheme.highlight_background
-    } else {
-        rc.color_scheme.normal_background
-    };
-
+    // render diagnostics
     {
         let ds = expr.label.diagnostics.0.take();
 
         for (i, d) in ds.iter().enumerate() {
+            let id = ui.id().with(i);
+
             let response = egui::Frame::new()
-                .fill(egui::Color32::RED)
+                .fill(rc.color_scheme.error_background)
                 .show(ui, |ui| {
-                    ui.add(egui::Label::new(
-                        egui::RichText::new(" ! ".to_owned()).color(egui::Color32::WHITE),
-                    ))
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(" ! ".to_owned()).color(rc.color_scheme.error_text),
+                        )
+                        .selectable(false),
+                    )
                 })
                 .response;
 
-            if response.hovered()
-                || match rc.handle {
-                    Handle::Point(p) => &p.path == path,
-                    _ => false,
-                }
-            {
-                egui::Area::new(ui.id().with(i))
+            if response.hovered() {
+                egui::Area::new(id)
                     .pivot(egui::Align2::LEFT_BOTTOM)
                     .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
                     .show(ui.ctx(), |ui| {
@@ -1149,12 +1149,13 @@ pub fn render_expr<ES: EditorSpec>(
             }
         }
         Constructor::PosArg => {
-            egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                ui.add(
-                    egui::Label::new(egui::RichText::new("[").color(rc.color_scheme.accent_text))
-                        .selectable(false),
-                );
-            });
+            egui::Frame::new()
+                .fill(rc.color_scheme.error_background)
+                .show(ui, |ui| {
+                    ui.add(egui::Label::new(
+                        egui::RichText::new("[".to_owned()).color(rc.color_scheme.error_text),
+                    ))
+                });
 
             let RenderContext {
                 handle,
@@ -1199,12 +1200,13 @@ pub fn render_expr<ES: EditorSpec>(
                 }
             }
 
-            egui::Frame::new().fill(fill_color).show(ui, |ui| {
-                ui.add(
-                    egui::Label::new(egui::RichText::new("]").color(rc.color_scheme.accent_text))
-                        .selectable(false),
-                );
-            });
+            egui::Frame::new()
+                .fill(rc.color_scheme.error_background)
+                .show(ui, |ui| {
+                    ui.add(egui::Label::new(
+                        egui::RichText::new("]".to_owned()).color(rc.color_scheme.error_text),
+                    ))
+                });
         }
     }
 }
