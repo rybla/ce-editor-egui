@@ -31,6 +31,7 @@ impl Sort {
             Prop => Type::Prop,
             Num => Type::Num,
             Var => Type::Var,
+            Declaration => Type::Declaration,
             _ => panic!("can't convert something to a Type"),
         }
     }
@@ -54,6 +55,8 @@ impl Type {
             Self::Num => Num,
             Self::Var => Var,
             Self::Proof(_) => Proof,
+            Self::Declaration => Declaration,
+            Self::Binding => Binding,
             _ => panic!("can't get_sort of this type: {self:?}"),
         }
     }
@@ -163,9 +166,9 @@ lazy_static! {
         // root
         "root" => rule![TopLevel, LIST Declaration],
         // Declaration
-        "lemma" => rule![Declaration, [Var, Prop, Proof]],
+        "lemma" => rule![Declaration, [Binding, Prop, Proof]],
         // Prop
-        "var" => rule![Prop, LITERAL],
+        "var" => rule![Num, LITERAL],
         "<" => rule![Prop, [Num, Num], infix],
         ">" => rule![Prop, [Num, Num], infix],
         ">=" => rule![Prop, [Num, Num], infix],
@@ -177,6 +180,8 @@ lazy_static! {
         "not" => rule![Prop, [Prop]],
         "forall" => rule![Prop, [Var, Prop]],
         "exists" => rule![Prop, [Var, Prop]],
+        "top" => rule![Prop, []],
+        "bot" => rule![Prop, []],
         // Binding
         "binding" => rule![Binding, LITERAL],
         // Num
@@ -355,69 +360,75 @@ fn check_type_helper(
     let expected_sort = expected_type.get_sort();
     // clean up the old annotation
     expr.clear_diagnostics();
-
-    let lit = match &expr.label.constructor {
-        Constructor::Literal(lit) => lit,
-        c => {
-            panic!(
-                "check_type_helper should only every be called on Literal constructors, instead of {c}"
-            )
-        }
-    };
-
-    // call this function to add error annotation, also sets the success flag
-    let mut add_error = |d: Diagnostic<<Fol as EditorSpec>::M>| {
-        expr.add_diagnostic(d);
-        *success = false;
-    };
-
-    // get the corresponding rule
-    let Rule {
-        sort: rule_sort,
-        kids: rule_kids,
-    } = match GRAMMAR.get(lit) {
-        None => {
-            add_error(Diagnostic::Diagnostic("foreign".to_owned()));
-            return;
-        }
-        Some(rule) => rule,
-    };
-
-    // check sort
-    if rule_sort != &expected_sort {
-        add_error(Diagnostic::Diagnostic(format!(
-            "expected {expected_sort:?}; actually {rule_sort:?}"
-        )));
-    }
-
-    // check arity
-    match rule_kids.len() {
-        Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
-            let expr_kids_len = expr.kids.0.len();
-            add_error(Diagnostic::Diagnostic(format!(
-                "expected {} kids; actually {} kids",
-                rule_kids
-                    .len()
-                    .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
-                expr_kids_len
-            )));
-        }
-        _ => {}
-    }
-
-    // check kid sorts
-
     if expr.label.constructor == Constructor::Root {
         for decl in &expr.kids.0 {
             check_type_helper(success, ctx.clone(), &Type::Declaration, decl);
         }
     } else {
+        let lit = match &expr.label.constructor {
+            Constructor::Literal(lit) => lit,
+            c => {
+                panic!(
+                    "check_type_helper should only every be called on Literal constructors, instead of {c}"
+                )
+            }
+        };
+
+        // call this function to add error annotation, also sets the success flag
+        let mut add_error = |d: Diagnostic<<Fol as EditorSpec>::M>| {
+            expr.add_diagnostic(d);
+            *success = false;
+        };
+
+        // get the corresponding rule
+        let Rule {
+            sort: rule_sort,
+            kids: rule_kids,
+        } = match GRAMMAR.get(lit) {
+            None => {
+                add_error(Diagnostic::Diagnostic("foreign".to_owned()));
+                return;
+            }
+            Some(rule) => rule,
+        };
+
+        // check sort
+        if rule_sort != &expected_sort {
+            add_error(Diagnostic::Diagnostic(format!(
+                "expected {expected_sort:?}; actually {rule_sort:?}"
+            )));
+        }
+
+        // check arity
+        match rule_kids.len() {
+            Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
+                let expr_kids_len = expr.kids.0.len();
+                add_error(Diagnostic::Diagnostic(format!(
+                    "expected {} kids; actually {} kids",
+                    rule_kids
+                        .len()
+                        .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
+                    expr_kids_len
+                )));
+            }
+            _ => {}
+        }
+
+        // check kid sorts
+
         match (expr.pat_literal(), expected_type) {
             (("lemma", [x, sig, imp]), _) => {
-                check_type_helper(success, ctx.clone(), &Type::Var, x);
-                check_type_helper(success, ctx.clone(), &Type::Prop, sig);
+                // TODO: this is redundant with the rules of Lemma in Grammar
+                check_pos_arg(success, ctx.clone(), &Type::Binding, x);
+                check_pos_arg(success, ctx.clone(), &Type::Prop, sig);
                 let sig = sig.to_plain();
-                check_type_helper(success, ctx, &Type::Proof(sig.clone()), imp);
+
+                if let Some(sig) = sig.kids.0.first() {
+                    println!("imp = {imp}");
+                    check_pos_arg(success, ctx, &Type::Proof(sig.clone()), imp);
+                } else {
+                    // TODO: put error that says need a sig first before checking imp
+                }
             }
             (("var", [x]), _) => {
                 let x = match x.pat_literal() {
@@ -433,7 +444,7 @@ fn check_type_helper(
                     let mut ctx = ctx;
                     match x0.pat_pos_arg() {
                         [x] => {
-                            check_type_helper(success, ctx.clone(), &Type::Var, x);
+                            check_pos_arg(success, ctx.clone(), &Type::Var, x);
                             match x.pat_literal() {
                                 ("var", [x]) => match x.pat_literal() {
                                     (x, []) => {
@@ -511,14 +522,16 @@ impl EditorSpec for Fol {
     }
 
     fn diagnose(state: &CoreState<MutDiagnostics<Self::M>>) {
-        for kid in &state.root.kids.0 {
-            let _success = check_type(hash_map! {}, &Type::Prop, kid);
-        }
+        // for kid in &state.root.kids.0 {
+        //     let _success = check_type(hash_map! {}, &Type::Prop, kid);
+        // }
 
         // for kid in &state.root.kids.0 {
         //     let _success = check_type(hash_map! {}, &Type::Declaration, kid);
         // }
-        // check_type(hash_map! {}, &Type::Declaration, &state.root);
+
+        // TODO: the &Type::Declaration is ignored here...
+        check_type(hash_map! {}, &Type::Declaration, &state.root);
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
@@ -541,6 +554,24 @@ impl EditorSpec for Fol {
                     Some(state)
                 },
             },
+            EditMenuOption {
+                pattern: EditMenuPattern::Dynamic("binding".to_owned(), |query| {
+                    if query.is_empty() || GRAMMAR.keys().any(|x| x == query) {
+                        return None;
+                    }
+                    Some(query.to_owned())
+                }),
+                edit: |query, mut state| {
+                    state.handle = state.root.insert_fragment(
+                        state.handle,
+                        Fragment::Span(Span(vec![GenEditorExpr::new_lit(
+                            "binding".to_owned(),
+                            vec![GenEditorExpr::new_lit(query.to_owned(), vec![])],
+                        )])),
+                    );
+                    Some(state)
+                },
+            },
             make_simple_edit_menu_option!["<"],
             make_simple_edit_menu_option![">"],
             make_simple_edit_menu_option![">="],
@@ -552,6 +583,8 @@ impl EditorSpec for Fol {
             make_simple_edit_menu_option!["not"],
             make_simple_edit_menu_option!["forall"],
             make_simple_edit_menu_option!["exists"],
+            make_simple_edit_menu_option!["top"],
+            make_simple_edit_menu_option!["bot"],
             make_simple_edit_menu_option!["+"],
             make_simple_edit_menu_option!["-"],
             make_simple_edit_menu_option!["*"],
@@ -563,6 +596,7 @@ impl EditorSpec for Fol {
             make_simple_edit_menu_option!["intro_and"],
             make_simple_edit_menu_option!["intro_top"],
             make_simple_edit_menu_option!["elim_bot"],
+            make_simple_edit_menu_option!["lemma"],
         ]
     }
 
