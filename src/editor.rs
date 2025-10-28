@@ -387,6 +387,7 @@ impl ModKey {
         self.mods.shift
     }
 
+    #[expect(dead_code)]
     pub fn alt(&self) -> bool {
         self.mods.alt
     }

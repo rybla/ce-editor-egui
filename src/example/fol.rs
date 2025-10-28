@@ -57,7 +57,6 @@ impl Type {
             Self::Proof(_) => Proof,
             Self::Declaration => Declaration,
             Self::Binding => Binding,
-            _ => panic!("can't get_sort of this type: {self:?}"),
         }
     }
 }
@@ -421,13 +420,10 @@ fn check_type_helper(
                 // TODO: this is redundant with the rules of Lemma in Grammar
                 check_pos_arg(success, ctx.clone(), &Type::Binding, x);
                 check_pos_arg(success, ctx.clone(), &Type::Prop, sig);
-                let sig = sig.to_plain();
-
-                if let Some(sig) = sig.kids.0.first() {
-                    println!("imp = {imp}");
+                if let Some(sig) = sig.to_plain().kids.0.first() {
                     check_pos_arg(success, ctx, &Type::Proof(sig.clone()), imp);
                 } else {
-                    // TODO: put error that says need a sig first before checking imp
+                    // don't check imp until a sig is provided
                 }
             }
             (("var", [x]), _) => {
@@ -439,7 +435,7 @@ fn check_type_helper(
                     add_error(Diagnostic::Diagnostic("mal-scoped var".to_owned()));
                 }
             }
-            (("forall" | "exists", [x0, p]), _) => {
+            (("forall" | "exists", [x0, a]), _) => {
                 let ctx = {
                     let mut ctx = ctx;
                     match x0.pat_pos_arg() {
@@ -459,14 +455,14 @@ fn check_type_helper(
                         _ => ctx,
                     }
                 };
-                check_pos_arg(success, ctx, &Type::Prop, p);
+                check_pos_arg(success, ctx, &Type::Prop, a);
             }
             // The proof step cases are handled here
             ((label, _), Type::Proof(prop)) => {
                 match ((label, expr.kids.0.as_slice()), prop.pat_literal()) {
                     (("intro_and", [a, b]), ("and", [p, q])) => {
-                        check_pos_arg(success, ctx.clone(), &Type::Proof(p.clone()), a);
-                        check_pos_arg(success, ctx.clone(), &Type::Proof(q.clone()), b);
+                        check_pos_arg(success, ctx.clone(), &Type::Proof(p.kids.0[0].clone()), a);
+                        check_pos_arg(success, ctx.clone(), &Type::Proof(q.kids.0[0].clone()), b);
                     }
                     (("intro_top", []), ("top", [])) => {}
                     (("elim_bot", [a]), _) => {
