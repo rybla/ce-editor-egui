@@ -160,7 +160,7 @@ impl PlainExpr {
 macro_rules! editor_ex {
     ( $label:expr, [ $( $e:expr ),* ] ) => {
         Expr {
-            label: GenEditorLabel { constructor: Constructor::Literal($label.to_owned()), diagnostics: () },
+            label: GenEditorLabel { constructor: Constructor::Literal($label.to_owned()), diagnostics: Default::default() },
             kids: Span(vec![ $( $e ),* ]),
         }
     };
@@ -1320,6 +1320,16 @@ impl<D> CoreState<D> {
 pub type DiagCoreState = CoreState<MutDiagnostics>;
 
 pub type PlainCoreState = CoreState<()>;
+
+impl Default for PlainCoreState {
+    fn default() -> Self {
+        Self {
+            root: Expr::new(GenEditorLabel::new(Constructor::Root, ()), Span::empty()),
+            handle: Default::default(),
+            clipboard: Default::default(),
+        }
+    }
+}
 
 pub struct EditMenu {
     pub query: String,
