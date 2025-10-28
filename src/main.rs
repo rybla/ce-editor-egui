@@ -2,8 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 // type ES = ce_editor_egui::example::ce::Ce;
-// type ES = ce_editor_egui::example::fol::Fol;
-type ES = ce_editor_egui::example::tic_tac_toe::Ttt;
+type ES = ce_editor_egui::example::fol::Fol;
+// type ES = ce_editor_egui::example::tic_tac_toe::Ttt;
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
