@@ -1,7 +1,7 @@
 use crate::{ex, expr::*, span, utility::is_single_char};
 use egui;
 use lazy_static::lazy_static;
-use log::trace;
+use log::{trace, warn};
 use nucleo_matcher::Matcher;
 use std::{
     cell::Cell,
@@ -354,6 +354,62 @@ impl<ES: EditorSpec + ?Sized> Default for EditorState<ES> {
     }
 }
 
+struct ModKey {
+    pub key: egui::Key,
+    pub mods: egui::Modifiers,
+}
+
+impl Display for ModKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}{}{}",
+            if self.mods.shift { "Shift " } else { "" },
+            if self.mods.alt { "Alt " } else { "" },
+            if self.command() { "Cmd " } else { "" },
+            self.key.symbol_or_name()
+        )
+    }
+}
+
+impl ModKey {
+    pub fn command(&self) -> bool {
+        self.mods.command || self.mods.mac_cmd || self.mods.ctrl
+    }
+
+    pub fn shift(&self) -> bool {
+        self.mods.shift
+    }
+
+    pub fn alt(&self) -> bool {
+        self.mods.alt
+    }
+
+    pub fn from_event(e: &egui::Event) -> Option<Self> {
+        if let egui::Event::Key {
+            key,
+            pressed: true,
+            modifiers,
+            ..
+        } = e
+        {
+            Some(Self {
+                key: *key,
+                mods: *modifiers,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+fn test_mod_key(opt_mod_key: &Option<ModKey>, f: impl Fn(&ModKey) -> bool) -> bool {
+    match opt_mod_key {
+        Some(mod_key) => f(mod_key),
+        None => false,
+    }
+}
+
 impl<ES: EditorSpec> EditorState<ES> {
     pub fn escape(&mut self) {
         if self.menu.is_some() {
@@ -395,29 +451,27 @@ impl<ES: EditorSpec> EditorState<ES> {
             self.drag_origin = None;
         }
 
-        let mut key_and_mods: Option<(egui::Key, egui::Modifiers)> = None;
+        let mut opt_mod_key: Option<ModKey> = None;
         ctx.input(|i| {
             for e in &i.events {
-                if let egui::Event::Key {
-                    key,
-                    pressed: true,
-                    modifiers,
-                    ..
-                } = e
-                {
-                    key_and_mods = Some((*key, *modifiers));
+                if let Some(mk) = ModKey::from_event(e) {
+                    opt_mod_key = Some(mk);
                 }
             }
+        });
+
+        trace!(target: "key", "{}", match &opt_mod_key {
+            Some(mod_key) => format!("{mod_key}"),
+            None => "None".to_owned(),
         });
 
         if false {
             // this is just a placeholder so the subsequent branches can all use `else if` syntax
         }
         // escape
-        else if key_and_mods
-            .map(|(k, m)| k == egui::Key::Escape && !m.command)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            !mk.command() && mk.key == egui::Key::Escape
+        }) {
             self.escape();
         }
         // when edit menu is open
@@ -425,14 +479,13 @@ impl<ES: EditorSpec> EditorState<ES> {
             if false {
             }
             // submit menu option
-            else if key_and_mods
-                .map(|(k, m)| {
-                    !m.command
-                        && !m.shift
-                        && (k == egui::Key::Tab || k == egui::Key::Enter || k == egui::Key::Space)
-                })
-                .unwrap_or(false)
-            {
+            else if test_mod_key(&opt_mod_key, |mk| {
+                !mk.command()
+                    && !mk.shift()
+                    && (mk.key == egui::Key::Tab
+                        || mk.key == egui::Key::Enter
+                        || mk.key == egui::Key::Space)
+            }) {
                 if let Some(option) = menu.focus_option() {
                     // NOTE: this should be the same as
                     // self.do_edit(&option.edit, &menu.query), but
@@ -465,66 +518,57 @@ impl<ES: EditorSpec> EditorState<ES> {
             }
         }
         // undo
-        else if key_and_mods
-            .map(|(k, m)| m.command && !m.shift && k == egui::Key::Z)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            mk.command() && !mk.shift() && mk.key == egui::Key::Z
+        }) {
             self.do_action(Action::Undo);
         }
         // redo
-        else if key_and_mods
-            .map(|(k, m)| m.command && m.shift && k == egui::Key::Z)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            mk.command() && mk.shift() && mk.key == egui::Key::Z
+        }) {
             self.do_action(Action::Redo);
         }
         // delete
-        else if key_and_mods
-            .map(|(k, m)| {
-                !m.command && !m.shift && (k == egui::Key::Delete || k == egui::Key::Backspace)
-            })
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            !mk.command()
+                && !mk.shift()
+                && (mk.key == egui::Key::Delete || mk.key == egui::Key::Backspace)
+        }) {
             self.do_action(Action::Delete);
         }
         // cut
-        else if key_and_mods
-            .map(|(k, m)| m.command && !m.shift && k == egui::Key::X)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            mk.command() && !mk.shift() && mk.key == egui::Key::X
+        }) {
             self.do_action(Action::Cut);
         }
         // copy
-        else if key_and_mods
-            .map(|(k, m)| m.command && !m.shift && k == egui::Key::C)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            mk.command() && !mk.shift() && mk.key == egui::Key::C
+        }) {
             self.do_action(Action::Copy);
         }
         // paste
-        else if key_and_mods
-            .map(|(k, m)| m.command && !m.shift && k == egui::Key::V)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            mk.command() && !mk.shift() && mk.key == egui::Key::V
+        }) {
             self.do_action(Action::Paste);
         }
         // newline
-        else if key_and_mods
-            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Enter)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            !mk.command() && !mk.shift() && mk.key == egui::Key::Enter
+        }) {
             self.do_edit(insert_newline, "");
         }
         // rotate focus
-        else if key_and_mods.map(|(_, m)| m.command).unwrap_or(false)
+        else if test_mod_key(&opt_mod_key, |mk| mk.command())
             && let Some(dir) = match_input_move_dir(ctx)
         {
             self.core.handle.rotate_focus_dir(&dir);
         }
         // select
-        else if key_and_mods
-            .map(|(_, m)| !m.command && m.shift)
-            .unwrap_or(false)
+        else if test_mod_key(&opt_mod_key, |mk| !mk.command() && mk.shift())
             && let Some(dir) = match_input_move_dir(ctx)
         {
             let mut target = self.core.handle.focus_point();
@@ -547,9 +591,7 @@ impl<ES: EditorSpec> EditorState<ES> {
             }
         }
         // move
-        else if key_and_mods
-            .map(|(_, m)| !m.command && !m.shift)
-            .unwrap_or(false)
+        else if test_mod_key(&opt_mod_key, |mk| !mk.command() && !mk.shift())
             && let Some(dir) = match_input_move_dir(ctx)
         {
             let mut origin = self.core.handle.clone();
@@ -575,10 +617,9 @@ impl<ES: EditorSpec> EditorState<ES> {
             }
         }
         // move up
-        else if key_and_mods
-            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::ArrowUp)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            !mk.command() && !mk.shift() && mk.key == egui::Key::ArrowUp
+        }) {
             let mut origin = self.core.handle.clone();
             loop {
                 let move_status = origin.move_up(&self.core.root);
@@ -597,23 +638,22 @@ impl<ES: EditorSpec> EditorState<ES> {
             }));
         }
         // open edit menu (without query)
-        else if key_and_mods
-            .map(|(k, m)| !m.command && !m.shift && k == egui::Key::Space)
-            .unwrap_or(false)
-        {
+        else if test_mod_key(&opt_mod_key, |mk| {
+            !mk.command() && !mk.shift() && mk.key == egui::Key::Space
+        }) {
             trace!(target: "editor.edit", "open EditMenu");
             let menu = ES::get_edits(self);
             self.menu = Some(EditMenu::new(menu));
         }
         // open edit menu (with query)
-        else if let Some((k, m)) = key_and_mods
-            && !m.command
-            && is_single_char(k.symbol_or_name())
+        else if let Some(mk) = opt_mod_key
+            && !mk.command()
+            && is_single_char(mk.key.symbol_or_name())
         {
             trace!(target: "editor.edit", "open EditMenu");
             let menu = ES::get_edits(self);
-            let mut s = k.symbol_or_name().to_owned();
-            if m.shift {
+            let mut s = mk.key.symbol_or_name().to_owned();
+            if mk.shift() {
                 s = s.to_uppercase();
             } else {
                 s = s.to_lowercase();
@@ -671,6 +711,9 @@ impl<ES: EditorSpec> EditorState<ES> {
                     self.history.push(self.core.to_plain());
                     self.menu = None;
                     self.core = core.to_diag();
+                    ES::diagnose(&self.core);
+                } else {
+                    warn!(target: "editor", "failed to redo since future was empty");
                 }
             }
             Action::Undo => {
@@ -678,6 +721,9 @@ impl<ES: EditorSpec> EditorState<ES> {
                     self.future.push(self.core.to_plain());
                     self.menu = None;
                     self.core = core.to_diag();
+                    ES::diagnose(&self.core);
+                } else {
+                    warn!(target: "editor", "failed to undo since history was empty");
                 }
             }
             Action::Copy => {
@@ -685,6 +731,8 @@ impl<ES: EditorSpec> EditorState<ES> {
                     let clipboard = Some(frag.map_to_owned(&mut |l| l.to_plain()));
                     self.snapshot();
                     self.core.clipboard = clipboard;
+                } else {
+                    warn!(target: "editor", "failed to copy");
                 }
             }
             Action::Paste => {
@@ -697,6 +745,9 @@ impl<ES: EditorSpec> EditorState<ES> {
                         .root
                         .insert_fragment(self.core.handle.clone(), frag);
                     self.core.handle = handle;
+                    ES::diagnose(&self.core);
+                } else {
+                    warn!(target: "editor", "failed to paste since clipboard was empty");
                 }
             }
             Action::Cut => {
@@ -705,6 +756,9 @@ impl<ES: EditorSpec> EditorState<ES> {
                     self.menu = None;
                     self.core.clipboard = Some(frag.into_plain());
                     self.core.handle = h;
+                    ES::diagnose(&self.core);
+                } else {
+                    warn!(target: "editor", "failed to cut");
                 }
             }
             Action::Delete => {
@@ -712,6 +766,9 @@ impl<ES: EditorSpec> EditorState<ES> {
                 if let Some((_frag, h)) = self.core.root.cut(&self.core.handle) {
                     self.menu = None;
                     self.core.handle = h;
+                    ES::diagnose(&self.core);
+                } else {
+                    warn!(target: "editor", "failed to delete");
                 }
             }
             Action::SetHandle(args) => {

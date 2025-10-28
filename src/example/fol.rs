@@ -67,27 +67,42 @@ impl<'a> Display for Type<'a> {
 struct Rule {
     pub sort: Sort,
     pub kids: RuleKids,
-    pub infix: bool,
 }
 
 enum RuleKids {
-    FixedArity(&'static [Sort]),
+    FixedArity(&'static [Sort], bool),
     FreeArity(Sort),
     LiteralKid,
 }
 
 impl RuleKids {
-    pub fn is_empty(&self) -> bool {
+    pub fn is_parenthesized(&self) -> bool {
         match self {
-            FixedArity(sorts) => sorts.is_empty(),
-            _ => false,
+            FixedArity(sorts, _) => !sorts.is_empty(),
+            FreeArity(_) => true,
+            LiteralKid => false,
         }
     }
 
     pub fn len(&self) -> Option<usize> {
         match self {
-            FixedArity(sorts) => Some(sorts.len()),
+            FixedArity(sorts, _) => Some(sorts.len()),
             _ => None,
+        }
+    }
+
+    pub fn is_infixed(&self) -> bool {
+        match self {
+            FixedArity(_, infixed) => *infixed,
+            _ => false,
+        }
+    }
+
+    fn is_prefixed(&self) -> bool {
+        match self {
+            FixedArity(_, infixed) => !*infixed,
+            FreeArity(_) => true,
+            LiteralKid => false,
         }
     }
 }
@@ -98,36 +113,31 @@ macro_rules! rule {
     ( $sort: expr, [ $( $kid: expr ),* ] ) => {
         Rule {
             sort: $sort,
-            kids: FixedArity(&[ $( $kid ),* ]),
-            infix: false
+            kids: FixedArity(&[ $( $kid ),* ], false),
         }
     };
     ( $sort: expr, [ $( $kid: expr ),* ], infix ) => {
         Rule {
             sort: $sort,
-            kids: FixedArity(&[ $( $kid ),* ]),
-            infix: true
+            kids: FixedArity(&[ $( $kid ),* ], true),
         }
     };
     ( $sort: expr, LITERAL ) => {
         Rule {
             sort: $sort,
             kids: LiteralKid,
-            infix: false
         }
     };
     ( $sort: expr, LIST $kid: expr ) => {
         Rule {
             sort: $sort,
             kids: FreeArity($kid),
-            infix: false
         }
     };
     ( $sort: expr, LIST $kid: expr, infix ) => {
         Rule {
             sort: $sort,
             kids: FreeArity($kid),
-            infix: true
         }
     };
 }
@@ -175,8 +185,7 @@ lazy_static! {
 
     static ref DEFAULT_LITERAL_RULE: Rule = Rule {
         sort: Var,
-        kids: FixedArity(&[]),
-        infix: false
+        kids: FixedArity(&[], false),
     };
 }
 
@@ -210,7 +219,7 @@ macro_rules! make_simple_edit_menu_option {
 
                 let mut kids: Vec<DiagExpr> = vec![];
                 match &rule.kids {
-                    FixedArity(sorts) => {
+                    FixedArity(sorts, _) => {
                         for _ in 0..sorts.len() {
                             kids.push(ex![
                                 GenEditorLabel::new(
@@ -350,7 +359,6 @@ fn check_type_helper<'a>(
     let Rule {
         sort: rule_sort,
         kids: rule_kids,
-        ..
     } = match GRAMMAR.get(lit) {
         None => {
             add_error(Diagnostic("foreign".to_owned()));
@@ -429,7 +437,7 @@ fn check_type_helper<'a>(
         }
         // default case that doesn't interact with environment, and uses simple sorts
         _ => match rule_kids {
-            FixedArity(rule_kids) => {
+            FixedArity(rule_kids, _) => {
                 for (kid, expected_kid_sort) in expr.kids.0.iter().zip(rule_kids.iter()) {
                     check_pos_arg(success, ctx.clone(), &expected_kid_sort.to_type(), kid);
                 }
@@ -615,7 +623,9 @@ impl EditorSpec for Fol {
             color_scheme.normal_background
         };
 
-        if !rule.kids.is_empty() {
+        let parenthesized = rule.kids.is_parenthesized();
+
+        if parenthesized {
             egui::Frame::new().fill(fill_color).show(ui, |ui| {
                 ui.add(
                     egui::Label::new(
@@ -632,25 +642,25 @@ impl EditorSpec for Fol {
             egui::Frame::new().fill(fill_color).show(ui, |ui| {
                 ui.add(
                     egui::Label::new(
-                        egui::RichText::new(label.to_owned())
-                            .color(if rule.kids.is_empty() {
-                                color_scheme.normal_text
-                            } else {
-                                color_scheme.keyword_text
-                            })
-                            .text_style(if rule.kids.is_empty() {
-                                egui::TextStyle::Body
-                            } else {
-                                egui::TextStyle::Monospace
-                            })
-                            .strong(),
+                        egui::RichText::new(if rule.kids.is_infixed() {
+                            format!(" {label} ")
+                        } else {
+                            label.to_owned()
+                        })
+                        .color(if rule.kids.is_parenthesized() {
+                            color_scheme.keyword_text
+                        } else {
+                            color_scheme.normal_text
+                        })
+                        .text_style(egui::TextStyle::Monospace)
+                        .strong(),
                     )
                     .selectable(false),
                 );
             });
         };
 
-        if !rule.infix {
+        if rule.kids.is_prefixed() {
             render_label(ui);
         }
 
@@ -697,12 +707,12 @@ impl EditorSpec for Fol {
                     },
                 );
             }
-            if rule.infix && i == 0 {
+            if rule.kids.is_infixed() && i == 0 {
                 render_label(ui);
             }
         }
 
-        if !rule.kids.is_empty() {
+        if parenthesized {
             egui::Frame::new().fill(fill_color).show(ui, |ui| {
                 ui.add(
                     egui::Label::new(
