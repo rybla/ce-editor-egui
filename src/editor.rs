@@ -62,9 +62,9 @@ lazy_static! {
 }
 
 #[derive(Default)]
-pub struct MutDiagnostics(pub Cell<Vec<Diagnostic>>);
+pub struct MutDiagnostics<M>(pub Cell<Vec<Diagnostic<M>>>);
 
-impl Debug for MutDiagnostics {
+impl<M: Debug> Debug for MutDiagnostics<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ds = self.0.take();
         let r = f.debug_tuple("Diagnostics").field(&ds).finish();
@@ -94,7 +94,7 @@ impl<D> Display for GenEditorLabel<D> {
     }
 }
 
-pub type DiagEditorLabel = GenEditorLabel<MutDiagnostics>;
+pub type DiagEditorLabel<M> = GenEditorLabel<MutDiagnostics<M>>;
 pub type PlainEditorLabel = GenEditorLabel<()>;
 
 impl<D> GenEditorLabel<D> {
@@ -119,14 +119,14 @@ impl<D> GenEditorLabel<D> {
         }
     }
 
-    pub fn to_diag(&self) -> DiagEditorLabel {
+    pub fn to_diag<M: Default>(&self) -> DiagEditorLabel<M> {
         GenEditorLabel {
             constructor: self.constructor.clone(),
             diagnostics: MutDiagnostics::default(),
         }
     }
 
-    pub fn into_diag(self) -> DiagEditorLabel {
+    pub fn into_diag<M: Default>(self) -> DiagEditorLabel<M> {
         GenEditorLabel {
             constructor: self.constructor,
             diagnostics: MutDiagnostics::default(),
@@ -134,7 +134,7 @@ impl<D> GenEditorLabel<D> {
     }
 }
 
-impl Expr<DiagEditorLabel> {
+impl<M> Expr<DiagEditorLabel<M>> {
     pub fn pat2(&self) -> (&Constructor, &[Self]) {
         (&self.label.constructor, self.kids.0.as_slice())
     }
@@ -144,11 +144,11 @@ impl Expr<DiagEditorLabel> {
 // e = (constructor [PosArg [d]])
 // d = newline | e
 pub type GenEditorExpr<D> = Expr<GenEditorLabel<D>>;
-pub type DiagExpr = GenEditorExpr<MutDiagnostics>;
+pub type DiagExpr<M> = GenEditorExpr<MutDiagnostics<M>>;
 pub type PlainExpr = GenEditorExpr<()>;
 
 impl PlainExpr {
-    pub fn into_annotated(self) -> DiagExpr {
+    pub fn into_annotated<M: Default>(self) -> DiagExpr<M> {
         self.map_owned(&mut |l| GenEditorLabel {
             constructor: l.constructor,
             diagnostics: MutDiagnostics::default(),
@@ -220,16 +220,16 @@ impl<D> GenEditorExpr<D> {
         self.map_owned(&mut |l| l.into_plain())
     }
 
-    pub fn to_diag(&self) -> DiagExpr {
+    pub fn to_diag<M: Default>(&self) -> DiagExpr<M> {
         self.map(&mut |l| l.to_diag())
     }
 
-    pub fn into_diag(self) -> DiagExpr {
+    pub fn into_diag<M: Default>(self) -> DiagExpr<M> {
         self.map_owned(&mut |l| l.into_diag())
     }
 }
 
-impl DiagExpr {
+impl<M> DiagExpr<M> {
     // clones but without cloning Cells, and just makes new Cells
     pub fn clone_without_diagnostics(&self) -> Self {
         let Self {
@@ -256,7 +256,10 @@ impl DiagExpr {
         self.label.diagnostics.0.set(annotation);
     }
 
-    pub fn add_diagnostic(&self, d: Diagnostic) {
+    pub fn add_diagnostic(&self, d: Diagnostic<M>)
+    where
+        M: Debug,
+    {
         println!("add_diagnostic: {d:?}");
         let mut annotation = self.label.diagnostics.0.take();
         annotation.push(d);
@@ -264,10 +267,10 @@ impl DiagExpr {
     }
 }
 
-pub type DiagFragment = Fragment<GenEditorLabel<MutDiagnostics>>;
+pub type DiagFragment<M> = Fragment<GenEditorLabel<MutDiagnostics<M>>>;
 pub type PlainFragment = Fragment<GenEditorLabel<()>>;
 
-impl DiagFragment {
+impl<M> DiagFragment<M> {
     pub fn into_plain(self) -> PlainFragment {
         match self {
             Self::Span(span) => Fragment::Span(span.into_plain()),
@@ -276,19 +279,19 @@ impl DiagFragment {
     }
 }
 
-pub type DiagSpan = Span<GenEditorLabel<MutDiagnostics>>;
+pub type DiagSpan<M> = Span<GenEditorLabel<MutDiagnostics<M>>>;
 pub type PlainSpan = Span<GenEditorLabel<()>>;
 
-impl DiagSpan {
+impl<M> DiagSpan<M> {
     pub fn into_plain(self) -> PlainSpan {
         Span(self.0.into_iter().map(|e| e.into_plain()).collect())
     }
 }
 
-pub type DiagZipper = Zipper<GenEditorLabel<MutDiagnostics>>;
+pub type DiagZipper<M> = Zipper<GenEditorLabel<MutDiagnostics<M>>>;
 pub type PlainZipper = Zipper<GenEditorLabel<()>>;
 
-impl DiagZipper {
+impl<M> DiagZipper<M> {
     pub fn into_plain(self) -> PlainZipper {
         Zipper {
             span_ol: self.span_ol.into_plain(),
@@ -298,19 +301,19 @@ impl DiagZipper {
     }
 }
 
-pub type DiagContext = Context<GenEditorLabel<MutDiagnostics>>;
+pub type DiagContext<M> = Context<GenEditorLabel<MutDiagnostics<M>>>;
 pub type PlainContext = Context<GenEditorLabel<()>>;
 
-impl DiagContext {
+impl<M> DiagContext<M> {
     pub fn into_plain(self) -> PlainContext {
         Context(self.0.into_iter().map(|th| th.into_plain()).collect())
     }
 }
 
-pub type DiagTooth = Tooth<GenEditorLabel<MutDiagnostics>>;
+pub type DiagTooth<M> = Tooth<GenEditorLabel<MutDiagnostics<M>>>;
 pub type PlainTooth = Tooth<GenEditorLabel<()>>;
 
-impl DiagTooth {
+impl<M> DiagTooth<M> {
     pub fn into_plain(self) -> PlainTooth {
         Tooth {
             label: self.label.into_plain(),
@@ -322,18 +325,21 @@ impl DiagTooth {
 
 pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub spec: PhantomData<ES>,
-    pub core: CoreState<MutDiagnostics>,
-    pub menu: Option<EditMenu>,
+    pub core: CoreState<MutDiagnostics<ES::M>>,
+    pub menu: Option<EditMenu<ES>>,
     pub history: Vec<PlainCoreState>,
     pub future: Vec<PlainCoreState>,
     pub drag_origin: Option<Handle>,
 }
 
-impl<ES: EditorSpec + ?Sized> Default for EditorState<ES> {
+impl<ES: EditorSpec + ?Sized> Default for EditorState<ES>
+where
+    ES::M: Default,
+{
     fn default() -> Self {
-        let state: CoreState<MutDiagnostics> = {
+        let state: CoreState<MutDiagnostics<ES::M>> = {
             let state = ES::initial_state();
-            let state: CoreState<MutDiagnostics> = CoreState {
+            let state: CoreState<MutDiagnostics<ES::M>> = CoreState {
                 root: state.root.into_annotated(),
                 handle: state.handle,
                 clipboard: state.clipboard,
@@ -425,7 +431,7 @@ impl<ES: EditorSpec> EditorState<ES> {
 
     pub fn do_edit(
         &mut self,
-        edit: impl Fn(&str, DiagCoreState) -> Option<DiagCoreState>,
+        edit: impl Fn(&str, DiagCoreState<ES::M>) -> Option<DiagCoreState<ES::M>>,
         query: &str,
     ) {
         let opt_core = (edit)(
@@ -443,7 +449,10 @@ impl<ES: EditorSpec> EditorState<ES> {
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::Context) {
+    pub fn update(&mut self, ctx: &egui::Context)
+    where
+        <ES as EditorSpec>::M: std::fmt::Debug,
+    {
         trace!(target: "editor.update", "update");
 
         if self.drag_origin.is_some() && ctx.input(|i| i.pointer.primary_released()) {
@@ -704,7 +713,7 @@ impl<ES: EditorSpec> EditorState<ES> {
         });
     }
 
-    pub fn do_action(&mut self, action: Action) {
+    pub fn do_action(&mut self, action: Action<ES>) {
         match action {
             Action::Redo => {
                 if let Some(core) = self.future.pop() {
@@ -797,10 +806,10 @@ impl<ES: EditorSpec> EditorState<ES> {
 }
 
 #[expect(clippy::needless_pass_by_value)]
-pub fn render_point<ES: EditorSpec>(
+pub fn render_point<ES: EditorSpec + ?Sized>(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
-    rc: RenderContext<'_>,
+    rc: RenderContext<'_, ES>,
     p: &Point,
 ) {
     let handle_at_point = Handle::Point(p.clone());
@@ -1021,53 +1030,56 @@ pub fn render_point<ES: EditorSpec>(
 pub fn render_expr<ES: EditorSpec>(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
-    rc: RenderContext<'_>,
+    rc: RenderContext<'_, ES>,
     path: &Path,
-    expr: &DiagExpr,
+    expr: &DiagExpr<ES::M>,
 ) {
     // render diagnostics
     {
         let ds = expr.label.diagnostics.0.take();
 
         for (i, d) in ds.iter().enumerate() {
-            let id = ui.id().with(i);
+            if let Diagnostic::Diagnostic(d) = d {
+                let id = ui.id().with(i);
 
-            let response = egui::Frame::new()
-                .fill(rc.color_scheme.error_background)
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(" ! ".to_owned()).color(rc.color_scheme.error_text),
+                let response = egui::Frame::new()
+                    .fill(rc.color_scheme.error_background)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(" ! ".to_owned())
+                                    .color(rc.color_scheme.error_text),
+                            )
+                            .selectable(false),
                         )
-                        .selectable(false),
-                    )
-                })
-                .response;
+                    })
+                    .response;
 
-            if response.hovered() {
-                egui::Area::new(id)
-                    .pivot(egui::Align2::LEFT_BOTTOM)
-                    .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
-                    .show(ui.ctx(), |ui| {
-                        egui::Frame::popup(ui.style())
-                            .shadow(egui::Shadow::NONE)
-                            .show(ui, |ui| {
-                                ui.set_max_width(200.0);
-                                ui.add(egui::Label::new(
-                                    egui::RichText::new("Diagnostic".to_owned())
-                                        .underline()
-                                        .size(10.0),
-                                ));
-                                ui.label(d.0.clone())
-                            })
-                    });
+                if response.hovered() {
+                    egui::Area::new(id)
+                        .pivot(egui::Align2::LEFT_BOTTOM)
+                        .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
+                        .show(ui.ctx(), |ui| {
+                            egui::Frame::popup(ui.style())
+                                .shadow(egui::Shadow::NONE)
+                                .show(ui, |ui| {
+                                    ui.set_max_width(200.0);
+                                    ui.add(egui::Label::new(
+                                        egui::RichText::new("Diagnostic".to_owned())
+                                            .underline()
+                                            .size(10.0),
+                                    ));
+                                    ui.label(d.clone());
+                                })
+                        });
+                }
             }
         }
 
         expr.label.diagnostics.0.set(ds);
     }
 
-    let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)> = vec![];
+    let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, ES>>)> = vec![];
 
     for (s, e) in expr.kids.iter_steps_and_kids() {
         render_steps_and_kids.push((
@@ -1131,7 +1143,7 @@ pub fn render_expr<ES: EditorSpec>(
                     },
                 );
                 if let Some(kid) = kid {
-                    kid.render::<ES>(
+                    kid.render(
                         ctx,
                         ui,
                         // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
@@ -1187,7 +1199,7 @@ pub fn render_expr<ES: EditorSpec>(
                     },
                 );
                 if let Some(kid) = kid {
-                    kid.render::<ES>(
+                    kid.render(
                         ctx,
                         ui,
                         // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
@@ -1240,7 +1252,7 @@ pub fn render_expr<ES: EditorSpec>(
                     },
                 );
                 if let Some(kid) = kid {
-                    kid.render::<ES>(
+                    kid.render(
                         ctx,
                         ui,
                         RenderContext {
@@ -1284,7 +1296,7 @@ impl<D> CoreState<D> {
         }
     }
 
-    pub fn into_diag(self) -> DiagCoreState {
+    pub fn into_diag<M: Default>(self) -> DiagCoreState<M> {
         CoreState {
             root: self.root.into_diag(),
             handle: self.handle,
@@ -1292,7 +1304,7 @@ impl<D> CoreState<D> {
         }
     }
 
-    pub fn to_diag(&self) -> DiagCoreState {
+    pub fn to_diag<M: Default>(&self) -> DiagCoreState<M> {
         CoreState {
             root: self.root.to_diag(),
             handle: self.handle.clone(),
@@ -1317,7 +1329,7 @@ impl<D> CoreState<D> {
     }
 }
 
-pub type DiagCoreState = CoreState<MutDiagnostics>;
+pub type DiagCoreState<M> = CoreState<MutDiagnostics<M>>;
 
 pub type PlainCoreState = CoreState<()>;
 
@@ -1331,16 +1343,16 @@ impl Default for PlainCoreState {
     }
 }
 
-pub struct EditMenu {
+pub struct EditMenu<ES: EditorSpec + ?Sized> {
     pub query: String,
-    pub all_options: Vec<EditMenuOption>,
+    pub all_options: Vec<EditMenuOption<ES>>,
     pub index: i8,
     pub matcher: nucleo_matcher::Matcher,
     pub requested_scroll_to_option: bool,
 }
 
-impl EditMenu {
-    pub fn new(all_options: Vec<EditMenuOption>) -> Self {
+impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
+    pub fn new(all_options: Vec<EditMenuOption<ES>>) -> Self {
         Self {
             query: Default::default(),
             all_options,
@@ -1350,7 +1362,7 @@ impl EditMenu {
         }
     }
 
-    pub fn new_with_query(all_options: Vec<EditMenuOption>, query: String) -> Self {
+    pub fn new_with_query(all_options: Vec<EditMenuOption<ES>>, query: String) -> Self {
         Self {
             query,
             all_options,
@@ -1360,8 +1372,8 @@ impl EditMenu {
         }
     }
 
-    pub fn matched_items(&mut self) -> Vec<(String, &EditMenuOption)> {
-        let matched_dynamic_items: Vec<(String, &EditMenuOption)> = self
+    pub fn matched_items(&mut self) -> Vec<(String, &EditMenuOption<ES>)> {
+        let matched_dynamic_items: Vec<(String, &EditMenuOption<ES>)> = self
             .all_options
             .iter()
             .filter_map(|item| match item.pattern {
@@ -1370,7 +1382,7 @@ impl EditMenu {
             })
             .collect::<Vec<_>>();
 
-        let matched_static_items: Vec<(String, &EditMenuOption)> =
+        let matched_static_items: Vec<(String, &EditMenuOption<ES>)> =
             nucleo_matcher::pattern::Pattern::parse(
                 &self.query,
                 nucleo_matcher::pattern::CaseMatching::Smart,
@@ -1391,7 +1403,7 @@ impl EditMenu {
         [matched_dynamic_items, matched_static_items].concat()
     }
 
-    pub fn focus_option(&mut self) -> Option<&EditMenuOption> {
+    pub fn focus_option(&mut self) -> Option<&EditMenuOption<ES>> {
         let index = self.index;
         let matched_items = self.matched_items();
 
@@ -1413,22 +1425,24 @@ impl EditMenu {
     }
 }
 
-pub type Edit = fn(&str, DiagCoreState) -> Option<DiagCoreState>;
+// pub type Edit = fn<M>(&str, DiagCoreState<M>) -> Option<DiagCoreState<M>>;
 
 #[derive(Debug, Clone)]
-pub struct EditMenuOption {
+pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
     pub pattern: EditMenuPattern,
-    pub edit: Edit,
+    pub edit: Edit<ES::M>,
 }
 
-impl AsRef<str> for EditMenuOption {
+impl<ES: EditorSpec + ?Sized> AsRef<str> for EditMenuOption<ES> {
     fn as_ref(&self) -> &str {
         self.pattern.label()
     }
 }
 
-impl EditMenuOption {
-    pub fn new(pattern: EditMenuPattern, edit: Edit) -> Self {
+pub type Edit<M> = fn(&str, DiagCoreState<M>) -> Option<DiagCoreState<M>>;
+
+impl<ES: EditorSpec + ?Sized> EditMenuOption<ES> {
+    pub fn new(pattern: EditMenuPattern, edit: Edit<ES::M>) -> Self {
         Self { pattern, edit }
     }
 }
@@ -1468,21 +1482,24 @@ impl Display for Constructor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Diagnostic(pub String);
+pub enum Diagnostic<M> {
+    Diagnostic(String),
+    Metadata(M),
+}
 
-impl Display for Diagnostic {
+impl<M: Debug> Display for Diagnostic<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{self:?}")
     }
 }
 
-pub struct RenderContext<'a> {
+pub struct RenderContext<'a, ES: EditorSpec + ?Sized> {
     pub handle: &'a Handle,
-    pub root: &'a DiagExpr,
+    pub root: &'a DiagExpr<ES::M>,
     pub color_scheme: &'a ColorScheme,
     pub drag_origin: &'a Option<Handle>,
-    pub menu: &'a mut Option<EditMenu>,
-    pub actions: &'a mut Vec<Action>,
+    pub menu: &'a mut Option<EditMenu<ES>>,
+    pub actions: &'a mut Vec<Action<ES>>,
     pub interactive: bool,
     pub indent_level: u8,
 }
@@ -1490,17 +1507,19 @@ pub struct RenderContext<'a> {
 pub struct AssembleRenderExprArgs {}
 
 pub trait EditorSpec: 'static {
+    type M: Debug + Default;
+
     fn name() -> String;
 
     fn initial_state() -> PlainCoreState;
 
-    fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption>;
+    fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption<Self>>;
 
-    fn diagnose(state: &CoreState<MutDiagnostics>);
+    fn diagnose(state: &CoreState<MutDiagnostics<Self::M>>);
 
-    fn is_valid_handle_specialized(handle: &Handle, root: &DiagExpr) -> bool;
+    fn is_valid_handle_specialized(handle: &Handle, root: &DiagExpr<Self::M>) -> bool;
 
-    fn is_valid_handle(handle: &Handle, root: &DiagExpr) -> bool {
+    fn is_valid_handle(handle: &Handle, root: &DiagExpr<Self::M>) -> bool {
         trace!(target: "is_valid_handle", "handle = {handle}");
         trace!(target: "is_valid_handle", "root   = {root}");
 
@@ -1552,10 +1571,10 @@ pub trait EditorSpec: 'static {
     fn assemble_rendered_expr(
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        rc: RenderContext<'_>,
+        rc: RenderContext<'_, Self>,
         path: &Path,
-        expr: &DiagExpr,
-        render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_>>)>,
+        expr: &DiagExpr<Self::M>,
+        render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
         literal: &str,
     );
 }
@@ -1588,11 +1607,11 @@ pub struct RenderPoint<'a> {
 }
 
 impl<'a> RenderPoint<'a> {
-    pub fn render<ES: EditorSpec>(
+    pub fn render<ES: EditorSpec + ?Sized>(
         &self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
-        rc: RenderContext<'_>,
+        rc: RenderContext<'_, ES>,
     ) {
         render_point::<ES>(
             ctx,
@@ -1606,30 +1625,25 @@ impl<'a> RenderPoint<'a> {
     }
 }
 
-pub struct RenderExpr<'a> {
+pub struct RenderExpr<'a, ES: EditorSpec + ?Sized> {
     pub path: Path,
-    pub expr: &'a DiagExpr,
+    pub expr: &'a DiagExpr<ES::M>,
 }
 
-impl<'a> RenderExpr<'a> {
-    pub fn render<ES: EditorSpec>(
-        &self,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-        rc: RenderContext<'_>,
-    ) {
+impl<'a, ES: EditorSpec> RenderExpr<'a, ES> {
+    pub fn render(&self, ctx: &egui::Context, ui: &mut egui::Ui, rc: RenderContext<'_, ES>) {
         render_expr::<ES>(ctx, ui, rc, &self.path, self.expr);
     }
 }
 
 // -----------------------------------------------------------------------------
 
-pub enum Action {
+pub enum Action<ES: EditorSpec + ?Sized> {
     Copy,
     Paste,
     Cut,
     Delete,
-    SetCore(DiagCoreState),
+    SetCore(DiagCoreState<ES::M>),
     SetHandle(SetHandle),
     SetDragOrigin(Option<Handle>),
     Undo,
@@ -1641,7 +1655,10 @@ pub struct SetHandle {
     pub snapshot: bool,
 }
 
-pub fn insert_newline(_query: &str, mut state: DiagCoreState) -> Option<DiagCoreState> {
+pub fn insert_newline<M: Debug>(
+    _query: &str,
+    mut state: DiagCoreState<M>,
+) -> Option<DiagCoreState<M>> {
     let h = state.root.insert_fragment(
         state.handle,
         Fragment::Span(span![ex![
