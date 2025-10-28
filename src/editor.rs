@@ -432,12 +432,12 @@ impl<ES: EditorSpec> EditorState<ES> {
 
     pub fn do_edit(
         &mut self,
-        edit: impl Fn(&str, DiagCoreState<ES::M>) -> Option<DiagCoreState<ES::M>>,
+        edit: impl Fn(&str, DiagCoreState<ES>) -> Option<DiagCoreState<ES>>,
         query: &str,
     ) {
         let opt_core = (edit)(
             query,
-            DiagCoreState {
+            DiagCoreState::<ES> {
                 root: self.core.root.to_diag(),
                 handle: self.core.handle.clone(),
                 clipboard: self.core.clipboard.clone(),
@@ -503,7 +503,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                     // self.do_edit since that borrows self as mutable
                     let opt_core = (option.edit)(
                         &menu.query,
-                        DiagCoreState {
+                        DiagCoreState::<ES> {
                             root: self.core.root.to_diag(),
                             handle: self.core.handle.clone(),
                             clipboard: self.core.clipboard.clone(),
@@ -569,7 +569,7 @@ impl<ES: EditorSpec> EditorState<ES> {
         else if test_mod_key(&opt_mod_key, |mk| {
             !mk.command() && !mk.shift() && mk.key == egui::Key::Enter
         }) {
-            self.do_edit(insert_newline, "");
+            self.do_edit(insert_newline::<ES>, "");
         }
         // rotate focus
         else if test_mod_key(&opt_mod_key, |mk| mk.command())
@@ -720,7 +720,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                 if let Some(core) = self.future.pop() {
                     self.history.push(self.core.to_plain());
                     self.menu = None;
-                    self.core = core.to_diag();
+                    self.core = core.to_diag::<ES>();
                     ES::diagnose(&self.core);
                 } else {
                     warn!(target: "editor", "failed to redo since future was empty");
@@ -730,7 +730,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                 if let Some(core) = self.history.pop() {
                     self.future.push(self.core.to_plain());
                     self.menu = None;
-                    self.core = core.to_diag();
+                    self.core = core.to_diag::<ES>();
                     ES::diagnose(&self.core);
                 } else {
                     warn!(target: "editor", "failed to undo since history was empty");
@@ -1297,7 +1297,7 @@ impl<D> CoreState<D> {
         }
     }
 
-    pub fn into_diag<M: Default>(self) -> DiagCoreState<M> {
+    pub fn into_diag<ES: EditorSpec + ?Sized>(self) -> DiagCoreState<ES> {
         CoreState {
             root: self.root.into_diag(),
             handle: self.handle,
@@ -1305,7 +1305,7 @@ impl<D> CoreState<D> {
         }
     }
 
-    pub fn to_diag<M: Default>(&self) -> DiagCoreState<M> {
+    pub fn to_diag<ES: EditorSpec + ?Sized>(&self) -> DiagCoreState<ES> {
         CoreState {
             root: self.root.to_diag(),
             handle: self.handle.clone(),
@@ -1330,7 +1330,7 @@ impl<D> CoreState<D> {
     }
 }
 
-pub type DiagCoreState<M> = CoreState<MutDiagnostics<M>>;
+pub type DiagCoreState<ES> = CoreState<MutDiagnostics<<ES as EditorSpec>::M>>;
 
 pub type PlainCoreState = CoreState<()>;
 
@@ -1426,12 +1426,12 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     }
 }
 
-// pub type Edit = fn<M>(&str, DiagCoreState<M>) -> Option<DiagCoreState<M>>;
+pub type Edit<ES> = fn(&str, DiagCoreState<ES>) -> Option<DiagCoreState<ES>>;
 
 #[derive(Debug, Clone)]
 pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
     pub pattern: EditMenuPattern,
-    pub edit: Edit<ES::M>,
+    pub edit: Edit<ES>,
 }
 
 impl<ES: EditorSpec + ?Sized> AsRef<str> for EditMenuOption<ES> {
@@ -1440,10 +1440,8 @@ impl<ES: EditorSpec + ?Sized> AsRef<str> for EditMenuOption<ES> {
     }
 }
 
-pub type Edit<M> = fn(&str, DiagCoreState<M>) -> Option<DiagCoreState<M>>;
-
 impl<ES: EditorSpec + ?Sized> EditMenuOption<ES> {
-    pub fn new(pattern: EditMenuPattern, edit: Edit<ES::M>) -> Self {
+    pub fn new(pattern: EditMenuPattern, edit: Edit<ES>) -> Self {
         Self { pattern, edit }
     }
 }
@@ -1644,7 +1642,7 @@ pub enum Action<ES: EditorSpec + ?Sized> {
     Paste,
     Cut,
     Delete,
-    SetCore(DiagCoreState<ES::M>),
+    SetCore(DiagCoreState<ES>),
     SetHandle(SetHandle),
     SetDragOrigin(Option<Handle>),
     Undo,
@@ -1656,10 +1654,10 @@ pub struct SetHandle {
     pub snapshot: bool,
 }
 
-pub fn insert_newline<M: Debug>(
+pub fn insert_newline<ES: EditorSpec + ?Sized>(
     _query: &str,
-    mut state: DiagCoreState<M>,
-) -> Option<DiagCoreState<M>> {
+    mut state: DiagCoreState<ES>,
+) -> Option<DiagCoreState<ES>> {
     let h = state.root.insert_fragment(
         state.handle,
         Fragment::Span(span![ex![
