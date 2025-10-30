@@ -220,7 +220,7 @@ impl<D> EditorExpr<D> {
     }
 }
 
-impl<M: Default> MetaExpr<M> {
+impl<M: EditorMetadata> MetaExpr<M> {
     // clones but without cloning Cells, and just makes new Cells
     pub fn clone_without_metadata(&self) -> Self {
         let Self {
@@ -240,6 +240,44 @@ impl<M: Default> MetaExpr<M> {
         let m = self.label.metadata.0.take();
         let m = f(m);
         self.label.metadata.0.set(m);
+    }
+
+    // gives children without newlines, flattens posargs, and place errors on posargs with wrong number of args
+    pub fn to_pat_flattened_without_newlines<'a>(&'a self) -> Vec<&'a Self> {
+        let mut kids: Vec<&'a Self> = vec![];
+
+        let mut add_kid = |e: &'a Self| {
+            if !matches!(e.label.constructor, Constructor::Newline) {
+                kids.push(e);
+            }
+        };
+
+        for kid in &self.kids.0 {
+            match kid.label.constructor {
+                Constructor::PosArg => {
+                    if kid.kids.0.len() != 1 {
+                        kid.modify_metadata(|mut m| {
+                            m.add_error(
+                                (if kid.kids.0.is_empty() {
+                                    "hole"
+                                } else {
+                                    "too many arguments"
+                                })
+                                .to_owned(),
+                            );
+                            m
+                        });
+                    }
+
+                    for e in &kid.kids.0 {
+                        add_kid(e);
+                    }
+                }
+                _ => add_kid(kid),
+            }
+        }
+
+        kids
     }
 }
 
@@ -1477,6 +1515,8 @@ pub trait EditorMetadata: Debug + Default {
     fn render_metadata(&self, ui: &mut egui::Ui);
 
     fn is_empty_metadata(&self) -> bool;
+
+    fn add_error(&mut self, e: String);
 }
 
 pub trait EditorSpec: 'static {

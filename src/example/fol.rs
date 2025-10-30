@@ -308,12 +308,12 @@ fn check_pos_arg(
         m
     });
 
-    // TODO: this needs to filter out newlines
     let without_newlines = pos_arg
         .pat_pos_arg()
         .iter()
         .filter(|x| !matches!(x.label.constructor, Constructor::Newline))
         .collect::<Vec<_>>();
+
     match without_newlines.as_slice() {
         [] => {
             pos_arg.modify_metadata(|mut m| {
@@ -546,6 +546,10 @@ impl EditorMetadata for M {
 
     fn is_empty_metadata(&self) -> bool {
         self.errors.is_empty()
+    }
+
+    fn add_error(&mut self, e: String) {
+        self.errors.push(e);
     }
 }
 
