@@ -531,7 +531,7 @@ impl EditorMetadata for M {
             .show(ui, |ui| {
                 ui.set_max_width(200.0);
                 ui.add(egui::Label::new(
-                    egui::RichText::new("Errors".to_owned())
+                    egui::RichText::new("Diagnostics".to_owned())
                         .underline()
                         .size(10.0),
                 ));
