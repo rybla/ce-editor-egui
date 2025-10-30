@@ -244,12 +244,6 @@ impl<M: EditorMetadata> MetaExpr<M> {
         }
     }
 
-    // pub fn modify_metadata<F: FnOnce(M) -> M>(&self, f: F) {
-    //     let m = self.label.metadata.0.take();
-    //     let m = f(m);
-    //     self.label.metadata.0.set(m);
-    // }
-
     // gives children without newlines, flattens posargs, and place errors on posargs with wrong number of args
     pub fn to_flattened<'a>(&'a self) -> Vec<&'a Self> {
         let mut kids: Vec<&'a Self> = vec![];
