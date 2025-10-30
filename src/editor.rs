@@ -62,13 +62,13 @@ lazy_static! {
 }
 
 #[derive(Default)]
-pub struct MutDiagnostics<M>(pub Cell<Vec<Diagnostic<M>>>);
+pub struct MutDiagnostics<M>(pub Cell<M>);
 
-impl<M: Debug> Debug for MutDiagnostics<M> {
+impl<M: Debug + Default> Debug for MutDiagnostics<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ds = self.0.take();
-        let r = f.debug_tuple("Diagnostics").field(&ds).finish();
-        self.0.set(ds);
+        let m = self.0.take();
+        let r = f.debug_tuple("MutDiagnostics").field(&m).finish();
+        self.0.set(m);
         r
     }
 }
@@ -220,7 +220,7 @@ impl<D> GenEditorExpr<D> {
     }
 }
 
-impl<M> DiagExpr<M> {
+impl<M: Default> DiagExpr<M> {
     // clones but without cloning Cells, and just makes new Cells
     pub fn clone_without_diagnostics(&self) -> Self {
         let Self {
@@ -230,7 +230,7 @@ impl<M> DiagExpr<M> {
         Self {
             label: DiagEditorLabel {
                 constructor: constructor.clone(),
-                diagnostics: MutDiagnostics(Cell::new(vec![])),
+                diagnostics: MutDiagnostics::default(),
             },
             kids: Span(
                 kids.0
@@ -241,20 +241,10 @@ impl<M> DiagExpr<M> {
         }
     }
 
-    pub fn clear_diagnostics(&self) {
-        let mut annotation = self.label.diagnostics.0.take();
-        annotation.clear();
-        self.label.diagnostics.0.set(annotation);
-    }
-
-    pub fn add_diagnostic(&self, d: Diagnostic<M>)
-    where
-        M: Debug,
-    {
-        println!("add_diagnostic: {d:?}");
-        let mut annotation = self.label.diagnostics.0.take();
-        annotation.push(d);
-        self.label.diagnostics.0.set(annotation);
+    pub fn modify_diagnostic<F: FnOnce(M) -> M>(&self, f: F) {
+        let m = self.label.diagnostics.0.take();
+        let m = f(m);
+        self.label.diagnostics.0.set(m);
     }
 }
 
@@ -699,21 +689,18 @@ impl<ES: EditorSpec> EditorState<ES> {
                             &self.core.root,
                         );
 
+                        // render top-level diagnostics
                         {
                             // TODO: this should actually be rendered in a more
                             // aesthetically-pleasing way, like off to the right
                             // side, and that involves reconfiguring the layout
                             // a bit
-                            let ds = self.core.diagnostics.0.take();
-                            if !ds.is_empty() {
+                            let m = self.core.diagnostics.0.take();
+                            if !m.is_empty_diagnostics() {
                                 ui.end_row();
-                                ui.end_row();
+                                m.render_diagnostics(ui);
                             }
-                            for d in &ds {
-                                render_diagnostic::<ES>(ui, d);
-                                ui.end_row();
-                            }
-                            self.core.diagnostics.0.set(ds);
+                            self.core.diagnostics.0.set(m);
                         }
 
                         for action in actions {
@@ -1038,23 +1025,6 @@ pub fn render_point<ES: EditorSpec + ?Sized>(
     }
 }
 
-pub fn render_diagnostic<ES: EditorSpec>(ui: &mut egui::Ui, d: &Diagnostic<ES::M>) {
-    // TODO: make entire Diagnostic polymoprphic type param
-    if let Diagnostic::Diagnostic(d) = d {
-        egui::Frame::popup(ui.style())
-            .shadow(egui::Shadow::NONE)
-            .show(ui, |ui| {
-                ui.set_max_width(200.0);
-                ui.add(egui::Label::new(
-                    egui::RichText::new("Diagnostic".to_owned())
-                        .underline()
-                        .size(10.0),
-                ));
-                ui.label(d.clone());
-            });
-    }
-}
-
 pub fn render_expr<ES: EditorSpec>(
     ui: &mut egui::Ui,
     rc: RenderContext<'_, ES>,
@@ -1063,37 +1033,34 @@ pub fn render_expr<ES: EditorSpec>(
 ) {
     // render diagnostics
     {
-        let ds = expr.label.diagnostics.0.take();
+        let id = ui.id();
 
-        for (i, d) in ds.iter().enumerate() {
-            if let Diagnostic::Diagnostic(_) = d {
-                let id = ui.id().with(i);
+        let m = expr.label.diagnostics.0.take();
 
-                let response = egui::Frame::new()
-                    .fill(rc.color_scheme.error_background)
-                    .show(ui, |ui| {
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(" ! ".to_owned())
-                                    .color(rc.color_scheme.error_text),
-                            )
-                            .selectable(false),
+        if !m.is_empty_diagnostics() {
+            let response = egui::Frame::new()
+                .fill(rc.color_scheme.error_background)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(" ! ".to_owned()).color(rc.color_scheme.error_text),
                         )
-                    })
-                    .response;
+                        .selectable(false),
+                    )
+                })
+                .response;
 
-                if response.hovered() {
-                    egui::Area::new(id)
-                        .pivot(egui::Align2::LEFT_BOTTOM)
-                        .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
-                        .show(ui.ctx(), |ui| {
-                            render_diagnostic::<ES>(ui, d);
-                        });
-                }
+            if response.hovered() {
+                egui::Area::new(id)
+                    .pivot(egui::Align2::LEFT_BOTTOM)
+                    .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
+                    .show(ui.ctx(), |ui| {
+                        m.render_diagnostics(ui);
+                    });
             }
         }
 
-        expr.label.diagnostics.0.set(ds);
+        expr.label.diagnostics.0.set(m);
     }
 
     let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, ES>>)> = vec![];
@@ -1500,17 +1467,17 @@ impl Display for Constructor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Diagnostic<M> {
-    Diagnostic(String),
-    Metadata(M),
-}
+// #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+// pub enum M {
+//     Diagnostic(String),
+//     Metadata(M),
+// }
 
-impl<M: Debug> Display for Diagnostic<M> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
+// impl<M: Debug> Display for M {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{self:?}")
+//     }
+// }
 
 pub struct RenderContext<'a, ES: EditorSpec + ?Sized> {
     pub handle: &'a Handle,
@@ -1525,8 +1492,14 @@ pub struct RenderContext<'a, ES: EditorSpec + ?Sized> {
 
 pub struct AssembleRenderExprArgs {}
 
+pub trait EditorMetadata: Debug + Default {
+    fn render_diagnostics(&self, ui: &mut egui::Ui);
+
+    fn is_empty_diagnostics(&self) -> bool;
+}
+
 pub trait EditorSpec: 'static {
-    type M: Debug + Default;
+    type M: EditorMetadata;
 
     fn name() -> String;
 
@@ -1674,7 +1647,7 @@ pub fn insert_newline<ES: EditorSpec + ?Sized>(
     let h = state.root.insert_fragment(
         state.handle,
         Fragment::Span(span![ex![
-            GenEditorLabel::new(Constructor::Newline, MutDiagnostics(Cell::new(vec![]))),
+            GenEditorLabel::new(Constructor::Newline, MutDiagnostics::default()),
             []
         ]]),
     );

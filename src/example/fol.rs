@@ -6,10 +6,11 @@ use crate::{
     expr::*,
     utility::pop_front,
 };
+use egui::RichText;
 use lazy_static::lazy_static;
 use map_macro::hash_map;
 use std::collections::HashMap;
-use std::{cell::Cell, fmt::Display};
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 // this is just the grammatical sort, like Type but with less information
@@ -240,10 +241,7 @@ macro_rules! make_simple_edit_menu_option {
                     FixedArity(sorts, _) => {
                         for _ in 0..sorts.len() {
                             kids.push(ex![
-                                GenEditorLabel::new(
-                                    Constructor::PosArg,
-                                    MutDiagnostics(Cell::new(vec![]))
-                                ),
+                                GenEditorLabel::new(Constructor::PosArg, MutDiagnostics::default()),
                                 []
                             ]);
                         }
@@ -263,7 +261,7 @@ macro_rules! make_simple_edit_menu_option {
                             None => vec![Tooth {
                                 label: GenEditorLabel::new(
                                     Constructor::Literal($name.to_owned()),
-                                    MutDiagnostics(Cell::new(vec![])),
+                                    MutDiagnostics::default(),
                                 ),
                                 span_l: Span::empty(),
                                 span_r: Span(kids),
@@ -272,7 +270,7 @@ macro_rules! make_simple_edit_menu_option {
                                 Tooth {
                                     label: GenEditorLabel::new(
                                         Constructor::Literal($name.to_owned()),
-                                        MutDiagnostics(Cell::new(vec![])),
+                                        MutDiagnostics::default(),
                                     ),
                                     span_l: Span::empty(),
                                     span_r: Span(kids),
@@ -304,7 +302,12 @@ fn check_pos_arg(
     expected_type: &Type,
     pos_arg: &DiagExpr<<Fol as EditorSpec>::M>,
 ) {
-    pos_arg.clear_diagnostics();
+    // clear old errors
+    pos_arg.modify_diagnostic(|mut m| {
+        m.errors.clear();
+        m
+    });
+
     // TODO: this needs to filter out newlines
     let without_newlines = pos_arg
         .pat_pos_arg()
@@ -313,15 +316,19 @@ fn check_pos_arg(
         .collect::<Vec<_>>();
     match without_newlines.as_slice() {
         [] => {
-            pos_arg.add_diagnostic(Diagnostic::Diagnostic(format!(
-                "hole of sort {expected_type}"
-            )));
+            pos_arg.modify_diagnostic(|mut m| {
+                m.errors.push(format!("hole of sort {expected_type}"));
+                m
+            });
         }
         [kid] => {
             check_type_helper(success, ctx, expected_type, kid);
         }
         _kids => {
-            pos_arg.add_diagnostic(Diagnostic::Diagnostic("too many kids".to_owned()));
+            pos_arg.modify_diagnostic(|mut m| {
+                m.errors.push("too many kids".to_owned());
+                m
+            });
             *success = false;
         }
     }
@@ -356,9 +363,14 @@ fn check_type_helper(
     expected_type: &Type,
     expr: &DiagExpr<<Fol as EditorSpec>::M>,
 ) {
+    // clear old errors
+    expr.modify_diagnostic(|mut m| {
+        m.errors.clear();
+        m
+    });
+
     let expected_sort = expected_type.get_sort();
-    // clean up the old annotation
-    expr.clear_diagnostics();
+
     if expr.label.constructor == Constructor::Root {
         for decl in &expr.kids.0 {
             check_type_helper(success, ctx.clone(), &Type::Declaration, decl);
@@ -374,8 +386,11 @@ fn check_type_helper(
         };
 
         // call this function to add error annotation, also sets the success flag
-        let mut add_error = |d: Diagnostic<<Fol as EditorSpec>::M>| {
-            expr.add_diagnostic(d);
+        let mut add_error = |e: String| {
+            expr.modify_diagnostic(|mut m| {
+                m.errors.push(e);
+                m
+            });
             *success = false;
         };
 
@@ -385,7 +400,7 @@ fn check_type_helper(
             kids: rule_kids,
         } = match GRAMMAR.get(lit) {
             None => {
-                add_error(Diagnostic::Diagnostic("foreign".to_owned()));
+                add_error("foreign".to_owned());
                 return;
             }
             Some(rule) => rule,
@@ -393,22 +408,22 @@ fn check_type_helper(
 
         // check sort
         if rule_sort != &expected_sort {
-            add_error(Diagnostic::Diagnostic(format!(
+            add_error(format!(
                 "expected {expected_sort:?}; actually {rule_sort:?}"
-            )));
+            ));
         }
 
         // check arity
         match rule_kids.len() {
             Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
                 let expr_kids_len = expr.kids.0.len();
-                add_error(Diagnostic::Diagnostic(format!(
+                add_error(format!(
                     "expected {} kids; actually {} kids",
                     rule_kids
                         .len()
                         .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
                     expr_kids_len
-                )));
+                ));
             }
             _ => {}
         }
@@ -432,7 +447,7 @@ fn check_type_helper(
                     _ => panic!("first child of Var should be Literal"),
                 };
                 if !ctx.contains_key(x) {
-                    add_error(Diagnostic::Diagnostic("mal-scoped var".to_owned()));
+                    add_error("mal-scoped var".to_owned());
                 }
             }
             (("forall" | "exists", [x0, a]), _) => {
@@ -469,7 +484,7 @@ fn check_type_helper(
                         check_pos_arg(success, ctx, &Type::Proof(editor_ex!("bot", [])), a);
                     }
                     _ => {
-                        add_error(Diagnostic::Diagnostic("invalid proof".to_owned()));
+                        add_error("invalid proof".to_owned());
                     }
                 }
             }
@@ -497,8 +512,51 @@ pub struct Fol {}
 
 impl Fol {}
 
+#[derive(Debug, Default)]
+pub struct M {
+    pub errors: Vec<String>,
+    pub ty_info: Option<TyInfo>,
+}
+
+impl M {
+    pub fn push_error(&mut self, e: String) {
+        self.errors.push(e);
+    }
+}
+
+impl EditorMetadata for M {
+    fn render_diagnostics(&self, ui: &mut egui::Ui) {
+        egui::Frame::popup(ui.style())
+            .shadow(egui::Shadow::NONE)
+            .show(ui, |ui| {
+                ui.set_max_width(200.0);
+                ui.add(egui::Label::new(
+                    egui::RichText::new("Diagnostic".to_owned())
+                        .underline()
+                        .size(10.0),
+                ));
+
+                // TODO: layout this more nicely
+                for e in &self.errors {
+                    ui.label(RichText::new(format!("Error: {e}")));
+                    ui.end_row();
+                }
+            });
+    }
+
+    fn is_empty_diagnostics(&self) -> bool {
+        self.errors.is_empty()
+    }
+}
+
+#[derive(Debug)]
+pub struct TyInfo {
+    pub ctx: HashMap<String, Type>,
+    pub ty: Type,
+}
+
 impl EditorSpec for Fol {
-    type M = Option<(HashMap<String, Type>, Type)>;
+    type M = M;
 
     fn name() -> String {
         "fol".to_owned()
@@ -531,9 +589,7 @@ impl EditorSpec for Fol {
 
         {
             let mut ds = state.diagnostics.0.take();
-            ds.push(Diagnostic::Diagnostic(
-                "this is a test top-level diagnostic".to_owned(),
-            ));
+            ds.push_error("this is a test top-level diagnostic".to_owned());
             state.diagnostics.0.set(ds);
         }
     }
