@@ -334,6 +334,7 @@ where
                 root: state.root.into_annotated(),
                 handle: state.handle,
                 clipboard: state.clipboard,
+                diagnostics: Default::default(),
             };
             trace!(target: "diagnose", "BEGIN diagnose");
             ES::diagnose(&state);
@@ -432,6 +433,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                 root: self.core.root.to_diag(),
                 handle: self.core.handle.clone(),
                 clipboard: self.core.clipboard.clone(),
+                diagnostics: Default::default(),
             },
         );
         if let Some(core) = opt_core {
@@ -498,6 +500,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                             root: self.core.root.to_diag(),
                             handle: self.core.handle.clone(),
                             clipboard: self.core.clipboard.clone(),
+                            diagnostics: Default::default(),
                         },
                     );
                     if let Some(core) = opt_core {
@@ -1275,14 +1278,19 @@ pub fn render_expr<ES: EditorSpec>(
 #[derive(Debug, Clone)]
 pub struct CoreState<D> {
     pub root: GenEditorExpr<D>,
+    pub diagnostics: D,
     pub handle: Handle,
     pub clipboard: Option<PlainFragment>,
 }
 
 impl<D> CoreState<D> {
-    pub fn new(expr: GenEditorExpr<D>, handle: Handle) -> Self {
+    pub fn new(expr: GenEditorExpr<D>, handle: Handle) -> Self
+    where
+        D: Default,
+    {
         Self {
             root: expr,
+            diagnostics: Default::default(),
             handle,
             clipboard: None,
         }
@@ -1293,6 +1301,7 @@ impl<D> CoreState<D> {
             root: self.root.into_diag(),
             handle: self.handle,
             clipboard: self.clipboard,
+            diagnostics: Default::default(),
         }
     }
 
@@ -1301,6 +1310,7 @@ impl<D> CoreState<D> {
             root: self.root.to_diag(),
             handle: self.handle.clone(),
             clipboard: self.clipboard.clone(),
+            diagnostics: Default::default(),
         }
     }
 
@@ -1309,6 +1319,7 @@ impl<D> CoreState<D> {
             root: self.root.into_plain(),
             handle: self.handle,
             clipboard: self.clipboard,
+            diagnostics: (),
         }
     }
 
@@ -1317,6 +1328,7 @@ impl<D> CoreState<D> {
             root: self.root.to_plain(),
             handle: self.handle.clone(),
             clipboard: self.clipboard.clone(),
+            diagnostics: (),
         }
     }
 }
@@ -1331,6 +1343,7 @@ impl Default for PlainCoreState {
             root: Expr::new(GenEditorLabel::new(Constructor::Root, ()), Span::empty()),
             handle: Default::default(),
             clipboard: Default::default(),
+            diagnostics: Default::default(),
         }
     }
 }
