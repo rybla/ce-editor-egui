@@ -64,6 +64,14 @@ lazy_static! {
 #[derive(Default)]
 pub struct MutMetadata<Metadata>(pub Cell<Metadata>);
 
+impl<Metadata: EditorMetadata> MutMetadata<Metadata> {
+    pub fn modify(&self, f: impl FnOnce(Metadata) -> Metadata) {
+        let m = self.0.take();
+        let m = f(m);
+        self.0.set(m);
+    }
+}
+
 impl<Metadata: Debug + Default> Debug for MutMetadata<Metadata> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = self.0.take();
@@ -236,11 +244,11 @@ impl<M: EditorMetadata> MetaExpr<M> {
         }
     }
 
-    pub fn modify_metadata<F: FnOnce(M) -> M>(&self, f: F) {
-        let m = self.label.metadata.0.take();
-        let m = f(m);
-        self.label.metadata.0.set(m);
-    }
+    // pub fn modify_metadata<F: FnOnce(M) -> M>(&self, f: F) {
+    //     let m = self.label.metadata.0.take();
+    //     let m = f(m);
+    //     self.label.metadata.0.set(m);
+    // }
 
     // gives children without newlines, flattens posargs, and place errors on posargs with wrong number of args
     pub fn to_flattened<'a>(&'a self) -> Vec<&'a Self> {
@@ -256,7 +264,7 @@ impl<M: EditorMetadata> MetaExpr<M> {
             match kid.label.constructor {
                 Constructor::PosArg => {
                     if kid.kids.0.len() != 1 {
-                        kid.modify_metadata(|mut m| {
+                        kid.label.metadata.modify(|mut m| {
                             m.add_error(
                                 (if kid.kids.0.is_empty() {
                                     "hole"

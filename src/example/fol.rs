@@ -303,7 +303,7 @@ fn check_pos_arg(
     pos_arg: &MetaExpr<<Fol as EditorSpec>::M>,
 ) {
     // clear old errors
-    pos_arg.modify_metadata(|mut m| {
+    pos_arg.label.metadata.modify(|mut m| {
         m.errors.clear();
         m
     });
@@ -316,7 +316,7 @@ fn check_pos_arg(
 
     match without_newlines.as_slice() {
         [] => {
-            pos_arg.modify_metadata(|mut m| {
+            pos_arg.label.metadata.modify(|mut m| {
                 m.errors.push(format!("hole of sort {expected_type}"));
                 m
             });
@@ -325,7 +325,7 @@ fn check_pos_arg(
             check_type_helper(success, ctx, expected_type, kid);
         }
         _kids => {
-            pos_arg.modify_metadata(|mut m| {
+            pos_arg.label.metadata.modify(|mut m| {
                 m.errors.push("too many kids".to_owned());
                 m
             });
@@ -364,7 +364,7 @@ fn check_type_helper(
     expr: &MetaExpr<<Fol as EditorSpec>::M>,
 ) {
     // clear old errors
-    expr.modify_metadata(|mut m| {
+    expr.label.metadata.modify(|mut m| {
         m.errors.clear();
         m
     });
@@ -387,7 +387,7 @@ fn check_type_helper(
 
         // call this function to add error annotation, also sets the success flag
         let mut add_error = |e: String| {
-            expr.modify_metadata(|mut m| {
+            expr.label.metadata.modify(|mut m| {
                 m.errors.push(e);
                 m
             });
