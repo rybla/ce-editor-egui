@@ -309,7 +309,7 @@ fn check_pos_arg(
     });
 
     let without_newlines = pos_arg
-        .pat_pos_arg()
+        .to_pos_arg()
         .iter()
         .filter(|x| !matches!(x.label.constructor, Constructor::Newline))
         .collect::<Vec<_>>();
@@ -430,7 +430,7 @@ fn check_type_helper(
 
         // check kid sorts
 
-        match (expr.pat_literal(), expected_type) {
+        match (expr.to_lit(), expected_type) {
             (("lemma", [x, sig, imp]), _) => {
                 // TODO: this is redundant with the rules of Lemma in Grammar
                 check_pos_arg(success, ctx.clone(), &Type::Binding, x);
@@ -442,7 +442,7 @@ fn check_type_helper(
                 }
             }
             (("var", [x]), _) => {
-                let x = match x.pat_literal() {
+                let x = match x.to_lit() {
                     (x, []) => x,
                     _ => panic!("first child of Var should be Literal"),
                 };
@@ -453,11 +453,11 @@ fn check_type_helper(
             (("forall" | "exists", [x0, a]), _) => {
                 let ctx = {
                     let mut ctx = ctx;
-                    match x0.pat_pos_arg() {
+                    match x0.to_pos_arg() {
                         [x] => {
                             check_pos_arg(success, ctx.clone(), &Type::Var, x);
-                            match x.pat_literal() {
-                                ("var", [x]) => match x.pat_literal() {
+                            match x.to_lit() {
+                                ("var", [x]) => match x.to_lit() {
                                     (x, []) => {
                                         ctx.insert(x.to_owned(), Type::Num);
                                         ctx
@@ -474,7 +474,7 @@ fn check_type_helper(
             }
             // The proof step cases are handled here
             ((label, _), Type::Proof(prop)) => {
-                match ((label, expr.kids.0.as_slice()), prop.pat_literal()) {
+                match ((label, expr.kids.0.as_slice()), prop.to_lit()) {
                     (("intro_and", [a, b]), ("and", [p, q])) => {
                         check_pos_arg(success, ctx.clone(), &Type::Proof(p.kids.0[0].clone()), a);
                         check_pos_arg(success, ctx.clone(), &Type::Proof(q.kids.0[0].clone()), b);

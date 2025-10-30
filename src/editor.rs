@@ -184,7 +184,7 @@ impl<D> EditorExpr<D> {
         }
     }
 
-    pub fn pat_pos_arg(&self) -> &[Self] {
+    pub fn to_pos_arg(&self) -> &[Self] {
         match self.label.constructor {
             Constructor::PosArg => self.kids.0.as_slice(),
             _ => panic!("expected a PostArg expr"),
@@ -194,7 +194,7 @@ impl<D> EditorExpr<D> {
     // this pat function assumes that the program is stored as a particular kind of structure
     // where each node has a list of positional arguments, each of which has a list of expressions
     // this returns the list of spots.
-    pub fn pat_literal(&self) -> (&str, &[Self]) {
+    pub fn to_lit(&self) -> (&str, &[Self]) {
         (
             match &self.label.constructor {
                 Constructor::Literal(s) => s.as_str(),
@@ -243,7 +243,7 @@ impl<M: EditorMetadata> MetaExpr<M> {
     }
 
     // gives children without newlines, flattens posargs, and place errors on posargs with wrong number of args
-    pub fn to_pat_flattened_without_newlines<'a>(&'a self) -> Vec<&'a Self> {
+    pub fn to_flattened<'a>(&'a self) -> Vec<&'a Self> {
         let mut kids: Vec<&'a Self> = vec![];
 
         let mut add_kid = |e: &'a Self| {
