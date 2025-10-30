@@ -73,15 +73,6 @@ impl<M: Debug> Debug for MutDiagnostics<M> {
     }
 }
 
-// impl Clone for Diagnostics {
-//     fn clone(&self) -> Self {
-//         let ds = self.0.take();
-//         let ds_clone = ds.clone();
-//         self.0.set(ds);
-//         Self(Cell::new(ds_clone))
-//     }
-// }
-
 #[derive(Debug, Clone)]
 pub struct GenEditorLabel<D> {
     pub constructor: Constructor,
