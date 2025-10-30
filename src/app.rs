@@ -58,7 +58,7 @@ impl<EditorSpec: editor::EditorSpec> eframe::App for App<EditorSpec> {
                     ui.spacing_mut().scroll = ScrollStyle::floating();
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
 
-                    self.editor_state.render(ctx, ui);
+                    self.editor_state.render(ui);
 
                     ui.set_max_size(ui.min_size());
                 });

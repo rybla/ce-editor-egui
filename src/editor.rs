@@ -673,7 +673,7 @@ impl<ES: EditorSpec> EditorState<ES> {
         }
     }
 
-    pub fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub fn render(&mut self, ui: &mut egui::Ui) {
         egui::Frame::new().show(ui, |ui| {
             egui::ScrollArea::both().show(ui, |ui| {
                 ui.with_layout(
@@ -684,7 +684,6 @@ impl<ES: EditorSpec> EditorState<ES> {
 
                         let mut actions = vec![];
                         render_expr::<ES>(
-                            ctx,
                             ui,
                             RenderContext {
                                 interactive: true,
@@ -699,6 +698,24 @@ impl<ES: EditorSpec> EditorState<ES> {
                             &Path::empty(),
                             &self.core.root,
                         );
+
+                        {
+                            // TODO: this should actually be rendered in a more
+                            // aesthetically-pleasing way, like off to the right
+                            // side, and that involves reconfiguring the layout
+                            // a bit
+                            let ds = self.core.diagnostics.0.take();
+                            if !ds.is_empty() {
+                                ui.end_row();
+                                ui.end_row();
+                            }
+                            for d in &ds {
+                                render_diagnostic::<ES>(ui, d);
+                                ui.end_row();
+                            }
+                            self.core.diagnostics.0.set(ds);
+                        }
+
                         for action in actions {
                             self.do_action(action);
                         }
@@ -802,7 +819,6 @@ impl<ES: EditorSpec> EditorState<ES> {
 
 #[expect(clippy::needless_pass_by_value)]
 pub fn render_point<ES: EditorSpec + ?Sized>(
-    ctx: &egui::Context,
     ui: &mut egui::Ui,
     rc: RenderContext<'_, ES>,
     p: &Point,
@@ -864,7 +880,7 @@ pub fn render_point<ES: EditorSpec + ?Sized>(
                     rc.actions
                         .push(Action::SetDragOrigin(Some(Handle::Point(p.clone()))));
                 } else if let Some(drag_origin) = rc.drag_origin
-                    && let Some(pointer_pos) = ctx.pointer_latest_pos()
+                    && let Some(pointer_pos) = ui.ctx().pointer_latest_pos()
                     && label.rect.contains(pointer_pos)
                 {
                     trace!(target: "editor.drag", "drag hover at point: p = {p}");
@@ -1022,8 +1038,24 @@ pub fn render_point<ES: EditorSpec + ?Sized>(
     }
 }
 
+pub fn render_diagnostic<ES: EditorSpec>(ui: &mut egui::Ui, d: &Diagnostic<ES::M>) {
+    // TODO: make entire Diagnostic polymoprphic type param
+    if let Diagnostic::Diagnostic(d) = d {
+        egui::Frame::popup(ui.style())
+            .shadow(egui::Shadow::NONE)
+            .show(ui, |ui| {
+                ui.set_max_width(200.0);
+                ui.add(egui::Label::new(
+                    egui::RichText::new("Diagnostic".to_owned())
+                        .underline()
+                        .size(10.0),
+                ));
+                ui.label(d.clone());
+            });
+    }
+}
+
 pub fn render_expr<ES: EditorSpec>(
-    ctx: &egui::Context,
     ui: &mut egui::Ui,
     rc: RenderContext<'_, ES>,
     path: &Path,
@@ -1034,7 +1066,7 @@ pub fn render_expr<ES: EditorSpec>(
         let ds = expr.label.diagnostics.0.take();
 
         for (i, d) in ds.iter().enumerate() {
-            if let Diagnostic::Diagnostic(d) = d {
+            if let Diagnostic::Diagnostic(_) = d {
                 let id = ui.id().with(i);
 
                 let response = egui::Frame::new()
@@ -1055,17 +1087,7 @@ pub fn render_expr<ES: EditorSpec>(
                         .pivot(egui::Align2::LEFT_BOTTOM)
                         .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
                         .show(ui.ctx(), |ui| {
-                            egui::Frame::popup(ui.style())
-                                .shadow(egui::Shadow::NONE)
-                                .show(ui, |ui| {
-                                    ui.set_max_width(200.0);
-                                    ui.add(egui::Label::new(
-                                        egui::RichText::new("Diagnostic".to_owned())
-                                            .underline()
-                                            .size(10.0),
-                                    ));
-                                    ui.label(d.clone());
-                                })
+                            render_diagnostic::<ES>(ui, d);
                         });
                 }
             }
@@ -1108,7 +1130,7 @@ pub fn render_expr<ES: EditorSpec>(
 
     match &expr.label.constructor {
         Constructor::Literal(literal) => {
-            ES::assemble_rendered_expr(ctx, ui, rc, path, expr, render_steps_and_kids, literal);
+            ES::assemble_rendered_expr(ui, rc, path, expr, render_steps_and_kids, literal);
         }
         Constructor::Root => {
             let RenderContext {
@@ -1123,7 +1145,6 @@ pub fn render_expr<ES: EditorSpec>(
             } = rc;
             for (step, kid) in &render_steps_and_kids {
                 step.render::<ES>(
-                    ctx,
                     ui,
                     // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
                     RenderContext {
@@ -1139,7 +1160,6 @@ pub fn render_expr<ES: EditorSpec>(
                 );
                 if let Some(kid) = kid {
                     kid.render(
-                        ctx,
                         ui,
                         // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
                         RenderContext {
@@ -1179,7 +1199,6 @@ pub fn render_expr<ES: EditorSpec>(
             } = rc;
             for (step, kid) in &render_steps_and_kids {
                 step.render::<ES>(
-                    ctx,
                     ui,
                     // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
                     RenderContext {
@@ -1195,7 +1214,6 @@ pub fn render_expr<ES: EditorSpec>(
                 );
                 if let Some(kid) = kid {
                     kid.render(
-                        ctx,
                         ui,
                         // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
                         RenderContext {
@@ -1233,7 +1251,6 @@ pub fn render_expr<ES: EditorSpec>(
             } = rc;
             for (step, kid) in &render_steps_and_kids {
                 step.render::<ES>(
-                    ctx,
                     ui,
                     RenderContext {
                         handle,
@@ -1248,7 +1265,6 @@ pub fn render_expr<ES: EditorSpec>(
                 );
                 if let Some(kid) = kid {
                     kid.render(
-                        ctx,
                         ui,
                         RenderContext {
                             handle,
@@ -1572,7 +1588,6 @@ pub trait EditorSpec: 'static {
     }
 
     fn assemble_rendered_expr(
-        ctx: &egui::Context,
         ui: &mut egui::Ui,
         rc: RenderContext<'_, Self>,
         path: &Path,
@@ -1610,14 +1625,8 @@ pub struct RenderPoint<'a> {
 }
 
 impl<'a> RenderPoint<'a> {
-    pub fn render<ES: EditorSpec + ?Sized>(
-        &self,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-        rc: RenderContext<'_, ES>,
-    ) {
+    pub fn render<ES: EditorSpec + ?Sized>(&self, ui: &mut egui::Ui, rc: RenderContext<'_, ES>) {
         render_point::<ES>(
-            ctx,
             ui,
             rc,
             &Point {
@@ -1634,8 +1643,8 @@ pub struct RenderExpr<'a, ES: EditorSpec + ?Sized> {
 }
 
 impl<'a, ES: EditorSpec> RenderExpr<'a, ES> {
-    pub fn render(&self, ctx: &egui::Context, ui: &mut egui::Ui, rc: RenderContext<'_, ES>) {
-        render_expr::<ES>(ctx, ui, rc, &self.path, self.expr);
+    pub fn render(&self, ui: &mut egui::Ui, rc: RenderContext<'_, ES>) {
+        render_expr::<ES>(ui, rc, &self.path, self.expr);
     }
 }
 

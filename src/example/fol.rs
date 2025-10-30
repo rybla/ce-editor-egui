@@ -528,6 +528,14 @@ impl EditorSpec for Fol {
 
         // TODO: the &Type::Declaration is ignored here...
         check_type(hash_map! {}, &Type::Declaration, &state.root);
+
+        {
+            let mut ds = state.diagnostics.0.take();
+            ds.push(Diagnostic::Diagnostic(
+                "this is a test top-level diagnostic".to_owned(),
+            ));
+            state.diagnostics.0.set(ds);
+        }
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
@@ -673,7 +681,6 @@ impl EditorSpec for Fol {
     }
 
     fn assemble_rendered_expr(
-        ctx: &egui::Context,
         ui: &mut egui::Ui,
         rc: RenderContext<'_, Self>,
         path: &Path,
@@ -745,7 +752,6 @@ impl EditorSpec for Fol {
         } = rc;
         for (i, (step, kid)) in render_steps_and_kids.iter().enumerate() {
             step.render::<Self>(
-                ctx,
                 ui,
                 // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
                 RenderContext {
@@ -761,7 +767,6 @@ impl EditorSpec for Fol {
             );
             if let Some(kid) = kid {
                 kid.render(
-                    ctx,
                     ui,
                     // NOTE: It's really annoying, but apparently you have to do this in order to avoid ownership problems.
                     RenderContext {
