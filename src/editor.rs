@@ -62,70 +62,70 @@ lazy_static! {
 }
 
 #[derive(Default)]
-pub struct MutDiagnostics<M>(pub Cell<M>);
+pub struct MutMetadata<Metadata>(pub Cell<Metadata>);
 
-impl<M: Debug + Default> Debug for MutDiagnostics<M> {
+impl<Metadata: Debug + Default> Debug for MutMetadata<Metadata> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = self.0.take();
-        let r = f.debug_tuple("MutDiagnostics").field(&m).finish();
+        let r = f.debug_tuple("Mutmetadata").field(&m).finish();
         self.0.set(m);
         r
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct GenEditorLabel<D> {
+pub struct Label<M> {
     pub constructor: Constructor,
-    pub diagnostics: D,
+    pub metadata: M,
 }
 
-impl<D> Display for GenEditorLabel<D> {
+impl<M> Display for Label<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.constructor)
     }
 }
 
-pub type DiagEditorLabel<M> = GenEditorLabel<MutDiagnostics<M>>;
-pub type PlainEditorLabel = GenEditorLabel<()>;
+pub type MetaLabel<M> = Label<MutMetadata<M>>;
+pub type PlainLabel = Label<()>;
 
-impl<D> GenEditorLabel<D> {
-    pub fn new(constructor: Constructor, diagnostics: D) -> Self {
+impl<M> Label<M> {
+    pub fn new(constructor: Constructor, metadata: M) -> Self {
         Self {
             constructor,
-            diagnostics,
+            metadata,
         }
     }
 
-    pub fn into_plain(self) -> PlainEditorLabel {
-        GenEditorLabel {
+    pub fn into_plain(self) -> PlainLabel {
+        Label {
             constructor: self.constructor,
-            diagnostics: (),
+            metadata: (),
         }
     }
 
-    pub fn to_plain(&self) -> PlainEditorLabel {
-        GenEditorLabel {
+    pub fn to_plain(&self) -> PlainLabel {
+        Label {
             constructor: self.constructor.clone(),
-            diagnostics: (),
+            metadata: (),
         }
     }
 
-    pub fn to_diag<M: Default>(&self) -> DiagEditorLabel<M> {
-        GenEditorLabel {
+    pub fn to_meta<M1: EditorMetadata>(&self) -> MetaLabel<M1> {
+        Label {
             constructor: self.constructor.clone(),
-            diagnostics: MutDiagnostics::default(),
+            metadata: MutMetadata::default(),
         }
     }
 
-    pub fn into_diag<M: Default>(self) -> DiagEditorLabel<M> {
-        GenEditorLabel {
+    pub fn into_meta<M1: EditorMetadata>(self) -> MetaLabel<M1> {
+        Label {
             constructor: self.constructor,
-            diagnostics: MutDiagnostics::default(),
+            metadata: MutMetadata::default(),
         }
     }
 }
 
-impl<M> Expr<DiagEditorLabel<M>> {
+impl<M> Expr<MetaLabel<M>> {
     pub fn pat2(&self) -> (&Constructor, &[Self]) {
         (&self.label.constructor, self.kids.0.as_slice())
     }
@@ -134,15 +134,15 @@ impl<M> Expr<DiagEditorLabel<M>> {
 // A GenEditorExpr is expected to always conform to the following grammar:
 // e = (constructor [PosArg [d]])
 // d = newline | e
-pub type GenEditorExpr<D> = Expr<GenEditorLabel<D>>;
-pub type DiagExpr<M> = GenEditorExpr<MutDiagnostics<M>>;
-pub type PlainExpr = GenEditorExpr<()>;
+pub type EditorExpr<M> = Expr<Label<M>>;
+pub type MetaExpr<M> = EditorExpr<MutMetadata<M>>;
+pub type PlainExpr = EditorExpr<()>;
 
 impl PlainExpr {
-    pub fn into_annotated<M: Default>(self) -> DiagExpr<M> {
-        self.map_owned(&mut |l| GenEditorLabel {
+    pub fn into_annotated<M: Default>(self) -> MetaExpr<M> {
+        self.map_owned(&mut |l| Label {
             constructor: l.constructor,
-            diagnostics: MutDiagnostics::default(),
+            metadata: MutMetadata::default(),
         })
     }
 }
@@ -151,21 +151,21 @@ impl PlainExpr {
 macro_rules! editor_ex {
     ( $label:expr, [ $( $e:expr ),* $(,)? ] ) => {
         Expr {
-            label: GenEditorLabel { constructor: Constructor::Literal($label.to_owned()), diagnostics: Default::default() },
+            label: Label { constructor: Constructor::Literal($label.to_owned()), metadata: Default::default() },
             kids: Span(vec![ $( $e ),* ]),
         }
     };
 }
 
-impl<D> GenEditorExpr<D> {
+impl<D> EditorExpr<D> {
     pub fn new_pos_arg(kids: Vec<Self>) -> Self
     where
         D: Default,
     {
         Self {
-            label: GenEditorLabel {
+            label: Label {
                 constructor: Constructor::PosArg,
-                diagnostics: Default::default(),
+                metadata: Default::default(),
             },
             kids: Span(kids),
         }
@@ -176,9 +176,9 @@ impl<D> GenEditorExpr<D> {
         D: Default,
     {
         Self {
-            label: GenEditorLabel {
+            label: Label {
                 constructor: Constructor::Literal(lit),
-                diagnostics: Default::default(),
+                metadata: Default::default(),
             },
             kids: Span(kids),
         }
@@ -211,47 +211,42 @@ impl<D> GenEditorExpr<D> {
         self.map_owned(&mut |l| l.into_plain())
     }
 
-    pub fn to_diag<M: Default>(&self) -> DiagExpr<M> {
-        self.map(&mut |l| l.to_diag())
+    pub fn to_meta<M: EditorMetadata>(&self) -> MetaExpr<M> {
+        self.map(&mut |l| l.to_meta())
     }
 
-    pub fn into_diag<M: Default>(self) -> DiagExpr<M> {
-        self.map_owned(&mut |l| l.into_diag())
+    pub fn into_meta<M: EditorMetadata>(self) -> MetaExpr<M> {
+        self.map_owned(&mut |l| l.into_meta())
     }
 }
 
-impl<M: Default> DiagExpr<M> {
+impl<M: Default> MetaExpr<M> {
     // clones but without cloning Cells, and just makes new Cells
-    pub fn clone_without_diagnostics(&self) -> Self {
+    pub fn clone_without_metadata(&self) -> Self {
         let Self {
-            label: DiagEditorLabel { constructor, .. },
+            label: MetaLabel { constructor, .. },
             kids,
         } = self;
         Self {
-            label: DiagEditorLabel {
+            label: MetaLabel {
                 constructor: constructor.clone(),
-                diagnostics: MutDiagnostics::default(),
+                metadata: MutMetadata::default(),
             },
-            kids: Span(
-                kids.0
-                    .iter()
-                    .map(|x| x.clone_without_diagnostics())
-                    .collect(),
-            ),
+            kids: Span(kids.0.iter().map(|x| x.clone_without_metadata()).collect()),
         }
     }
 
-    pub fn modify_diagnostic<F: FnOnce(M) -> M>(&self, f: F) {
-        let m = self.label.diagnostics.0.take();
+    pub fn modify_metadata<F: FnOnce(M) -> M>(&self, f: F) {
+        let m = self.label.metadata.0.take();
         let m = f(m);
-        self.label.diagnostics.0.set(m);
+        self.label.metadata.0.set(m);
     }
 }
 
-pub type DiagFragment<M> = Fragment<GenEditorLabel<MutDiagnostics<M>>>;
-pub type PlainFragment = Fragment<GenEditorLabel<()>>;
+pub type MetaFragment<M> = Fragment<Label<MutMetadata<M>>>;
+pub type PlainFragment = Fragment<Label<()>>;
 
-impl<M> DiagFragment<M> {
+impl<M> MetaFragment<M> {
     pub fn into_plain(self) -> PlainFragment {
         match self {
             Self::Span(span) => Fragment::Span(span.into_plain()),
@@ -260,19 +255,19 @@ impl<M> DiagFragment<M> {
     }
 }
 
-pub type DiagSpan<M> = Span<GenEditorLabel<MutDiagnostics<M>>>;
-pub type PlainSpan = Span<GenEditorLabel<()>>;
+pub type MetaSpan<M> = Span<Label<MutMetadata<M>>>;
+pub type PlainSpan = Span<Label<()>>;
 
-impl<M> DiagSpan<M> {
+impl<M> MetaSpan<M> {
     pub fn into_plain(self) -> PlainSpan {
         Span(self.0.into_iter().map(|e| e.into_plain()).collect())
     }
 }
 
-pub type DiagZipper<M> = Zipper<GenEditorLabel<MutDiagnostics<M>>>;
-pub type PlainZipper = Zipper<GenEditorLabel<()>>;
+pub type MetaZipper<M> = Zipper<Label<MutMetadata<M>>>;
+pub type PlainZipper = Zipper<Label<()>>;
 
-impl<M> DiagZipper<M> {
+impl<M> MetaZipper<M> {
     pub fn into_plain(self) -> PlainZipper {
         Zipper {
             span_ol: self.span_ol.into_plain(),
@@ -282,19 +277,19 @@ impl<M> DiagZipper<M> {
     }
 }
 
-pub type DiagContext<M> = Context<GenEditorLabel<MutDiagnostics<M>>>;
-pub type PlainContext = Context<GenEditorLabel<()>>;
+pub type MetaContext<M> = Context<Label<MutMetadata<M>>>;
+pub type PlainContext = Context<Label<()>>;
 
-impl<M> DiagContext<M> {
+impl<M> MetaContext<M> {
     pub fn into_plain(self) -> PlainContext {
         Context(self.0.into_iter().map(|th| th.into_plain()).collect())
     }
 }
 
-pub type DiagTooth<M> = Tooth<GenEditorLabel<MutDiagnostics<M>>>;
-pub type PlainTooth = Tooth<GenEditorLabel<()>>;
+pub type MetaTooth<M> = Tooth<Label<MutMetadata<M>>>;
+pub type PlainTooth = Tooth<Label<()>>;
 
-impl<M> DiagTooth<M> {
+impl<M> MetaTooth<M> {
     pub fn into_plain(self) -> PlainTooth {
         Tooth {
             label: self.label.into_plain(),
@@ -306,7 +301,7 @@ impl<M> DiagTooth<M> {
 
 pub struct EditorState<ES: EditorSpec + ?Sized> {
     pub spec: PhantomData<ES>,
-    pub core: CoreState<MutDiagnostics<ES::M>>,
+    pub core: CoreState<MutMetadata<ES::M>>,
     pub menu: Option<EditMenu<ES>>,
     pub history: Vec<PlainCoreState>,
     pub future: Vec<PlainCoreState>,
@@ -318,17 +313,15 @@ where
     ES::M: Default,
 {
     fn default() -> Self {
-        let state: CoreState<MutDiagnostics<ES::M>> = {
+        let state: CoreState<MutMetadata<ES::M>> = {
             let state = ES::initial_state();
-            let state: CoreState<MutDiagnostics<ES::M>> = CoreState {
+            let state: CoreState<MutMetadata<ES::M>> = CoreState {
                 root: state.root.into_annotated(),
                 handle: state.handle,
                 clipboard: state.clipboard,
-                diagnostics: Default::default(),
+                metadata: Default::default(),
             };
-            trace!(target: "diagnose", "BEGIN diagnose");
-            ES::diagnose(&state);
-            trace!(target: "diagnose", "END diagnose");
+            ES::annotate(&state);
             state
         };
         Self {
@@ -414,16 +407,16 @@ impl<ES: EditorSpec> EditorState<ES> {
 
     pub fn do_edit(
         &mut self,
-        edit: impl Fn(&str, DiagCoreState<ES>) -> Option<DiagCoreState<ES>>,
+        edit: impl Fn(&str, MetaCoreState<ES>) -> Option<MetaCoreState<ES>>,
         query: &str,
     ) {
         let opt_core = (edit)(
             query,
-            DiagCoreState::<ES> {
-                root: self.core.root.to_diag(),
+            MetaCoreState::<ES> {
+                root: self.core.root.to_meta(),
                 handle: self.core.handle.clone(),
                 clipboard: self.core.clipboard.clone(),
-                diagnostics: Default::default(),
+                metadata: Default::default(),
             },
         );
         if let Some(core) = opt_core {
@@ -486,11 +479,11 @@ impl<ES: EditorSpec> EditorState<ES> {
                     // self.do_edit since that borrows self as mutable
                     let opt_core = (option.edit)(
                         &menu.query,
-                        DiagCoreState::<ES> {
-                            root: self.core.root.to_diag(),
+                        MetaCoreState::<ES> {
+                            root: self.core.root.to_meta(),
                             handle: self.core.handle.clone(),
                             clipboard: self.core.clipboard.clone(),
-                            diagnostics: Default::default(),
+                            metadata: Default::default(),
                         },
                     );
                     if let Some(core) = opt_core {
@@ -689,18 +682,18 @@ impl<ES: EditorSpec> EditorState<ES> {
                             &self.core.root,
                         );
 
-                        // render top-level diagnostics
+                        // render top-level metadata
                         {
                             // TODO: this should actually be rendered in a more
                             // aesthetically-pleasing way, like off to the right
                             // side, and that involves reconfiguring the layout
                             // a bit
-                            let m = self.core.diagnostics.0.take();
-                            if !m.is_empty_diagnostics() {
+                            let m = self.core.metadata.0.take();
+                            if !m.is_empty_metadata() {
                                 ui.end_row();
-                                m.render_diagnostics(ui);
+                                m.render_metadata(ui);
                             }
-                            self.core.diagnostics.0.set(m);
+                            self.core.metadata.0.set(m);
                         }
 
                         for action in actions {
@@ -718,8 +711,8 @@ impl<ES: EditorSpec> EditorState<ES> {
                 if let Some(core) = self.future.pop() {
                     self.history.push(self.core.to_plain());
                     self.menu = None;
-                    self.core = core.to_diag::<ES>();
-                    ES::diagnose(&self.core);
+                    self.core = core.to_meta::<ES>();
+                    ES::annotate(&self.core);
                 } else {
                     warn!(target: "editor", "failed to redo since future was empty");
                 }
@@ -728,8 +721,8 @@ impl<ES: EditorSpec> EditorState<ES> {
                 if let Some(core) = self.history.pop() {
                     self.future.push(self.core.to_plain());
                     self.menu = None;
-                    self.core = core.to_diag::<ES>();
-                    ES::diagnose(&self.core);
+                    self.core = core.to_meta::<ES>();
+                    ES::annotate(&self.core);
                 } else {
                     warn!(target: "editor", "failed to undo since history was empty");
                 }
@@ -745,7 +738,7 @@ impl<ES: EditorSpec> EditorState<ES> {
             }
             Action::Paste => {
                 if let Some(frag) = &self.core.clipboard {
-                    let frag = frag.to_ref().map_to_owned(&mut |l| l.to_diag());
+                    let frag = frag.to_ref().map_to_owned(&mut |l| l.to_meta());
                     self.snapshot();
                     self.menu = None;
                     let handle = self
@@ -753,7 +746,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                         .root
                         .insert_fragment(self.core.handle.clone(), frag);
                     self.core.handle = handle;
-                    ES::diagnose(&self.core);
+                    ES::annotate(&self.core);
                 } else {
                     warn!(target: "editor", "failed to paste since clipboard was empty");
                 }
@@ -764,7 +757,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                     self.menu = None;
                     self.core.clipboard = Some(frag.into_plain());
                     self.core.handle = h;
-                    ES::diagnose(&self.core);
+                    ES::annotate(&self.core);
                 } else {
                     warn!(target: "editor", "failed to cut");
                 }
@@ -774,7 +767,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                 if let Some((_frag, h)) = self.core.root.cut(&self.core.handle) {
                     self.menu = None;
                     self.core.handle = h;
-                    ES::diagnose(&self.core);
+                    ES::annotate(&self.core);
                 } else {
                     warn!(target: "editor", "failed to delete");
                 }
@@ -790,7 +783,7 @@ impl<ES: EditorSpec> EditorState<ES> {
                 self.snapshot();
                 self.menu = None;
                 self.core = core;
-                ES::diagnose(&self.core);
+                ES::annotate(&self.core);
             }
             Action::SetDragOrigin(handle) => {
                 self.drag_origin = handle;
@@ -1029,15 +1022,15 @@ pub fn render_expr<ES: EditorSpec>(
     ui: &mut egui::Ui,
     rc: RenderContext<'_, ES>,
     path: &Path,
-    expr: &DiagExpr<ES::M>,
+    expr: &MetaExpr<ES::M>,
 ) {
-    // render diagnostics
+    // render metadata
     {
         let id = ui.id();
 
-        let m = expr.label.diagnostics.0.take();
+        let m = expr.label.metadata.0.take();
 
-        if !m.is_empty_diagnostics() {
+        if !m.is_empty_metadata() {
             let response = egui::Frame::new()
                 .fill(rc.color_scheme.error_background)
                 .show(ui, |ui| {
@@ -1055,12 +1048,12 @@ pub fn render_expr<ES: EditorSpec>(
                     .pivot(egui::Align2::LEFT_BOTTOM)
                     .fixed_pos(response.rect.left_top() + egui::Vec2::new(0.0, -2.0))
                     .show(ui.ctx(), |ui| {
-                        m.render_diagnostics(ui);
+                        m.render_metadata(ui);
                     });
             }
         }
 
-        expr.label.diagnostics.0.set(m);
+        expr.label.metadata.0.set(m);
     }
 
     let mut render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, ES>>)> = vec![];
@@ -1260,40 +1253,40 @@ pub fn render_expr<ES: EditorSpec>(
 
 #[derive(Debug, Clone)]
 pub struct CoreState<D> {
-    pub root: GenEditorExpr<D>,
-    pub diagnostics: D,
+    pub root: EditorExpr<D>,
+    pub metadata: D,
     pub handle: Handle,
     pub clipboard: Option<PlainFragment>,
 }
 
 impl<D> CoreState<D> {
-    pub fn new(expr: GenEditorExpr<D>, handle: Handle) -> Self
+    pub fn new(expr: EditorExpr<D>, handle: Handle) -> Self
     where
         D: Default,
     {
         Self {
             root: expr,
-            diagnostics: Default::default(),
+            metadata: Default::default(),
             handle,
             clipboard: None,
         }
     }
 
-    pub fn into_diag<ES: EditorSpec + ?Sized>(self) -> DiagCoreState<ES> {
+    pub fn into_meta<ES: EditorSpec + ?Sized>(self) -> MetaCoreState<ES> {
         CoreState {
-            root: self.root.into_diag(),
+            root: self.root.into_meta(),
             handle: self.handle,
             clipboard: self.clipboard,
-            diagnostics: Default::default(),
+            metadata: Default::default(),
         }
     }
 
-    pub fn to_diag<ES: EditorSpec + ?Sized>(&self) -> DiagCoreState<ES> {
+    pub fn to_meta<ES: EditorSpec + ?Sized>(&self) -> MetaCoreState<ES> {
         CoreState {
-            root: self.root.to_diag(),
+            root: self.root.to_meta(),
             handle: self.handle.clone(),
             clipboard: self.clipboard.clone(),
-            diagnostics: Default::default(),
+            metadata: Default::default(),
         }
     }
 
@@ -1302,7 +1295,7 @@ impl<D> CoreState<D> {
             root: self.root.into_plain(),
             handle: self.handle,
             clipboard: self.clipboard,
-            diagnostics: (),
+            metadata: (),
         }
     }
 
@@ -1311,22 +1304,22 @@ impl<D> CoreState<D> {
             root: self.root.to_plain(),
             handle: self.handle.clone(),
             clipboard: self.clipboard.clone(),
-            diagnostics: (),
+            metadata: (),
         }
     }
 }
 
-pub type DiagCoreState<ES> = CoreState<MutDiagnostics<<ES as EditorSpec>::M>>;
+pub type MetaCoreState<ES> = CoreState<MutMetadata<<ES as EditorSpec>::M>>;
 
 pub type PlainCoreState = CoreState<()>;
 
 impl Default for PlainCoreState {
     fn default() -> Self {
         Self {
-            root: Expr::new(GenEditorLabel::new(Constructor::Root, ()), Span::empty()),
+            root: Expr::new(Label::new(Constructor::Root, ()), Span::empty()),
             handle: Default::default(),
             clipboard: Default::default(),
-            diagnostics: Default::default(),
+            metadata: Default::default(),
         }
     }
 }
@@ -1413,7 +1406,7 @@ impl<ES: EditorSpec + ?Sized> EditMenu<ES> {
     }
 }
 
-pub type Edit<ES> = fn(&str, DiagCoreState<ES>) -> Option<DiagCoreState<ES>>;
+pub type Edit<ES> = fn(&str, MetaCoreState<ES>) -> Option<MetaCoreState<ES>>;
 
 #[derive(Debug, Clone)]
 pub struct EditMenuOption<ES: EditorSpec + ?Sized> {
@@ -1467,21 +1460,9 @@ impl Display for Constructor {
     }
 }
 
-// #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-// pub enum M {
-//     Diagnostic(String),
-//     Metadata(M),
-// }
-
-// impl<M: Debug> Display for M {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{self:?}")
-//     }
-// }
-
 pub struct RenderContext<'a, ES: EditorSpec + ?Sized> {
     pub handle: &'a Handle,
-    pub root: &'a DiagExpr<ES::M>,
+    pub root: &'a MetaExpr<ES::M>,
     pub color_scheme: &'a ColorScheme,
     pub drag_origin: &'a Option<Handle>,
     pub menu: &'a mut Option<EditMenu<ES>>,
@@ -1493,9 +1474,9 @@ pub struct RenderContext<'a, ES: EditorSpec + ?Sized> {
 pub struct AssembleRenderExprArgs {}
 
 pub trait EditorMetadata: Debug + Default {
-    fn render_diagnostics(&self, ui: &mut egui::Ui);
+    fn render_metadata(&self, ui: &mut egui::Ui);
 
-    fn is_empty_diagnostics(&self) -> bool;
+    fn is_empty_metadata(&self) -> bool;
 }
 
 pub trait EditorSpec: 'static {
@@ -1507,11 +1488,11 @@ pub trait EditorSpec: 'static {
 
     fn get_edits(state: &EditorState<Self>) -> Vec<EditMenuOption<Self>>;
 
-    fn diagnose(state: &CoreState<MutDiagnostics<Self::M>>);
+    fn annotate(state: &CoreState<MutMetadata<Self::M>>);
 
-    fn is_valid_handle_specialized(handle: &Handle, root: &DiagExpr<Self::M>) -> bool;
+    fn is_valid_handle_specialized(handle: &Handle, root: &MetaExpr<Self::M>) -> bool;
 
-    fn is_valid_handle(handle: &Handle, root: &DiagExpr<Self::M>) -> bool {
+    fn is_valid_handle(handle: &Handle, root: &MetaExpr<Self::M>) -> bool {
         trace!(target: "is_valid_handle", "handle = {handle}");
         trace!(target: "is_valid_handle", "root   = {root}");
 
@@ -1564,7 +1545,7 @@ pub trait EditorSpec: 'static {
         ui: &mut egui::Ui,
         rc: RenderContext<'_, Self>,
         path: &Path,
-        expr: &DiagExpr<Self::M>,
+        expr: &MetaExpr<Self::M>,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
         literal: &str,
     );
@@ -1612,7 +1593,7 @@ impl<'a> RenderPoint<'a> {
 
 pub struct RenderExpr<'a, ES: EditorSpec + ?Sized> {
     pub path: Path,
-    pub expr: &'a DiagExpr<ES::M>,
+    pub expr: &'a MetaExpr<ES::M>,
 }
 
 impl<'a, ES: EditorSpec> RenderExpr<'a, ES> {
@@ -1628,7 +1609,7 @@ pub enum Action<ES: EditorSpec + ?Sized> {
     Paste,
     Cut,
     Delete,
-    SetCore(DiagCoreState<ES>),
+    SetCore(MetaCoreState<ES>),
     SetHandle(SetHandle),
     SetDragOrigin(Option<Handle>),
     Undo,
@@ -1642,12 +1623,12 @@ pub struct SetHandle {
 
 pub fn insert_newline<ES: EditorSpec + ?Sized>(
     _query: &str,
-    mut state: DiagCoreState<ES>,
-) -> Option<DiagCoreState<ES>> {
+    mut state: MetaCoreState<ES>,
+) -> Option<MetaCoreState<ES>> {
     let h = state.root.insert_fragment(
         state.handle,
         Fragment::Span(span![ex![
-            GenEditorLabel::new(Constructor::Newline, MutDiagnostics::default()),
+            Label::new(Constructor::Newline, MutMetadata::default()),
             []
         ]]),
     );

@@ -29,7 +29,7 @@
 //             i += 1;
 //             EditorLabel {
 //                 constructor: Constructor::Literal(format!(" label_{i} ")),
-//                 diagnostics: vec![Diagnostic(" diagnostic ".to_owned())],
+//                 metadata: vec![Diagnostic(" diagnostic ".to_owned())],
 //             }
 //         };
 
@@ -43,7 +43,7 @@
 //                 Fragment::Span(Span(vec![Expr {
 //                     label: EditorLabel {
 //                         constructor: Constructor::Literal("A".to_owned()),
-//                         diagnostics: Default::default(),
+//                         metadata: Default::default(),
 //                     },
 //                     kids: Span(vec![]),
 //                 }]))
@@ -73,7 +73,7 @@
 //         ]
 //     }
 
-//     fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
+//     fn get_metadata(_state: EditorState<Self>) -> Vec<Diagnostic> {
 //         vec![Diagnostic("this is an example diagnostic".to_owned())]
 //     }
 

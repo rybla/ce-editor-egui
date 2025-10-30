@@ -216,7 +216,7 @@ fn get_rule(c: &Constructor) -> Option<&Rule> {
 }
 
 #[expect(dead_code)]
-fn get_sorts(span: &Span<DiagEditorLabel<<Fol as EditorSpec>::M>>) -> Vec<Option<&Sort>> {
+fn get_sorts(span: &Span<MetaLabel<<Fol as EditorSpec>::M>>) -> Vec<Option<&Sort>> {
     span.0
         .iter()
         .map(|e| get_rule(&e.label.constructor).map(|r| &r.sort))
@@ -236,18 +236,18 @@ macro_rules! make_simple_edit_menu_option {
                     .get($name)
                     .unwrap_or_else(|| panic!("no rule for {}", $name));
 
-                let mut kids: Vec<DiagExpr<<Fol as EditorSpec>::M>> = vec![];
+                let mut kids: Vec<MetaExpr<<Fol as EditorSpec>::M>> = vec![];
                 match &rule.kids {
                     FixedArity(sorts, _) => {
                         for _ in 0..sorts.len() {
                             kids.push(ex![
-                                GenEditorLabel::new(Constructor::PosArg, MutDiagnostics::default()),
+                                Label::new(Constructor::PosArg, MutMetadata::default()),
                                 []
                             ]);
                         }
                     }
                     FreeArity(_sort) => {}
-                    LiteralKid => {} // TODO: put some diagnostic if not 1 kid
+                    LiteralKid => {} // TODO: add error if not 1 kid
                 }
 
                 let tooth_into_first_kid = pop_front(&mut kids).map(|e| e.into_tooth(Index(0)));
@@ -259,18 +259,18 @@ macro_rules! make_simple_edit_menu_option {
                         span_or: Span::empty(),
                         middle: Context(match tooth_into_first_kid {
                             None => vec![Tooth {
-                                label: GenEditorLabel::new(
+                                label: Label::new(
                                     Constructor::Literal($name.to_owned()),
-                                    MutDiagnostics::default(),
+                                    MutMetadata::default(),
                                 ),
                                 span_l: Span::empty(),
                                 span_r: Span(kids),
                             }],
                             Some(tooth_into_first_kid) => vec![
                                 Tooth {
-                                    label: GenEditorLabel::new(
+                                    label: Label::new(
                                         Constructor::Literal($name.to_owned()),
-                                        MutDiagnostics::default(),
+                                        MutMetadata::default(),
                                     ),
                                     span_l: Span::empty(),
                                     span_r: Span(kids),
@@ -300,10 +300,10 @@ fn check_pos_arg(
     success: &mut bool,
     ctx: HashMap<String, Type>,
     expected_type: &Type,
-    pos_arg: &DiagExpr<<Fol as EditorSpec>::M>,
+    pos_arg: &MetaExpr<<Fol as EditorSpec>::M>,
 ) {
     // clear old errors
-    pos_arg.modify_diagnostic(|mut m| {
+    pos_arg.modify_metadata(|mut m| {
         m.errors.clear();
         m
     });
@@ -316,7 +316,7 @@ fn check_pos_arg(
         .collect::<Vec<_>>();
     match without_newlines.as_slice() {
         [] => {
-            pos_arg.modify_diagnostic(|mut m| {
+            pos_arg.modify_metadata(|mut m| {
                 m.errors.push(format!("hole of sort {expected_type}"));
                 m
             });
@@ -325,7 +325,7 @@ fn check_pos_arg(
             check_type_helper(success, ctx, expected_type, kid);
         }
         _kids => {
-            pos_arg.modify_diagnostic(|mut m| {
+            pos_arg.modify_metadata(|mut m| {
                 m.errors.push("too many kids".to_owned());
                 m
             });
@@ -338,7 +338,7 @@ fn check_free_args(
     success: &mut bool,
     ctx: &HashMap<String, Type>,
     expected_type: &Type,
-    args: &[DiagExpr<<Fol as EditorSpec>::M>],
+    args: &[MetaExpr<<Fol as EditorSpec>::M>],
 ) {
     for arg in args {
         check_type_helper(success, ctx.clone(), expected_type, arg);
@@ -348,23 +348,23 @@ fn check_free_args(
 fn check_type(
     ctx: HashMap<String, Type>,
     expected_type: &Type,
-    expr: &DiagExpr<<Fol as EditorSpec>::M>,
+    expr: &MetaExpr<<Fol as EditorSpec>::M>,
 ) -> bool {
     let mut success = true;
     check_type_helper(&mut success, ctx, expected_type, expr);
     success
 }
 
-// clears old diagnostics on the expr, typechecks it, and places new diagnostics
+// clears old metadata on the expr, typechecks it, and places new metadata
 // corresponding to the new type errors.
 fn check_type_helper(
     success: &mut bool,
     ctx: HashMap<String, Type>,
     expected_type: &Type,
-    expr: &DiagExpr<<Fol as EditorSpec>::M>,
+    expr: &MetaExpr<<Fol as EditorSpec>::M>,
 ) {
     // clear old errors
-    expr.modify_diagnostic(|mut m| {
+    expr.modify_metadata(|mut m| {
         m.errors.clear();
         m
     });
@@ -387,7 +387,7 @@ fn check_type_helper(
 
         // call this function to add error annotation, also sets the success flag
         let mut add_error = |e: String| {
-            expr.modify_diagnostic(|mut m| {
+            expr.modify_metadata(|mut m| {
                 m.errors.push(e);
                 m
             });
@@ -525,13 +525,13 @@ impl M {
 }
 
 impl EditorMetadata for M {
-    fn render_diagnostics(&self, ui: &mut egui::Ui) {
+    fn render_metadata(&self, ui: &mut egui::Ui) {
         egui::Frame::popup(ui.style())
             .shadow(egui::Shadow::NONE)
             .show(ui, |ui| {
                 ui.set_max_width(200.0);
                 ui.add(egui::Label::new(
-                    egui::RichText::new("Diagnostic".to_owned())
+                    egui::RichText::new("Errors".to_owned())
                         .underline()
                         .size(10.0),
                 ));
@@ -544,7 +544,7 @@ impl EditorMetadata for M {
             });
     }
 
-    fn is_empty_diagnostics(&self) -> bool {
+    fn is_empty_metadata(&self) -> bool {
         self.errors.is_empty()
     }
 }
@@ -565,9 +565,9 @@ impl EditorSpec for Fol {
     fn initial_state() -> PlainCoreState {
         CoreState::new(
             Expr::new(
-                GenEditorLabel {
+                Label {
                     constructor: Constructor::Root,
-                    diagnostics: (),
+                    metadata: (),
                 },
                 Span::empty(),
             ),
@@ -575,7 +575,7 @@ impl EditorSpec for Fol {
         )
     }
 
-    fn diagnose(state: &CoreState<MutDiagnostics<Self::M>>) {
+    fn annotate(state: &CoreState<MutMetadata<Self::M>>) {
         // for kid in &state.root.kids.0 {
         //     let _success = check_type(hash_map! {}, &Type::Prop, kid);
         // }
@@ -588,9 +588,9 @@ impl EditorSpec for Fol {
         check_type(hash_map! {}, &Type::Declaration, &state.root);
 
         {
-            let mut ds = state.diagnostics.0.take();
-            ds.push_error("this is a test top-level diagnostic".to_owned());
-            state.diagnostics.0.set(ds);
+            let mut ds = state.metadata.0.take();
+            ds.push_error("this is an example top-level error".to_owned());
+            state.metadata.0.set(ds);
         }
     }
 
@@ -606,9 +606,9 @@ impl EditorSpec for Fol {
                 edit: |query, mut state| {
                     state.handle = state.root.insert_fragment(
                         state.handle,
-                        Fragment::Span(Span(vec![GenEditorExpr::new_lit(
+                        Fragment::Span(Span(vec![EditorExpr::new_lit(
                             "var".to_owned(),
-                            vec![GenEditorExpr::new_lit(query.to_owned(), vec![])],
+                            vec![EditorExpr::new_lit(query.to_owned(), vec![])],
                         )])),
                     );
                     Some(state)
@@ -624,9 +624,9 @@ impl EditorSpec for Fol {
                 edit: |query, mut state| {
                     state.handle = state.root.insert_fragment(
                         state.handle,
-                        Fragment::Span(Span(vec![GenEditorExpr::new_lit(
+                        Fragment::Span(Span(vec![EditorExpr::new_lit(
                             "binding".to_owned(),
-                            vec![GenEditorExpr::new_lit(query.to_owned(), vec![])],
+                            vec![EditorExpr::new_lit(query.to_owned(), vec![])],
                         )])),
                     );
                     Some(state)
@@ -660,7 +660,7 @@ impl EditorSpec for Fol {
         ]
     }
 
-    fn is_valid_handle_specialized(h: &Handle, root: &DiagExpr<Self::M>) -> bool {
+    fn is_valid_handle_specialized(h: &Handle, root: &MetaExpr<Self::M>) -> bool {
         match h {
             Handle::Point(p) => {
                 let e = root.get_subexpr(&p.path);
@@ -740,7 +740,7 @@ impl EditorSpec for Fol {
         ui: &mut egui::Ui,
         rc: RenderContext<'_, Self>,
         path: &Path,
-        expr: &DiagExpr<Self::M>,
+        expr: &MetaExpr<Self::M>,
         render_steps_and_kids: Vec<(RenderPoint<'_>, Option<RenderExpr<'_, Self>>)>,
         label: &str,
     ) {

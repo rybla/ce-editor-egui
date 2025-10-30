@@ -305,19 +305,19 @@
 //         }
 //     }
 
-//     fn diagnose(state: &CoreState<MutDiagnostics>) {
+//     fn diagnose(state: &CoreState<Mutmetadata>) {
 //         if let Ok(game) = Game::parse(&state.root, &state.handle) {
 //             let winner = game.get_winner();
 //             let turn = game.get_turn();
 
 //             let game_expr = &state.root.kids.0[0];
-//             let mut ds = game_expr.label.diagnostics.0.take();
+//             let mut ds = game_expr.label.metadata.0.take();
 //             ds.push(Diagnostic(format!("winner: {winner}")));
 //             ds.push(Diagnostic(format!(
 //                 "turn: {}",
 //                 if !turn { "X" } else { "O" }
 //             )));
-//             game_expr.label.diagnostics.0.set(ds);
+//             game_expr.label.metadata.0.set(ds);
 //         }
 //     }
 

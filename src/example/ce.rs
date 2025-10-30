@@ -18,7 +18,7 @@
 //             Expr::new(
 //                 EditorLabel {
 //                     constructor: Constructor::Root,
-//                     diagnostics: Default::default(),
+//                     metadata: Default::default(),
 //                 },
 //                 Span::empty(),
 //             ),
@@ -75,7 +75,7 @@
 //         ]
 //     }
 
-//     fn get_diagnostics(_state: EditorState<Self>) -> Vec<Diagnostic> {
+//     fn get_metadata(_state: EditorState<Self>) -> Vec<Diagnostic> {
 //         Default::default()
 //     }
 
