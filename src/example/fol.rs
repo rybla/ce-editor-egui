@@ -302,12 +302,6 @@ fn check_pos_arg(
     expected_type: &Type,
     pos_arg: &MetaExpr<<Fol as EditorSpec>::M>,
 ) {
-    // clear old errors
-    pos_arg.label.metadata.modify(|mut m| {
-        m.errors.clear();
-        m
-    });
-
     let without_newlines = pos_arg
         .to_pos_arg()
         .iter()
@@ -363,12 +357,6 @@ fn check_type_helper(
     expected_type: &Type,
     expr: &MetaExpr<<Fol as EditorSpec>::M>,
 ) {
-    // clear old errors
-    expr.label.metadata.modify(|mut m| {
-        m.errors.clear();
-        m
-    });
-
     let expected_sort = expected_type.get_sort();
 
     if expr.label.constructor == Constructor::Root {
@@ -588,14 +576,21 @@ impl EditorSpec for Fol {
         //     let _success = check_type(hash_map! {}, &Type::Declaration, kid);
         // }
 
+        // clear old errors
+        state.root.map(&mut |m| {
+            m.metadata.modify(|mut m| {
+                m.errors.clear();
+                m
+            });
+        });
+
         // TODO: the &Type::Declaration is ignored here...
         check_type(hash_map! {}, &Type::Declaration, &state.root);
 
-        {
-            let mut ds = state.metadata.0.take();
-            ds.push_error("this is an example top-level error".to_owned());
-            state.metadata.0.set(ds);
-        }
+        state.metadata.modify(|mut m| {
+            m.push_error("this is an example top-level error".to_owned());
+            m
+        });
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
