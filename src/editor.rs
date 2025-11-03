@@ -1,5 +1,6 @@
 use crate::{ex, expr::*, span, utility::is_single_char};
 use egui;
+use itertools::Either;
 use lazy_static::lazy_static;
 use log::{trace, warn};
 use nucleo_matcher::Matcher;
@@ -243,44 +244,6 @@ impl<M: EditorMetadata> MetaExpr<M> {
             kids: Span(kids.0.iter().map(|x| x.clone_without_metadata()).collect()),
         }
     }
-
-    // gives children without newlines, flattens posargs, and place errors on posargs with wrong number of args
-    pub fn to_flattened<'a>(&'a self) -> Vec<&'a Self> {
-        let mut kids: Vec<&'a Self> = vec![];
-
-        let mut add_kid = |e: &'a Self| {
-            if !matches!(e.label.constructor, Constructor::Newline) {
-                kids.push(e);
-            }
-        };
-
-        for kid in &self.kids.0 {
-            match kid.label.constructor {
-                Constructor::PosArg => {
-                    if kid.kids.0.len() != 1 {
-                        kid.label.metadata.modify(|mut m| {
-                            m.add_error(
-                                (if kid.kids.0.is_empty() {
-                                    "hole"
-                                } else {
-                                    "too many arguments"
-                                })
-                                .to_owned(),
-                            );
-                            m
-                        });
-                    }
-
-                    for e in &kid.kids.0 {
-                        add_kid(e);
-                    }
-                }
-                _ => add_kid(kid),
-            }
-        }
-
-        kids
-    }
 }
 
 pub type MetaFragment<M> = Fragment<Label<MutMetadata<M>>>;
@@ -292,6 +255,91 @@ impl<M> MetaFragment<M> {
             Self::Span(span) => Fragment::Span(span.into_plain()),
             Self::Zipper(zipper) => Fragment::Zipper(zipper.into_plain()),
         }
+    }
+}
+
+type EditorSpan<M> = Span<Label<M>>;
+
+impl<M> EditorSpan<M> {
+    pub fn simplify<'a>(&'a self) -> Either<Vec<&'a EditorExpr<M>>, Vec<Vec<&'a EditorExpr<M>>>> {
+        let any_pos_arg = self
+            .0
+            .iter()
+            .any(|e| matches!(e.label.constructor, Constructor::PosArg));
+        let all_pos_arg = self
+            .0
+            .iter()
+            .all(|e| matches!(e.label.constructor, Constructor::PosArg));
+
+        assert!(
+            !any_pos_arg || all_pos_arg,
+            "at least one Expr in a Span was a PosArg, but not all of them"
+        );
+
+        if any_pos_arg {
+            let mut kidss: Vec<Vec<&'a EditorExpr<M>>> = vec![];
+            for pos_arg in &self.0 {
+                if pos_arg.label.constructor == Constructor::PosArg {
+                    let mut kids = vec![];
+                    for e in &pos_arg.kids.0 {
+                        if !matches!(e.label.constructor, Constructor::Newline) {
+                            kids.push(e);
+                        }
+                    }
+                    kidss.push(kids);
+                } else {
+                    panic!("a span contains PosArgs and non-PosArgs");
+                }
+            }
+            Either::Right(kidss)
+        } else {
+            let mut kids: Vec<&'a EditorExpr<M>> = vec![];
+            for e in &self.0 {
+                if !matches!(e.label.constructor, Constructor::Newline) {
+                    kids.push(e);
+                }
+            }
+            Either::Left(kids)
+        }
+    }
+
+    // without newlines, flattens posargs, and place errors on posargs with wrong number of args
+    pub fn flatten_span<'a>(&'a self) -> Vec<&'a EditorExpr<M>> {
+        let mut kids: Vec<&'a EditorExpr<M>> = vec![];
+
+        let mut add_kid = |e: &'a EditorExpr<M>| {
+            if !matches!(e.label.constructor, Constructor::Newline) {
+                kids.push(e);
+            }
+        };
+
+        for kid in &self.0 {
+            match kid.label.constructor {
+                Constructor::PosArg => {
+                    // TODO: this is old, probably should either make this generic or do without it, since we dont actually need add_error on metadata, and there's already the rendering of PosArgs that have 0 or >1 kids
+                    // if kid.kids.0.len() != 1 {
+                    //     kid.label.metadata.modify(|mut m| {
+                    //         m.add_error(
+                    //             (if kid.kids.0.is_empty() {
+                    //                 "hole"
+                    //             } else {
+                    //                 "too many arguments"
+                    //             })
+                    //             .to_owned(),
+                    //         );
+                    //         m
+                    //     });
+                    // }
+
+                    for e in &kid.kids.0 {
+                        add_kid(e);
+                    }
+                }
+                _ => add_kid(kid),
+            }
+        }
+
+        kids
     }
 }
 
@@ -1500,6 +1548,15 @@ impl Display for Constructor {
     }
 }
 
+impl Constructor {
+    pub fn expect_literal(&self) -> &String {
+        match self {
+            Constructor::Literal(s) => s,
+            c => panic!("expected the Constructor `{c:?}` to be a Literal"),
+        }
+    }
+}
+
 pub struct RenderContext<'a, ES: EditorSpec + ?Sized> {
     pub handle: &'a Handle,
     pub root: &'a MetaExpr<ES::M>,
@@ -1517,8 +1574,6 @@ pub trait EditorMetadata: Debug + Default {
     fn render_metadata(&self, ui: &mut egui::Ui);
 
     fn is_empty_metadata(&self) -> bool;
-
-    fn add_error(&mut self, e: String);
 }
 
 pub trait EditorSpec: 'static {
