@@ -83,21 +83,21 @@ impl<Metadata: Debug + Default> Debug for MutMetadata<Metadata> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Label<M> {
+pub struct EditorLabel<M> {
     pub constructor: Constructor,
     pub metadata: M,
 }
 
-impl<M> Display for Label<M> {
+impl<M> Display for EditorLabel<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.constructor)
     }
 }
 
-pub type MetaLabel<M> = Label<MutMetadata<M>>;
-pub type PlainLabel = Label<()>;
+pub type MetaLabel<M> = EditorLabel<MutMetadata<M>>;
+pub type PlainLabel = EditorLabel<()>;
 
-impl<M> Label<M> {
+impl<M> EditorLabel<M> {
     pub fn new(constructor: Constructor, metadata: M) -> Self {
         Self {
             constructor,
@@ -106,28 +106,28 @@ impl<M> Label<M> {
     }
 
     pub fn into_plain(self) -> PlainLabel {
-        Label {
+        EditorLabel {
             constructor: self.constructor,
             metadata: (),
         }
     }
 
     pub fn to_plain(&self) -> PlainLabel {
-        Label {
+        EditorLabel {
             constructor: self.constructor.clone(),
             metadata: (),
         }
     }
 
     pub fn to_meta<M1: EditorMetadata>(&self) -> MetaLabel<M1> {
-        Label {
+        EditorLabel {
             constructor: self.constructor.clone(),
             metadata: MutMetadata::default(),
         }
     }
 
     pub fn into_meta<M1: EditorMetadata>(self) -> MetaLabel<M1> {
-        Label {
+        EditorLabel {
             constructor: self.constructor,
             metadata: MutMetadata::default(),
         }
@@ -143,13 +143,13 @@ impl<M> Expr<MetaLabel<M>> {
 // A GenEditorExpr is expected to always conform to the following grammar:
 // e = (constructor [PosArg [d]])
 // d = newline | e
-pub type EditorExpr<M> = Expr<Label<M>>;
+pub type EditorExpr<M> = Expr<EditorLabel<M>>;
 pub type MetaExpr<M> = EditorExpr<MutMetadata<M>>;
 pub type PlainExpr = EditorExpr<()>;
 
 impl PlainExpr {
     pub fn into_annotated<M: Default>(self) -> MetaExpr<M> {
-        self.map_owned(&mut |l| Label {
+        self.map_owned(&mut |l| EditorLabel {
             constructor: l.constructor,
             metadata: MutMetadata::default(),
         })
@@ -160,7 +160,7 @@ impl PlainExpr {
 macro_rules! editor_ex {
     ( $label:expr, [ $( $e:expr ),* $(,)? ] ) => {
         Expr {
-            label: Label { constructor: Constructor::Literal($label.to_owned()), metadata: Default::default() },
+            label: EditorLabel { constructor: Constructor::Literal($label.to_owned()), metadata: Default::default() },
             kids: Span(vec![ $( $e ),* ]),
         }
     };
@@ -172,7 +172,7 @@ impl<D> EditorExpr<D> {
         D: Default,
     {
         Self {
-            label: Label {
+            label: EditorLabel {
                 constructor: Constructor::PosArg,
                 metadata: Default::default(),
             },
@@ -185,7 +185,7 @@ impl<D> EditorExpr<D> {
         D: Default,
     {
         Self {
-            label: Label {
+            label: EditorLabel {
                 constructor: Constructor::Literal(lit),
                 metadata: Default::default(),
             },
@@ -246,8 +246,9 @@ impl<M: EditorMetadata> MetaExpr<M> {
     }
 }
 
-pub type MetaFragment<M> = Fragment<Label<MutMetadata<M>>>;
-pub type PlainFragment = Fragment<Label<()>>;
+pub type EditorFragment<M> = Fragment<EditorLabel<M>>;
+pub type MetaFragment<M> = EditorFragment<MutMetadata<M>>;
+pub type PlainFragment = EditorFragment<()>;
 
 impl<M> MetaFragment<M> {
     pub fn into_plain(self) -> PlainFragment {
@@ -258,7 +259,15 @@ impl<M> MetaFragment<M> {
     }
 }
 
-type EditorSpan<M> = Span<Label<M>>;
+type EditorSpan<M> = Span<EditorLabel<M>>;
+pub type MetaSpan<M> = Span<EditorLabel<MutMetadata<M>>>;
+pub type PlainSpan = Span<EditorLabel<()>>;
+
+impl<M> MetaSpan<M> {
+    pub fn into_plain(self) -> PlainSpan {
+        Span(self.0.into_iter().map(|e| e.into_plain()).collect())
+    }
+}
 
 impl<M> EditorSpan<M> {
     pub fn simplify<'a>(&'a self) -> SimplifiedEditorSpan<'a, M> {
@@ -277,21 +286,26 @@ impl<M> EditorSpan<M> {
         );
 
         if any_pos_arg {
-            let mut kidss = vec![];
+            let mut kids: Vec<SimplifiedFixedKid<'_, _>> = vec![];
             for pos_arg in &self.0 {
                 if pos_arg.label.constructor == Constructor::PosArg {
-                    let mut kids = vec![];
+                    let mut subkids = vec![];
                     for e in &pos_arg.kids.0 {
                         if !matches!(e.label.constructor, Constructor::Newline) {
-                            kids.push(e);
+                            subkids.push(e);
                         }
                     }
-                    kidss.push(kids);
+
+                    let subkids_array: Option<[&EditorExpr<M>; 1]> = subkids.try_into().ok();
+                    match subkids_array {
+                        Some([subkid]) => kids.push(Ok(subkid)),
+                        None => kids.push(Err(pos_arg)),
+                    }
                 } else {
                     panic!("a span contains PosArgs and non-PosArgs");
                 }
             }
-            SimplifiedEditorSpan::Fixed(kidss.into_boxed_slice())
+            SimplifiedEditorSpan::Fixed(kids.into_boxed_slice())
         } else {
             let mut kids: Vec<&'a EditorExpr<M>> = vec![];
             for e in &self.0 {
@@ -302,72 +316,28 @@ impl<M> EditorSpan<M> {
             SimplifiedEditorSpan::Free(kids.into_boxed_slice())
         }
     }
-
-    // without newlines, flattens posargs, and place errors on posargs with wrong number of args
-    pub fn flatten_span<'a>(&'a self) -> Vec<&'a EditorExpr<M>> {
-        let mut kids: Vec<&'a EditorExpr<M>> = vec![];
-
-        let mut add_kid = |e: &'a EditorExpr<M>| {
-            if !matches!(e.label.constructor, Constructor::Newline) {
-                kids.push(e);
-            }
-        };
-
-        for kid in &self.0 {
-            match kid.label.constructor {
-                Constructor::PosArg => {
-                    // TODO: this is old, probably should either make this generic or do without it, since we dont actually need add_error on metadata, and there's already the rendering of PosArgs that have 0 or >1 kids
-                    // if kid.kids.0.len() != 1 {
-                    //     kid.label.metadata.modify(|mut m| {
-                    //         m.add_error(
-                    //             (if kid.kids.0.is_empty() {
-                    //                 "hole"
-                    //             } else {
-                    //                 "too many arguments"
-                    //             })
-                    //             .to_owned(),
-                    //         );
-                    //         m
-                    //     });
-                    // }
-
-                    for e in &kid.kids.0 {
-                        add_kid(e);
-                    }
-                }
-                _ => add_kid(kid),
-            }
-        }
-
-        kids
-    }
 }
 
+#[derive(Debug)]
 pub enum SimplifiedEditorSpan<'a, M> {
     Free(Box<[&'a EditorExpr<M>]>),
-    Fixed(Box<[Vec<&'a EditorExpr<M>>]>),
+    Fixed(Box<[SimplifiedFixedKid<'a, M>]>),
 }
 
+pub type SimplifiedFixedKid<'a, M> = Result<&'a EditorExpr<M>, &'a EditorExpr<M>>;
+
 impl<'a, M> SimplifiedEditorSpan<'a, M> {
-    pub fn as_ref(&self) -> Either<&[&'a EditorExpr<M>], &[Vec<&'a EditorExpr<M>>]> {
+    pub fn as_ref(&self) -> Either<&[&'a EditorExpr<M>], &[SimplifiedFixedKid<'a, M>]> {
         match self {
             SimplifiedEditorSpan::Free(kids) => Either::Left(kids.as_ref()),
-            SimplifiedEditorSpan::Fixed(kidss) => Either::Right(kidss.as_ref()),
+            SimplifiedEditorSpan::Fixed(kids) => Either::Right(kids.as_ref()),
         }
     }
 }
 
-pub type MetaSpan<M> = Span<Label<MutMetadata<M>>>;
-pub type PlainSpan = Span<Label<()>>;
-
-impl<M> MetaSpan<M> {
-    pub fn into_plain(self) -> PlainSpan {
-        Span(self.0.into_iter().map(|e| e.into_plain()).collect())
-    }
-}
-
-pub type MetaZipper<M> = Zipper<Label<MutMetadata<M>>>;
-pub type PlainZipper = Zipper<Label<()>>;
+pub type EditorZipper<M> = Zipper<EditorLabel<M>>;
+pub type MetaZipper<M> = EditorZipper<MutMetadata<M>>;
+pub type PlainZipper = EditorZipper<()>;
 
 impl<M> MetaZipper<M> {
     pub fn into_plain(self) -> PlainZipper {
@@ -379,8 +349,9 @@ impl<M> MetaZipper<M> {
     }
 }
 
-pub type MetaContext<M> = Context<Label<MutMetadata<M>>>;
-pub type PlainContext = Context<Label<()>>;
+pub type EditorContext<M> = Context<EditorLabel<M>>;
+pub type MetaContext<M> = EditorContext<MutMetadata<M>>;
+pub type PlainContext = EditorContext<()>;
 
 impl<M> MetaContext<M> {
     pub fn into_plain(self) -> PlainContext {
@@ -388,8 +359,9 @@ impl<M> MetaContext<M> {
     }
 }
 
-pub type MetaTooth<M> = Tooth<Label<MutMetadata<M>>>;
-pub type PlainTooth = Tooth<Label<()>>;
+pub type EditorTooth<M> = Tooth<EditorLabel<M>>;
+pub type MetaTooth<M> = EditorTooth<MutMetadata<M>>;
+pub type PlainTooth = EditorTooth<()>;
 
 impl<M> MetaTooth<M> {
     pub fn into_plain(self) -> PlainTooth {
@@ -1418,7 +1390,7 @@ pub type PlainCoreState = CoreState<()>;
 impl Default for PlainCoreState {
     fn default() -> Self {
         Self {
-            root: Expr::new(Label::new(Constructor::Root, ()), Span::empty()),
+            root: Expr::new(EditorLabel::new(Constructor::Root, ()), Span::empty()),
             handle: Default::default(),
             clipboard: Default::default(),
             metadata: Default::default(),
@@ -1565,7 +1537,7 @@ impl Display for Constructor {
 impl Constructor {
     pub fn expect_literal(&self) -> &String {
         match self {
-            Constructor::Literal(s) => s,
+            Self::Literal(s) => s,
             c => panic!("expected the Constructor `{c:?}` to be a Literal"),
         }
     }
@@ -1739,7 +1711,7 @@ pub fn insert_newline<ES: EditorSpec + ?Sized>(
     let h = state.root.insert_fragment(
         state.handle,
         Fragment::Span(span![ex![
-            Label::new(Constructor::Newline, MutMetadata::default()),
+            EditorLabel::new(Constructor::Newline, MutMetadata::default()),
             []
         ]]),
     );

@@ -42,6 +42,7 @@ impl Sort {
 // grammatical sort and the type
 #[derive(Debug, Clone)]
 pub enum Type {
+    TopLevel,
     Binding,
     Prop,
     Num,
@@ -59,6 +60,7 @@ impl Type {
             Self::Proof(_) => Proof,
             Self::Declaration => Declaration,
             Self::Binding => Binding,
+            Self::TopLevel => TopLevel,
         }
     }
 }
@@ -72,6 +74,7 @@ impl Display for Type {
             Self::Proof(p) => write!(f, "Proof({p})"),
             Self::Declaration => write!(f, "Declaration"),
             Self::Binding => write!(f, "Binding"),
+            Self::TopLevel => write!(f, "TopLevel"),
         }
     }
 }
@@ -96,15 +99,18 @@ impl RuleKids {
         }
     }
 
-    pub fn len(&self) -> Option<usize> {
-        match self {
-            FixedArity(sorts, _) => Some(sorts.len()),
-            _ => None,
-        }
-    }
-
     pub fn matches_arity<'a, M>(&self, span: &SimplifiedEditorSpan<'a, M>) -> bool {
-        todo!()
+        match (self, span) {
+            (FixedArity(sorts, _), SimplifiedEditorSpan::Fixed(kids)) => sorts.len() == kids.len(),
+            (FixedArity(sorts, _), SimplifiedEditorSpan::Free(kids))
+                if sorts.is_empty() && kids.is_empty() =>
+            {
+                true
+            }
+            (FreeArity(_sort), SimplifiedEditorSpan::Free(_kids)) => true,
+            (LiteralKid, SimplifiedEditorSpan::Free(kids)) => kids.len() == 1,
+            _ => false,
+        }
     }
 
     pub fn is_infixed(&self) -> bool {
@@ -221,7 +227,7 @@ fn get_rule(c: &Constructor) -> Option<&Rule> {
 }
 
 #[expect(dead_code)]
-fn get_sorts(span: &Span<MetaLabel<<Fol as EditorSpec>::M>>) -> Vec<Option<&Sort>> {
+fn get_sorts(span: &Span<MetaLabel<M>>) -> Vec<Option<&Sort>> {
     span.0
         .iter()
         .map(|e| get_rule(&e.label.constructor).map(|r| &r.sort))
@@ -241,12 +247,12 @@ macro_rules! make_simple_edit_menu_option {
                     .get($name)
                     .unwrap_or_else(|| panic!("no rule for {}", $name));
 
-                let mut kids: Vec<MetaExpr<<Fol as EditorSpec>::M>> = vec![];
+                let mut kids: Vec<MetaExpr<M>> = vec![];
                 match &rule.kids {
                     FixedArity(sorts, _) => {
                         for _ in 0..sorts.len() {
                             kids.push(ex![
-                                Label::new(Constructor::PosArg, MutMetadata::default()),
+                                EditorLabel::new(Constructor::PosArg, MutMetadata::default()),
                                 []
                             ]);
                         }
@@ -264,7 +270,7 @@ macro_rules! make_simple_edit_menu_option {
                         span_or: Span::empty(),
                         middle: Context(match tooth_into_first_kid {
                             None => vec![Tooth {
-                                label: Label::new(
+                                label: EditorLabel::new(
                                     Constructor::Literal($name.to_owned()),
                                     MutMetadata::default(),
                                 ),
@@ -273,7 +279,7 @@ macro_rules! make_simple_edit_menu_option {
                             }],
                             Some(tooth_into_first_kid) => vec![
                                 Tooth {
-                                    label: Label::new(
+                                    label: EditorLabel::new(
                                         Constructor::Literal($name.to_owned()),
                                         MutMetadata::default(),
                                     ),
@@ -298,236 +304,78 @@ macro_rules! make_simple_edit_menu_option {
 // begin the type-checker
 // -----------------------------------------------------------------------------
 
-/// inputs a [`Constructor::PosArg`] that is supposed to have one child with a
-/// given expected type ignores newlines. if not one, it places an error
-/// message. if so, it typechecks that.
-fn check_pos_arg(
-    success: &mut bool,
-    ctx: HashMap<String, Type>,
-    expected_type: &Type,
-    pos_arg: &MetaExpr<<Fol as EditorSpec>::M>,
-) {
-    let without_newlines = pos_arg
-        .to_pos_arg()
-        .iter()
-        .filter(|x| !matches!(x.label.constructor, Constructor::Newline))
-        .collect::<Vec<_>>();
-
-    match without_newlines.as_slice() {
-        [] => {
-            pos_arg.label.metadata.modify(|mut m| {
-                m.errors.push(format!("hole of sort {expected_type}"));
-                m
-            });
-        }
-        [kid] => {
-            check_type_helper_old(success, ctx, expected_type, kid);
-        }
-        _kids => {
-            pos_arg.label.metadata.modify(|mut m| {
-                m.errors.push("too many kids".to_owned());
-                m
-            });
-            *success = false;
-        }
-    }
-}
-
-fn check_free_args(
-    success: &mut bool,
-    ctx: &HashMap<String, Type>,
-    expected_type: &Type,
-    args: &[MetaExpr<<Fol as EditorSpec>::M>],
-) {
-    for arg in args {
-        check_type_helper_old(success, ctx.clone(), expected_type, arg);
-    }
-}
-
-fn check_type(
-    ctx: HashMap<String, Type>,
-    expected_type: &Type,
-    expr: &MetaExpr<<Fol as EditorSpec>::M>,
-) -> bool {
+fn check(ctx: HashMap<String, Type>, expected_type: &Type, expr: &MetaExpr<M>) -> bool {
     let mut success = true;
-    check_type_helper_old(&mut success, ctx, expected_type, expr);
+    check_helper(&mut success, ctx, expected_type, expr);
     success
 }
 
 // places new metadata corresponding to the new type errors.
-fn check_type_helper_old(
+fn check_helper(
     success: &mut bool,
     ctx: HashMap<String, Type>,
     expected_type: &Type,
-    expr: &MetaExpr<<Fol as EditorSpec>::M>,
+    expr: &MetaExpr<M>,
 ) {
-    let expected_sort = expected_type.get_sort();
+    // call this function to add error annotation, also sets the success flag
+    let mut add_error = |e: String| {
+        expr.label.metadata.modify(|mut m| {
+            m.errors.push(e);
+            m
+        });
+        *success = false;
+    };
 
-    if expr.label.constructor == Constructor::Root {
-        for decl in &expr.kids.0 {
-            check_type_helper_old(success, ctx.clone(), &Type::Declaration, decl);
-        }
-    } else {
-        let lit = match &expr.label.constructor {
-            Constructor::Literal(lit) => lit,
-            c => {
-                panic!(
-                    "check_type_helper should only every be called on Literal constructors, instead of {c}"
-                )
-            }
-        };
-
-        // call this function to add error annotation, also sets the success flag
-        let mut add_error = |e: String| {
-            expr.label.metadata.modify(|mut m| {
-                m.errors.push(e);
-                m
-            });
-            *success = false;
-        };
-
-        // get the corresponding rule
-        let Rule {
-            sort: rule_sort,
-            kids: rule_kids,
-        } = match GRAMMAR.get(lit) {
-            None => {
-                add_error("foreign".to_owned());
-                return;
-            }
-            Some(rule) => rule,
-        };
-
-        // check sort
-        if rule_sort != &expected_sort {
-            add_error(format!(
-                "expected {expected_sort:?}; actually {rule_sort:?}"
-            ));
-        }
-
-        // check arity
-        match rule_kids.len() {
-            Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
-                let expr_kids_len = expr.kids.0.len();
-                add_error(format!(
-                    "expected {} kids; actually {} kids",
-                    rule_kids
-                        .len()
-                        .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
-                    expr_kids_len
-                ));
-            }
-            _ => {}
-        }
-
-        // check kid sorts
-
-        match (expr.to_lit(), expected_type) {
-            (("lemma", [x, sig, imp]), _) => {
-                // TODO: this is redundant with the rules of Lemma in Grammar
-                check_pos_arg(success, ctx.clone(), &Type::Binding, x);
-                check_pos_arg(success, ctx.clone(), &Type::Prop, sig);
-                if let Some(sig) = sig.to_plain().kids.0.first() {
-                    check_pos_arg(success, ctx, &Type::Proof(sig.clone()), imp);
-                } else {
-                    // don't check imp until a sig is provided
-                }
-            }
-            (("var", [x]), _) => {
-                let x = match x.to_lit() {
-                    (x, []) => x,
-                    _ => panic!("first child of Var should be Literal"),
-                };
-                if !ctx.contains_key(x) {
-                    add_error("mal-scoped var".to_owned());
-                }
-            }
-            (("forall" | "exists", [x0, a]), _) => {
-                let ctx = {
-                    let mut ctx = ctx;
-                    match x0.to_pos_arg() {
-                        [x] => {
-                            check_pos_arg(success, ctx.clone(), &Type::Var, x);
-                            match x.to_lit() {
-                                ("var", [x]) => match x.to_lit() {
-                                    (x, []) => {
-                                        ctx.insert(x.to_owned(), Type::Num);
-                                        ctx
-                                    }
-                                    _ => panic!("first child of Var should be Literal"),
-                                },
-                                _ => ctx,
-                            }
-                        }
-                        _ => ctx,
+    fn check_fixed_kid<'a>(
+        success: &mut bool,
+        ctx: &HashMap<String, Type>,
+        expected_type: &'a Type,
+        kid: &SimplifiedFixedKid<'a, MutMetadata<M>>,
+    ) {
+        match kid {
+            Err(pos_arg) => {
+                pos_arg.label.metadata.modify(|mut m| {
+                    m.ty_info = Some(TyInfo {
+                        ctx: ctx.clone(),
+                        ty: expected_type.clone(),
+                    });
+                    if pos_arg.kids.0.is_empty() {
+                        m.push_error("hole".to_owned());
+                    } else {
+                        m.push_error("overflow".to_owned());
                     }
-                };
-                check_pos_arg(success, ctx, &Type::Prop, a);
-            }
-            // The proof step cases are handled here
-            ((label, _), Type::Proof(prop)) => {
-                match ((label, expr.kids.0.as_slice()), prop.to_lit()) {
-                    (("intro_and", [a, b]), ("and", [p, q])) => {
-                        check_pos_arg(success, ctx.clone(), &Type::Proof(p.kids.0[0].clone()), a);
-                        check_pos_arg(success, ctx.clone(), &Type::Proof(q.kids.0[0].clone()), b);
-                    }
-                    (("intro_top", []), ("top", [])) => {}
-                    (("elim_bot", [a]), _) => {
-                        check_pos_arg(success, ctx, &Type::Proof(editor_ex!("bot", [])), a);
-                    }
-                    _ => {
-                        add_error("invalid proof".to_owned());
-                    }
-                }
-            }
-            // default case that doesn't interact with environment, and uses simple sorts
-            _ => match rule_kids {
-                FixedArity(rule_kids, _) => {
-                    for (kid, expected_kid_sort) in expr.kids.0.iter().zip(rule_kids.iter()) {
-                        check_pos_arg(success, ctx.clone(), &expected_kid_sort.to_type(), kid);
-                    }
-                }
-                FreeArity(expected_kid_sort) => {
-                    check_free_args(success, &ctx, &expected_kid_sort.to_type(), &expr.kids.0);
-                }
-                LiteralKid => {}
-            },
-        }
-    }
-}
-
-// places new metadata corresponding to the new type errors.
-fn check_type_helper<'a>(
-    success: &mut bool,
-    ctx: HashMap<String, Type>,
-    expected_type: &'a Type,
-    expr: &MetaExpr<<Fol as EditorSpec>::M>,
-) {
-    let expected_sort = expected_type.get_sort();
-
-    // let v: Vec<String> = vec![];
-    // let s = v.as_slice();
-
-    // let ov: Either<Vec<String>, Vec<String>> = Either::Left(vec![]);
-    // let os = match ov {
-    //     Either::Left(v) => v.as_slice(),
-    //     Either::Right(v) => v.as_slice(),
-    // };
-
-    match (&expr.label.constructor, expr.kids.simplify()) {
-        (Constructor::Root, kidss) => {
-            todo!()
-        }
-        (Constructor::Literal(lit), kidss) => {
-            // call this function to add error annotation, also sets the success flag
-            let mut add_error = |e: String| {
-                expr.label.metadata.modify(|mut m| {
-                    m.errors.push(e);
                     m
                 });
-                *success = false;
-            };
 
+                *success = false;
+            }
+            Ok(kid) => check_helper(success, ctx.clone(), expected_type, kid),
+        }
+    }
+
+    //
+
+    expr.label.metadata.modify(|mut m| {
+        m.ty_info = Some(TyInfo {
+            ctx: ctx.clone(),
+            ty: expected_type.clone(),
+        });
+        m
+    });
+
+    let expected_sort = expected_type.get_sort();
+
+    match (&expr.label.constructor, expr.kids.simplify()) {
+        (Constructor::Root, kids) => {
+            let kids = match kids {
+                SimplifiedEditorSpan::Fixed(_) => panic!("Root should not have fixed kids"),
+                SimplifiedEditorSpan::Free(kids) => kids,
+            };
+            for kid in kids {
+                check_helper(success, ctx.clone(), &Type::Declaration, kid);
+            }
+        }
+        (Constructor::Literal(lit), kids) => {
             // get the corresponding rule
             let Rule {
                 sort: rule_sort,
@@ -548,7 +396,7 @@ fn check_type_helper<'a>(
             }
 
             // check arity
-            if !rule_kids.matches_arity(&kidss) {
+            if !rule_kids.matches_arity(&kids) {
                 add_error(format!(
                     "expected {}; actually {}",
                     match &rule_kids {
@@ -556,144 +404,114 @@ fn check_type_helper<'a>(
                         FreeArity(_sort) => "free kids".to_owned(),
                         LiteralKid => "a literal kid".to_owned(),
                     },
-                    match &kidss {
+                    match &kids {
                         SimplifiedEditorSpan::Free(kids) => format!("{} free kid(s)", kids.len()),
-                        SimplifiedEditorSpan::Fixed(kidss) =>
-                            format!("{} fixed ki(s)", kidss.len()),
+                        SimplifiedEditorSpan::Fixed(kids) => format!("{} fixed ki(s)", kids.len()),
                     }
                 ));
             }
 
-            // let x: Either<Box<String>, Box<String>> = Either::Right(Box::new("hello".to_owned()));
-            // let y = x.as_deref();
+            match ((lit.as_str(), kids.as_ref()), expected_type) {
+                (("lemma", Either::Right([x, sig, imp])), Type::Declaration) => {
+                    check_fixed_kid(success, &ctx, &Type::Binding, x);
+                    let x = if *success
+                        && let Ok(x) = x
+                        && let Some(x) = x.kids.0.first()
+                    {
+                        x.label.constructor.expect_literal()
+                    } else {
+                        return;
+                    };
 
-            match ((lit.as_str(), kidss.as_ref()), expected_type) {
-                (("lemma", Either::Right([x, sig, imp])), _) => {
-                    todo!()
+                    check_fixed_kid(success, &ctx, &Type::Prop, sig);
+                    let sig = if *success && let Ok(sig) = sig {
+                        sig.to_plain()
+                    } else {
+                        return;
+                    };
+
+                    let ctx = {
+                        let mut ctx = ctx;
+                        ctx.insert(x.clone(), Type::Prop);
+                        ctx
+                    };
+
+                    check_fixed_kid(success, &ctx, &Type::Proof(sig), imp);
                 }
-                _ => todo!(),
+                (("forall" | "exists", Either::Right([x, a])), _) => {
+                    check_fixed_kid(success, &ctx, &Type::Binding, x);
+                    let x = if *success
+                        && let Ok(x) = x
+                        && let Some(x) = x.kids.0.first()
+                    {
+                        x.label.constructor.expect_literal()
+                    } else {
+                        return;
+                    };
+
+                    let ctx = {
+                        let mut ctx = ctx;
+                        ctx.insert(x.clone(), Type::Prop);
+                        ctx
+                    };
+
+                    check_fixed_kid(success, &ctx, &Type::Prop, a);
+                }
+                ((proof_con, proof_kids), Type::Proof(prop)) => {
+                    match (
+                        (proof_con, proof_kids),
+                        (
+                            prop.label.constructor.expect_literal().as_str(),
+                            prop.kids.0.as_slice(),
+                        ),
+                    ) {
+                        (("intro_and", Either::Right([a, b])), ("and", [p, q])) => {
+                            check_fixed_kid(success, &ctx, &Type::Proof(p.clone()), a);
+                            check_fixed_kid(success, &ctx, &Type::Proof(q.clone()), b);
+                        }
+                        (("intro_top", Either::Right([])), ("top", [])) => {}
+                        (("elim_bot", Either::Right([a])), _) => {
+                            check_fixed_kid(success, &ctx, &Type::Proof(editor_ex!["bot", []]), a);
+                        }
+                        _ => {
+                            expr.label.metadata.modify(|mut m| {
+                                m.push_error("invalid".to_owned());
+                                m
+                            });
+                        }
+                    }
+                }
+                _ => match rule_kids {
+                    FixedArity(rule_kids, _) => {
+                        assert_eq!(
+                            expr.kids.0.len(),
+                            rule_kids.len(),
+                            "a form with FixedArity must have the proper number of kids"
+                        );
+                        for (kid, expected_kid_sort) in expr.kids.0.iter().zip(rule_kids.iter()) {
+                            check_helper(success, ctx.clone(), &expected_kid_sort.to_type(), kid);
+                        }
+                    }
+                    FreeArity(expected_kid_sort) => {
+                        let expected_kid_type = expected_kid_sort.to_type();
+                        for kid in &expr.kids.0 {
+                            check_helper(success, ctx.clone(), &expected_kid_type, kid);
+                        }
+                    }
+                    LiteralKid => {
+                        if let SimplifiedEditorSpan::Free(kids) = kids
+                            && let [x] = kids.as_ref()
+                            && let Constructor::Literal(_) = x.label.constructor
+                        {
+                        } else {
+                            add_error("expected a literal kid".to_owned());
+                        }
+                    }
+                },
             }
         }
-        _ => todo!(),
+        _ => panic!("I don't know how to handle this EditorExpr: {expr}"),
     }
-
-    // match (&expr.label.constructor, xxx) {
-    //     (Constructor::Root, _) => {
-    //         todo!()
-    //     }
-    //     (Constructor::Literal(lit), kids) => {
-    //         // call this function to add error annotation, also sets the success flag
-    //         let mut add_error = |e: String| {
-    //             expr.label.metadata.modify(|mut m| {
-    //                 m.errors.push(e);
-    //                 m
-    //             });
-    //             *success = false;
-    //         };
-
-    //         // get the corresponding rule
-    //         let Rule {
-    //             sort: rule_sort,
-    //             kids: rule_kids,
-    //         } = match GRAMMAR.get(lit.as_str()) {
-    //             None => {
-    //                 add_error("foreign".to_owned());
-    //                 return;
-    //             }
-    //             Some(rule) => rule,
-    //         };
-
-    //         // check sort
-    //         if rule_sort != &expected_sort {
-    //             add_error(format!(
-    //                 "expected {expected_sort:?}; actually {rule_sort:?}"
-    //             ));
-    //         }
-
-    //         // check arity
-    //         match rule_kids.len() {
-    //             Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
-    //                 let expr_kids_len = expr.kids.0.len();
-    //                 add_error(format!(
-    //                     "expected {} kids; actually {} kids",
-    //                     rule_kids
-    //                         .len()
-    //                         .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
-    //                     expr_kids_len
-    //                 ));
-    //             }
-    //             _ => {}
-    //         }
-
-    //         match ((lit.as_str(), kids), expected_type) {
-    //             (("lemma", Either::Right([[x], [sig], [imp]])), _) => {
-    //                 todo!()
-    //             }
-    //             (("var", Either::Right([[x]])), _) => {
-    //                 todo!()
-    //             }
-    //             (("forall" | "exists", Either::Right(([x0, a]))), _) => {
-    //                 // let ctx = {
-
-    //                 // }
-    //                 todo!()
-    //             }
-    //             ((proof_lit, proof_kids), Type::Proof(prop)) => {
-    //                 let yyy = match prop.kids.simplify() {
-    //                     Either::Left(yyy) => Either::Left(yyy.as_slice()),
-    //                     Either::Right(yyy) => Either::Right(
-    //                         yyy.iter()
-    //                             .map(|yyy| yyy.as_slice())
-    //                             .collect::<Vec<_>>()
-    //                             .as_slice(),
-    //                     ),
-    //                 };
-
-    //                 match (
-    //                     (proof_lit, proof_kids),
-    //                     (prop.label.constructor.expect_literal().as_str(), yyy),
-    //                 ) {
-    //                     (
-    //                         ("intro_and", Either::Right([[a], [b]])),
-    //                         ("and", Either::Right([[p], [q]])),
-    //                     ) => {
-    //                         check_type_helper(success, ctx.clone(), &Type::Proof((*p).clone()), a);
-    //                         check_type_helper(success, ctx.clone(), &Type::Proof((*q).clone()), b);
-    //                     }
-    //                     (("intro_top", Either::Right([])), ("top", Either::Right([]))) => {}
-    //                     _ => {
-    //                         add_error(format!("invalid proof of {prop}"));
-    //                     }
-    //                 }
-    //             }
-    //             _ => match rule_kids {
-    //                 FixedArity(rule_kids, _) => {
-    //                     assert_eq!(
-    //                         expr.kids.0.len(),
-    //                         rule_kids.len(),
-    //                         "a form with FixedArity must have the proper number of kids"
-    //                     );
-    //                     for (kid, expected_kid_sort) in expr.kids.0.iter().zip(rule_kids.iter()) {
-    //                         check_type_helper(
-    //                             success,
-    //                             ctx.clone(),
-    //                             &expected_kid_sort.to_type(),
-    //                             kid,
-    //                         );
-    //                     }
-    //                 }
-    //                 FreeArity(expected_kid_sort) => {
-    //                     let expected_kid_type = expected_kid_sort.to_type();
-    //                     for kid in &expr.kids.0 {
-    //                         check_type_helper(success, ctx.clone(), &expected_kid_type, kid);
-    //                     }
-    //                 }
-    //                 LiteralKid => todo!(),
-    //             },
-    //         }
-    //     }
-    //     _ => todo!(),
-    // }
 }
 
 // -----------------------------------------------------------------------------
@@ -757,7 +575,7 @@ impl EditorSpec for Fol {
     fn initial_state() -> PlainCoreState {
         CoreState::new(
             Expr::new(
-                Label {
+                EditorLabel {
                     constructor: Constructor::Root,
                     metadata: (),
                 },
@@ -785,7 +603,7 @@ impl EditorSpec for Fol {
         });
 
         // TODO: the &Type::Declaration is ignored here...
-        check_type(hash_map! {}, &Type::Declaration, &state.root);
+        check(hash_map! {}, &Type::Declaration, &state.root);
 
         state.metadata.modify(|mut m| {
             m.push_error("this is an example top-level error".to_owned());
