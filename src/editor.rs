@@ -261,7 +261,7 @@ impl<M> MetaFragment<M> {
 type EditorSpan<M> = Span<Label<M>>;
 
 impl<M> EditorSpan<M> {
-    pub fn simplify<'a>(&'a self) -> Either<Vec<&'a EditorExpr<M>>, Vec<Vec<&'a EditorExpr<M>>>> {
+    pub fn simplify<'a>(&'a self) -> SimplifiedEditorSpan<'a, M> {
         let any_pos_arg = self
             .0
             .iter()
@@ -277,7 +277,7 @@ impl<M> EditorSpan<M> {
         );
 
         if any_pos_arg {
-            let mut kidss: Vec<Vec<&'a EditorExpr<M>>> = vec![];
+            let mut kidss = vec![];
             for pos_arg in &self.0 {
                 if pos_arg.label.constructor == Constructor::PosArg {
                     let mut kids = vec![];
@@ -291,7 +291,7 @@ impl<M> EditorSpan<M> {
                     panic!("a span contains PosArgs and non-PosArgs");
                 }
             }
-            Either::Right(kidss)
+            SimplifiedEditorSpan::Fixed(kidss.into_boxed_slice())
         } else {
             let mut kids: Vec<&'a EditorExpr<M>> = vec![];
             for e in &self.0 {
@@ -299,7 +299,7 @@ impl<M> EditorSpan<M> {
                     kids.push(e);
                 }
             }
-            Either::Left(kids)
+            SimplifiedEditorSpan::Free(kids.into_boxed_slice())
         }
     }
 
@@ -340,6 +340,20 @@ impl<M> EditorSpan<M> {
         }
 
         kids
+    }
+}
+
+pub enum SimplifiedEditorSpan<'a, M> {
+    Free(Box<[&'a EditorExpr<M>]>),
+    Fixed(Box<[Vec<&'a EditorExpr<M>>]>),
+}
+
+impl<'a, M> SimplifiedEditorSpan<'a, M> {
+    pub fn as_ref(&self) -> Either<&[&'a EditorExpr<M>], &[Vec<&'a EditorExpr<M>>]> {
+        match self {
+            SimplifiedEditorSpan::Free(kids) => Either::Left(kids.as_ref()),
+            SimplifiedEditorSpan::Fixed(kidss) => Either::Right(kidss.as_ref()),
+        }
     }
 }
 

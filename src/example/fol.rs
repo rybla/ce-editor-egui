@@ -103,6 +103,10 @@ impl RuleKids {
         }
     }
 
+    pub fn matches_arity<'a, M>(&self, span: &SimplifiedEditorSpan<'a, M>) -> bool {
+        todo!()
+    }
+
     pub fn is_infixed(&self) -> bool {
         match self {
             FixedArity(_, infixed) => *infixed,
@@ -500,21 +504,21 @@ fn check_type_helper<'a>(
     expr: &MetaExpr<<Fol as EditorSpec>::M>,
 ) {
     let expected_sort = expected_type.get_sort();
-    let xxx = match expr.kids.simplify() {
-        Either::Left(xxx) => Either::Left(xxx.as_slice()),
-        Either::Right(xxx) => Either::Right(
-            xxx.iter()
-                .map(|xxx| xxx.as_slice())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        ),
-    };
 
-    match (&expr.label.constructor, xxx) {
-        (Constructor::Root, _) => {
+    // let v: Vec<String> = vec![];
+    // let s = v.as_slice();
+
+    // let ov: Either<Vec<String>, Vec<String>> = Either::Left(vec![]);
+    // let os = match ov {
+    //     Either::Left(v) => v.as_slice(),
+    //     Either::Right(v) => v.as_slice(),
+    // };
+
+    match (&expr.label.constructor, expr.kids.simplify()) {
+        (Constructor::Root, kidss) => {
             todo!()
         }
-        (Constructor::Literal(lit), kids) => {
+        (Constructor::Literal(lit), kidss) => {
             // call this function to add error annotation, also sets the success flag
             let mut add_error = |e: String| {
                 expr.label.metadata.modify(|mut m| {
@@ -544,89 +548,152 @@ fn check_type_helper<'a>(
             }
 
             // check arity
-            match rule_kids.len() {
-                Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
-                    let expr_kids_len = expr.kids.0.len();
-                    add_error(format!(
-                        "expected {} kids; actually {} kids",
-                        rule_kids
-                            .len()
-                            .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
-                        expr_kids_len
-                    ));
-                }
-                _ => {}
+            if !rule_kids.matches_arity(&kidss) {
+                add_error(format!(
+                    "expected {}; actually {}",
+                    match &rule_kids {
+                        FixedArity(sorts, _) => format!("{} fixed kid(s)", sorts.len()),
+                        FreeArity(_sort) => "free kids".to_owned(),
+                        LiteralKid => "a literal kid".to_owned(),
+                    },
+                    match &kidss {
+                        SimplifiedEditorSpan::Free(kids) => format!("{} free kid(s)", kids.len()),
+                        SimplifiedEditorSpan::Fixed(kidss) =>
+                            format!("{} fixed ki(s)", kidss.len()),
+                    }
+                ));
             }
 
-            match ((lit.as_str(), kids), expected_type) {
-                (("lemma", Either::Right([[x], [sig], [imp]])), _) => {
-                    todo!()
-                }
-                (("var", Either::Right([[x]])), _) => {
-                    todo!()
-                }
-                (("forall" | "exists", Either::Right(([x0, a]))), _) => {
-                    // let ctx = {
+            // let x: Either<Box<String>, Box<String>> = Either::Right(Box::new("hello".to_owned()));
+            // let y = x.as_deref();
 
-                    // }
+            match ((lit.as_str(), kidss.as_ref()), expected_type) {
+                (("lemma", Either::Right([x, sig, imp])), _) => {
                     todo!()
                 }
-                ((proof_lit, proof_kids), Type::Proof(prop)) => {
-                    let yyy = match prop.kids.simplify() {
-                        Either::Left(yyy) => Either::Left(yyy.as_slice()),
-                        Either::Right(yyy) => Either::Right(
-                            yyy.iter()
-                                .map(|yyy| yyy.as_slice())
-                                .collect::<Vec<_>>()
-                                .as_slice(),
-                        ),
-                    };
-
-                    match (
-                        (proof_lit, proof_kids),
-                        (prop.label.constructor.expect_literal().as_str(), yyy),
-                    ) {
-                        (
-                            ("intro_and", Either::Right([[a], [b]])),
-                            ("and", Either::Right([[p], [q]])),
-                        ) => {
-                            check_type_helper(success, ctx.clone(), &Type::Proof((*p).clone()), a);
-                            check_type_helper(success, ctx.clone(), &Type::Proof((*q).clone()), b);
-                        }
-                        (("intro_top", Either::Right([])), ("top", Either::Right([]))) => {}
-                        _ => {
-                            add_error(format!("invalid proof of {prop}"));
-                        }
-                    }
-                }
-                _ => match rule_kids {
-                    FixedArity(rule_kids, _) => {
-                        assert_eq!(
-                            expr.kids.0.len(),
-                            rule_kids.len(),
-                            "a form with FixedArity must have the proper number of kids"
-                        );
-                        for (kid, expected_kid_sort) in expr.kids.0.iter().zip(rule_kids.iter()) {
-                            check_type_helper(
-                                success,
-                                ctx.clone(),
-                                &expected_kid_sort.to_type(),
-                                kid,
-                            );
-                        }
-                    }
-                    FreeArity(expected_kid_sort) => {
-                        let expected_kid_type = expected_kid_sort.to_type();
-                        for kid in &expr.kids.0 {
-                            check_type_helper(success, ctx.clone(), &expected_kid_type, kid);
-                        }
-                    }
-                    LiteralKid => todo!(),
-                },
+                _ => todo!(),
             }
         }
         _ => todo!(),
     }
+
+    // match (&expr.label.constructor, xxx) {
+    //     (Constructor::Root, _) => {
+    //         todo!()
+    //     }
+    //     (Constructor::Literal(lit), kids) => {
+    //         // call this function to add error annotation, also sets the success flag
+    //         let mut add_error = |e: String| {
+    //             expr.label.metadata.modify(|mut m| {
+    //                 m.errors.push(e);
+    //                 m
+    //             });
+    //             *success = false;
+    //         };
+
+    //         // get the corresponding rule
+    //         let Rule {
+    //             sort: rule_sort,
+    //             kids: rule_kids,
+    //         } = match GRAMMAR.get(lit.as_str()) {
+    //             None => {
+    //                 add_error("foreign".to_owned());
+    //                 return;
+    //             }
+    //             Some(rule) => rule,
+    //         };
+
+    //         // check sort
+    //         if rule_sort != &expected_sort {
+    //             add_error(format!(
+    //                 "expected {expected_sort:?}; actually {rule_sort:?}"
+    //             ));
+    //         }
+
+    //         // check arity
+    //         match rule_kids.len() {
+    //             Some(rule_kids_len) if rule_kids_len != expr.kids.0.len() => {
+    //                 let expr_kids_len = expr.kids.0.len();
+    //                 add_error(format!(
+    //                     "expected {} kids; actually {} kids",
+    //                     rule_kids
+    //                         .len()
+    //                         .map_or_else(|| "infinity".to_owned(), |n| n.to_string()),
+    //                     expr_kids_len
+    //                 ));
+    //             }
+    //             _ => {}
+    //         }
+
+    //         match ((lit.as_str(), kids), expected_type) {
+    //             (("lemma", Either::Right([[x], [sig], [imp]])), _) => {
+    //                 todo!()
+    //             }
+    //             (("var", Either::Right([[x]])), _) => {
+    //                 todo!()
+    //             }
+    //             (("forall" | "exists", Either::Right(([x0, a]))), _) => {
+    //                 // let ctx = {
+
+    //                 // }
+    //                 todo!()
+    //             }
+    //             ((proof_lit, proof_kids), Type::Proof(prop)) => {
+    //                 let yyy = match prop.kids.simplify() {
+    //                     Either::Left(yyy) => Either::Left(yyy.as_slice()),
+    //                     Either::Right(yyy) => Either::Right(
+    //                         yyy.iter()
+    //                             .map(|yyy| yyy.as_slice())
+    //                             .collect::<Vec<_>>()
+    //                             .as_slice(),
+    //                     ),
+    //                 };
+
+    //                 match (
+    //                     (proof_lit, proof_kids),
+    //                     (prop.label.constructor.expect_literal().as_str(), yyy),
+    //                 ) {
+    //                     (
+    //                         ("intro_and", Either::Right([[a], [b]])),
+    //                         ("and", Either::Right([[p], [q]])),
+    //                     ) => {
+    //                         check_type_helper(success, ctx.clone(), &Type::Proof((*p).clone()), a);
+    //                         check_type_helper(success, ctx.clone(), &Type::Proof((*q).clone()), b);
+    //                     }
+    //                     (("intro_top", Either::Right([])), ("top", Either::Right([]))) => {}
+    //                     _ => {
+    //                         add_error(format!("invalid proof of {prop}"));
+    //                     }
+    //                 }
+    //             }
+    //             _ => match rule_kids {
+    //                 FixedArity(rule_kids, _) => {
+    //                     assert_eq!(
+    //                         expr.kids.0.len(),
+    //                         rule_kids.len(),
+    //                         "a form with FixedArity must have the proper number of kids"
+    //                     );
+    //                     for (kid, expected_kid_sort) in expr.kids.0.iter().zip(rule_kids.iter()) {
+    //                         check_type_helper(
+    //                             success,
+    //                             ctx.clone(),
+    //                             &expected_kid_sort.to_type(),
+    //                             kid,
+    //                         );
+    //                     }
+    //                 }
+    //                 FreeArity(expected_kid_sort) => {
+    //                     let expected_kid_type = expected_kid_sort.to_type();
+    //                     for kid in &expr.kids.0 {
+    //                         check_type_helper(success, ctx.clone(), &expected_kid_type, kid);
+    //                     }
+    //                 }
+    //                 LiteralKid => todo!(),
+    //             },
+    //         }
+    //     }
+    //     _ => todo!(),
+    // }
 }
 
 // -----------------------------------------------------------------------------
