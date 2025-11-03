@@ -366,11 +366,7 @@ fn check_helper(
     let expected_sort = expected_type.get_sort();
 
     match (&expr.label.constructor, expr.kids.simplify()) {
-        (Constructor::Root, kids) => {
-            let kids = match kids {
-                SimplifiedEditorSpan::Fixed(_) => panic!("Root should not have fixed kids"),
-                SimplifiedEditorSpan::Free(kids) => kids,
-            };
+        (Constructor::Root, SimplifiedEditorSpan::Free(kids)) => {
             for kid in kids {
                 check_helper(success, ctx.clone(), &Type::Declaration, kid);
             }
