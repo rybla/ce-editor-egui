@@ -587,10 +587,10 @@ impl EditorSpec for Fol {
         // TODO: the &Type::Declaration is ignored here...
         check_type(hash_map! {}, &Type::Declaration, &state.root);
 
-        state.metadata.modify(|mut m| {
-            m.push_error("this is an example top-level error".to_owned());
-            m
-        });
+        // state.metadata.modify(|mut m| {
+        //     m.push_error("this is an example top-level error".to_owned());
+        //     m
+        // });
     }
 
     fn get_edits(_state: &EditorState<Self>) -> Vec<EditMenuOption<Self>> {
