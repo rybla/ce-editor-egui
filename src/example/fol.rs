@@ -200,6 +200,8 @@ lazy_static! {
         "intro_and" => rule![Proof, [Proof, Proof]],
         "intro_top" => rule![Proof, []],
         "elim_bot" => rule![Proof, [Proof]],
+        "intro_forall" => rule![Proof, [Binding, Proof]],
+        "reflexivity" => rule![Proof, []],
     };
 
     static ref DEFAULT_LITERAL_RULE: Rule = Rule {
@@ -311,7 +313,8 @@ fn check_pos_arg(
     match without_newlines.as_slice() {
         [] => {
             pos_arg.label.metadata.modify(|mut m| {
-                m.errors.push(format!("hole of sort {expected_type}"));
+                m.errors
+                    .push(format!("hole of sort {expected_type} in context {ctx:?}"));
                 m
             });
         }
@@ -442,9 +445,9 @@ fn check_type_helper(
                     let mut ctx = ctx;
                     match x0.to_pos_arg() {
                         [x] => {
-                            check_pos_arg(success, ctx.clone(), &Type::Var, x);
+                            // check_pos_arg(success, ctx.clone(), &Type::Var, x);
                             match x.to_lit() {
-                                ("var", [x]) => match x.to_lit() {
+                                ("binding", [x]) => match x.to_lit() {
                                     (x, []) => {
                                         ctx.insert(x.to_owned(), Type::Num);
                                         ctx
@@ -469,6 +472,36 @@ fn check_type_helper(
                     (("intro_top", []), ("top", [])) => {}
                     (("elim_bot", [a]), _) => {
                         check_pos_arg(success, ctx, &Type::Proof(editor_ex!("bot", [])), a);
+                    }
+                    (("intro_forall", [x0, a]), ("forall", [x1, p])) => {
+                        let ctx = {
+                            let mut ctx = ctx;
+                            match x0.to_pos_arg() {
+                                [x] => {
+                                    // check_pos_arg(success, ctx.clone(), &Type::Var, x);
+                                    match x.to_lit() {
+                                        ("binding", [x]) => match x.to_lit() {
+                                            (x, []) => {
+                                                ctx.insert(x.to_owned(), Type::Num);
+                                                ctx
+                                            }
+                                            _ => panic!("first child of Var should be Literal"),
+                                        },
+                                        _ => ctx,
+                                    }
+                                }
+                                _ => ctx,
+                            }
+                        };
+                        println!("x1 = {x1:?}");
+                        let x1 = x1.to_pos_arg().first().unwrap().to_lit().0;
+                        let p = substitute(x1, &x0.to_plain(), p);
+                        check_pos_arg(success, ctx, &Type::Proof(p), a);
+                    }
+                    (("reflexivity", []), ("=", [m, n])) => {
+                        if m != n {
+                            add_error(format!("{m} is not equal to {n}"));
+                        }
                     }
                     _ => {
                         add_error("invalid proof".to_owned());
@@ -654,6 +687,8 @@ impl EditorSpec for Fol {
             make_simple_edit_menu_option!["intro_and"],
             make_simple_edit_menu_option!["intro_top"],
             make_simple_edit_menu_option!["elim_bot"],
+            make_simple_edit_menu_option!["reflexivity"],
+            make_simple_edit_menu_option!["intro_forall"],
             make_simple_edit_menu_option!["lemma"],
         ]
     }
@@ -852,5 +887,18 @@ impl EditorSpec for Fol {
                 );
             });
         }
+    }
+}
+
+fn substitute(x: &str, t: &PlainExpr, a: &PlainExpr) -> PlainExpr {
+    match (&a.label.constructor, a.kids.0.as_slice()) {
+        (Constructor::Literal(lit), [y]) if lit == "var" => match y.to_lit() {
+            (y, _) if y == x => t.clone(),
+            _ => a.clone(),
+        },
+        _ => PlainExpr::new(
+            a.label.clone(),
+            Span(a.kids.0.iter().map(|kid| substitute(x, t, kid)).collect()),
+        ),
     }
 }

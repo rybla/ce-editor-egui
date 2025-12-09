@@ -81,7 +81,7 @@ impl<Metadata: Debug + Default> Debug for MutMetadata<Metadata> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label<M> {
     pub constructor: Constructor,
     pub metadata: M,
