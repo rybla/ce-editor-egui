@@ -349,8 +349,7 @@ fn check_type(
     success
 }
 
-// clears old metadata on the expr, typechecks it, and places new metadata
-// corresponding to the new type errors.
+/// typechecks expr and places new metadata corresponding to the new type errors.
 fn check_type_helper(
     success: &mut bool,
     ctx: HashMap<String, Type>,
